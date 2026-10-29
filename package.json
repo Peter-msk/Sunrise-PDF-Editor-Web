@@ -1,0 +1,14 @@
+{
+  "name": "sunrise-pdf-editor",
+  "version": "1.0.0",
+  "description": "Sunrise PDF Editor Web release build",
+  "scripts": {
+    "build": "node scripts/build-release.cjs",
+    "test": "node tests/synthetic-contract.cjs && node tests/rotation-contract.cjs && node tests/lazy-text-contract.cjs && node tests/undo-performance-contract.cjs && node tests/placement-gesture-contract.cjs"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "terser": "5.51.2"
+  },
+  "private": true
+}

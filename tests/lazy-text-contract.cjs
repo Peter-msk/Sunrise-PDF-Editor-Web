@@ -1,0 +1,26 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../src/editor/index.html'), 'utf8');
+const start = source.indexOf('    async function ensurePageTexts(');
+const end = source.indexOf('    async function openPdfFromBytes(', start);
+assert(start >= 0 && end > start);
+let calls = 0;
+const reader = { getPage: async n => ({getTextContent: async () => {calls++; return {items:[{str:`page ${n}`} ]};}}) };
+const ctx = vm.createContext({console});
+vm.runInContext(source.slice(start,end),ctx);
+(async () => {
+ ctx.doc = {pdfJsDoc:reader,pageTexts:[null,null,null]};
+ await Promise.all([vm.runInContext('ensurePageTexts(doc)',ctx),vm.runInContext('ensurePageTexts(doc)',ctx)]);
+ assert.equal(calls,3);
+ assert.deepEqual(Array.from(ctx.doc.pageTexts), ['page 1','page 2','page 3']);
+ await vm.runInContext('ensurePageTexts(doc)',ctx);
+ assert.equal(calls,3);
+ let release; const gate = new Promise(resolve => {release=resolve});
+ ctx.doc2 = {pdfJsDoc:{getPage:async()=>({getTextContent:async()=>{await gate;return {items:[{str:'old'}]}}})},pageTexts:[null]};
+ const pending = vm.runInContext('ensurePageTexts(doc2)',ctx);
+ ctx.doc2.pdfJsDoc = reader; release();
+ assert.equal(await pending,false);
+ assert.deepEqual(Array.from(ctx.doc2.pageTexts),[null]);
+ console.log('PASS: lazy extraction, shared in-flight work, cached result, stale document guard');
+})().catch(error=>{console.error(error);process.exit(1)});

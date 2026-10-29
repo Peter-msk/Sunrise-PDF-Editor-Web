@@ -1,0 +1,5 @@
+name = "sunrise-pdf-editor"
+compatibility_date = "2026-10-29"
+
+[assets]
+directory = "./dist"
