@@ -1,0 +1,23 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>Sunrise PDF Editor · 관리자 로그인</title>
+<style>
+:root{font-family:system-ui,'Malgun Gothic',sans-serif;color:#15384f;background:#f2f7fb}*{box-sizing:border-box}body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100dvh;padding:20px}
+main{width:min(440px,100%);background:white;border:1px solid #d3e2ed;border-radius:16px;box-shadow:0 18px 55px #163a541c;padding:28px}
+h1{font-size:21px;margin:0 0 4px}.sub{color:#658096;font-size:13px;margin:0 0 20px}
+form{display:grid;gap:14px}label{display:grid;gap:5px;font-size:13px;font-weight:700}
+input{padding:12px;border:1px solid #b5cad8;border-radius:8px;font:inherit;font-size:14px;min-width:0}
+button{border:0;border-radius:9px;padding:12px;font:inherit;font-weight:750;cursor:pointer;background:#246d9b;color:white}
+button:disabled{opacity:.6}#status{color:#7b4b10;background:#fff7e7;border-radius:8px;padding:9px;font-size:12px;min-height:30px}
+a{color:#246d9b;font-size:12px;text-decoration:none}.fine{font-size:12px;color:#6a8190;line-height:1.6}
+</style></head><body data-mode="login"><main>
+<h1>SUNRISE PDF EDITOR</h1><p class="sub">관리자 로그인 · 아이디 + 비밀번호</p>
+<form id="authForm" autocomplete="on">
+
+<label>관리자 아이디<input name="username" type="text" pattern="[a-z][a-z0-9._-]{3,31}" minlength="4" maxlength="32" autocomplete="username" spellcheck="false" required></label>
+<label>비밀번호<input name="password" type="password" minlength="16" maxlength="128" autocomplete="current-password" required></label>
+
+<button type="submit" id="submit">로그인</button></form>
+<p id="status" role="status" aria-live="polite">로그인은 서버에서 안전하게 검증됩니다.</p>
+<p class="fine">로그인 상태는 최대 8시간 유지되며, 30분간 활동이 없으면 만료됩니다.</p>
+<p><a href="/">메인 화면으로</a></p>
+</main><script defer src="/assets/sunrise-admin-login.js"></script></body></html>
