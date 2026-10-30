@@ -2,13 +2,13 @@
 
 ## 화면 / 인증
 - 공개 홈: https://sunrise-pdf-editor.ko-pg.workers.dev/
-- 홈 우측 상단 **관리자** 버튼 → 같은 사이트의 `/admin/` 페이지.
+- **관리자 기능 보류:** 메인 홈페이지에서 관리자 버튼을 의도적으로 숨김. `/admin/` 및 `/api/admin/*`는 Access 인증 없이 403을 반환하도록 기존 보호 코드를 유지함.
 - 별도 관리자 사이트나 별도 도메인은 사용하지 않는다.
 - **Cloudflare Zero Trust > Access > Applications**에서 *self-hosted application*을 구성해야 로그인 가능.
 - 접근 보호 경로: `sunrise-pdf-editor.ko-pg.workers.dev/admin*` 및 `sunrise-pdf-editor.ko-pg.workers.dev/api/admin/*` (정확한 앱 경로 규칙을 Cloudflare UI에서 검증).
 - 허용 사용자: 해당 Cloudflare 계정 소유자 이메일만 지정. 이메일 도메인 전체 허용 금지.
 - Worker는 `ctx.access.getIdentity()`를 다시 확인하며, `ADMIN_EMAIL` 비밀 환경 변수의 허용 이메일과 같아야 데이터 응답.
-- **Access 미설정 또는 인증 실패 시 /admin/과 /api/admin/* 모두 403**, 로그인 우회 없음.
+- **Access 미설정 또는 인증 실패 시 /admin/과 /api/admin/* 모두 403**, 로그인 우회 없음. 공개 홈페이지에서는 관리자 진입 링크를 표시하지 않음.
 - 기존 공개 PDF 편집과 문의 접수는 로그인 없이 유지.
 - Cloudflare Access 보호를 **전체 Worker**에 걸면 일반 사용자의 PDF 편집까지 막힐 수 있으므로 경로별 보호만 적용.
 
