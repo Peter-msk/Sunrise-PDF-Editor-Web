@@ -1,33 +1,50 @@
-/* Avoid covering the hero: left rail stays inside the available gutter. */
+/* Sunrise homepage notice/release rail — no hero text obstruction. */
+/* Centred main container begins at 50vw - 568px; leave >= 26px of clearance. */
 @media (min-width:1520px) {
- .notice-rail {
-   position:fixed!important;top:88px!important;bottom:auto!important;
-   left:max(12px,calc((100vw - 1136px)/2 - 26px - 228px))!important;
-   width:min(228px,calc((100vw - 1136px)/2 - 36px))!important;
-   max-height:calc(100dvh - 105px)!important;display:flex!important;
-   flex-direction:column!important;gap:12px!important
- }
- .rail-panel{min-width:0}
+  .notice-rail {
+    position:fixed!important;
+    top:88px!important;
+    bottom:auto!important;
+    left:max(12px,calc(50vw - 808px))!important;
+    width:min(214px,calc(50vw - 610px))!important;
+    max-height:calc(100dvh - 105px)!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:10px!important;
+  }
+  .rail-panel{min-width:0}
+  .rail-panel summary{padding:10px 9px;font-size:12px}
+  .rail-items{padding:5px 9px 9px}
+  .rail-entry{padding:8px 0}
+  .rail-entry strong{font-size:11.5px}
+  .rail-entry p{font-size:10.5px;line-height:1.6}
+  .rail-release p{margin:4px 0}
 }
+/* The left gutter is too narrow below 1520px; give panels their own layout row. */
 @media (max-width:1519px) {
- .notice-rail {
-   position:sticky!important;top:76px!important;left:auto!important;bottom:auto!important;
-   display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
-   margin:0 auto!important;padding:7px 0!important;
-   width:min(1136px,calc(100% - 40px))!important;max-height:42dvh!important;
-   gap:9px!important;background:var(--bg)!important;
- }
- .rail-panel:nth-child(n){max-height:34dvh!important;min-width:0}
- .rail-panel summary{padding:8px 10px!important}
- .rail-items{max-height:27dvh!important}
+  .notice-rail {
+    position:sticky!important;
+    top:76px!important;
+    left:auto!important;
+    bottom:auto!important;
+    width:min(1136px,calc(100% - 40px))!important;
+    margin:0 auto!important;
+    padding:7px 0!important;
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    align-items:start!important;
+    gap:9px!important;
+    max-height:40dvh!important;
+    background:var(--bg)!important;
+  }
+  .rail-panel:nth-child(n){max-height:33dvh!important;min-width:0}
+  .rail-panel summary{padding:8px 10px!important;font-size:12px}
+  .rail-items{max-height:26dvh!important}
 }
-@media(max-width:650px){
- .notice-rail{top:62px!important;width:calc(100% - 28px)!important;gap:6px!important}
- .rail-panel:nth-child(n){max-height:32dvh!important}
- .rail-items{max-height:26dvh!important}
+@media (max-width:650px) {
+  .notice-rail{top:62px!important;width:calc(100% - 28px)!important;gap:6px!important}
+  .rail-panel:nth-child(n){max-height:30dvh!important}
+  .rail-items{max-height:23dvh!important}
 }
-#adminNavButton{display:inline-flex;align-items:center;justify-content:center;border:1px solid #bdd7e7;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:750;background:#f3f9fd;color:#1c5f88;text-decoration:none;white-space:nowrap}
-#adminNavButton:hover,#adminNavButton:focus-visible{background:#e4f3fc}
-@media(max-width:650px){#adminNavButton{padding:7px 8px;font-size:11px}.actions{gap:5px!important}}
-
-@media(max-width:860px){.actions #adminNavButton{display:inline-flex!important}}
+/* Defense in depth: do not surface the dormant administrator navigation. */
+#adminNavButton{display:none!important}
