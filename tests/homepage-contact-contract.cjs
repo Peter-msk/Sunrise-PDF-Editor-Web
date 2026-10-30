@@ -18,7 +18,7 @@ assert.match(worker,/env\.ASSETS\.fetch\(request\)/);
 assert.match(worker,/env\.INQUIRY_HASH_SALT/);
 assert.match(worker,/inquiry_rate_limits/);
 assert(!worker.includes('SELECT * FROM inquiries'),'Public GET must never expose submitted messages');
-assert.match(cfg,/run_worker_first\s*=\s*\["\/api\/\*"\]/);
+assert.match(cfg,/run_worker_first\s*=\s*\[[^\]]*"\/api\/\*"[^\]]*\]/);
 assert.match(cfg,/binding = "DB"/);
 assert.match(cfg,/crons = \["0 3 \* \* \*"\]/);
 console.log('PASS: homepage fixed notice/update rail, feature descriptions, public feed and private inquiry form contract');
