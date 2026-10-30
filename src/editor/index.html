@@ -5574,7 +5574,13 @@
             strength.addEventListener('input', () => { preset.value = 'custom'; syncStrength(); });
             strength.addEventListener('change', calculate);
             preset.addEventListener('change', () => { if (preset.value === 'custom') return; strength.value = preset.value; syncStrength(); calculate(); });
-            for (const id of ['compressionQuality','compressionMaxEdge']) document.getElementById(id).addEventListener('change', () => { preset.value = 'custom'; reset(); calculate(); });
+            for (const id of ['compressionQuality','compressionMaxEdge']) {
+              const input = document.getElementById(id); let modified = false;
+              input.addEventListener('input', () => { modified = true; preset.value = 'custom'; reset(); });
+              const commit = () => { if (!modified) return; modified = false; calculate(); };
+              input.addEventListener('change', commit);
+              input.addEventListener('blur', commit);
+            }
           }
           document.getElementById("saveAsConfirmBtn").addEventListener("click", async () => {
             const button = document.getElementById("saveAsConfirmBtn");
