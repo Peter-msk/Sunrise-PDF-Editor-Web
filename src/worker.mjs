@@ -1,4 +1,5 @@
-import {telemetry,adminIdentity,adminApi} from './admin-api.mjs';
+import {telemetry,adminApi} from './admin-api.mjs';
+import {authRoutes,getAdminSession} from './admin-password-auth.mjs';
 // Sunrise PDF Editor Web: public release feed + private Cloudflare D1 inquiry inbox.
 // No PDF data is read, uploaded or retained by this Worker.
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
@@ -50,10 +51,19 @@ async function submitInquiry(request,env,url) {
 export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
-    if(url.pathname==='/admin' || url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')){
-      const admin=await adminIdentity(ctx,env);
-      if(!admin)return new Response('관리자 Access 인증이 필요합니다. Cloudflare Access를 먼저 설정하세요.',{status:403,headers:{'content-type':'text/plain; charset=utf-8','cache-control':'no-store'}});
-      if(url.pathname.startsWith('/api/admin/'))return adminApi(request,env,url,admin);
+    if(url.pathname.startsWith('/api/auth/'))return authRoutes(request,env,url);
+    if(url.pathname==='/admin')return Response.redirect(url.origin+'/admin/',302);
+    if(url.pathname==='/admin/login/' || url.pathname==='/admin/setup/'){
+      if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Method Not Allowed',{status:405});
+      return env.ASSETS.fetch(request);
+    }
+    if(url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')){
+      const username=await getAdminSession(request,env);
+      if(!username){
+        if(url.pathname.startsWith('/api/admin/'))return respond({error:'관리자 로그인이 필요합니다.'},401);
+        return Response.redirect(url.origin+'/admin/login/',302);
+      }
+      if(url.pathname.startsWith('/api/admin/'))return adminApi(request,env,url,username);
       return env.ASSETS.fetch(request);
     }
     if(url.pathname==='/api/telemetry')return telemetry(request,env,url);
@@ -74,5 +84,7 @@ export default {
     await env.DB.prepare("DELETE FROM inquiries WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-90 days')").run();
     await env.DB.prepare("DELETE FROM inquiry_rate_limits WHERE day < strftime('%Y-%m-%d','now','-2 days')").run();
     await env.DB.prepare("DELETE FROM analytics_sessions WHERE day < date('now','+9 hours','-14 days')").run();
+    await env.DB.prepare('DELETE FROM admin_sessions WHERE expires_ms<? OR last_seen_ms<?').bind(Date.now(),Date.now()-30*60*1000).run();
+    await env.DB.prepare('DELETE FROM admin_login_limits WHERE window_start_ms<?').bind(Date.now()-24*60*60*1000).run();
   }
 };

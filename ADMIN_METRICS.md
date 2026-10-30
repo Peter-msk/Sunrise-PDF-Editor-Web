@@ -1,3 +1,7 @@
+# 관리자 인증 방식 변경
+
+최신 관리자 로그인 및 최초 설정 절차는 [ADMIN_PASSWORD_LOGIN.md](ADMIN_PASSWORD_LOGIN.md) 참고. 기존 Access 관련 지침은 더 이상 운영 인증 방법이 아니다.
+
 # Sunrise PDF Editor · 관리자 대시보드 운영 가이드
 
 ## 화면 / 인증
