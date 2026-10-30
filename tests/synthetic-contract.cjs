@@ -29,6 +29,8 @@ const context = vm.createContext({
 });
 vm.runInContext('let overlayIdCounter = 100;\n' +
   section('    function remapPageItems', '    function openSaveAsModal') +
+  section('    function addPdfHighlight(', '    async function highlightCurrentSearchHit(') +
+  section('    function appendPdfBookmarks(', '    async function compileDocumentWithOverlays(') +
   section('    async function compileDocumentWithOverlays', '    // =========================================================================\n    // Feature 1:'), context);
 
 (async () => {
@@ -46,10 +48,12 @@ vm.runInContext('let overlayIdCounter = 100;\n' +
 
   const pdf = await PDFDocument.create();
   pdf.addPage([400, 600]);
+  context.pdfForHighlight = pdf;
+  vm.runInContext('addPdfHighlight(pdfForHighlight, 0, [30, 500, 80, 520])', context);
   pdf.addPage([400, 600]).setRotation(degrees(90));
   const bytes = await pdf.save();
   context.realDoc = {
-    bytes, metadata: { title: 'Synthetic test', author: '', subject: '', keywords: '' },
+    bytes, bookmarks: [{title: '첫 장', page: 0}], metadata: { title: 'Synthetic test', author: '', subject: '', keywords: '' },
     attachments: [{ name: 'fixture.txt', bytes: new TextEncoder().encode('synthetic attachment'), type: 'text/plain', isNew: true }],
     overlays: [
       { pageIndex: 0, type: 'Text', text: '한글 시험 ABC', x: 30, y: 40, width: 200, height: 30 },
@@ -59,9 +63,13 @@ vm.runInContext('let overlayIdCounter = 100;\n' +
       getViewport: () => ({ convertToPdfPoint: (x, y) => index === 2 ? [y, x] : [x, 600 - y] }) }) },
   };
   const output = await vm.runInContext('compileDocumentWithOverlays(realDoc)', context);
-  assert.equal((await PDFDocument.load(output)).getPageCount(), 2);
+  const outputPdf = await PDFDocument.load(output);
+  assert.equal(outputPdf.getPageCount(), 2);
+  assert(outputPdf.catalog.get(context.window.PDFLib.PDFName.of('Outlines')));
+  assert.equal(outputPdf.getPage(0).node.Annots().size(),1);
   const restored = await editState.restore(output, context.window.PDFLib);
   assert.equal(restored.warning, false);
+  assert.equal((await PDFDocument.load(restored.bytes)).getPage(0).node.Annots().size(),1);
   assert.equal(restored.overlays.length, 2);
   assert.equal(restored.overlays[0].text, '한글 시험 ABC');
   restored.overlays[0].text = '수정된 한글 ABC';
@@ -73,3 +81,4 @@ vm.runInContext('let overlayIdCounter = 100;\n' +
   if (target) { fs.writeFileSync(target, output); fs.writeFileSync(target.replace(/\.pdf$/i, '.edited.pdf'), edited); }
   console.log('PASS: page remapping, searchable Korean PDF text, attachment, rotated overlay and saved-item restoration');
 })().catch(error => { console.error(error); process.exit(1); });
+

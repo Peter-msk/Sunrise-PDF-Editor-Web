@@ -24,3 +24,4 @@ vm.runInContext(source.slice(start,end),ctx);
  assert.deepEqual(Array.from(ctx.doc2.pageTexts),[null]);
  console.log('PASS: lazy extraction, shared in-flight work, cached result, stale document guard');
 })().catch(error=>{console.error(error);process.exit(1)});
+

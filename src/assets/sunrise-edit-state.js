@@ -10,6 +10,7 @@
     for (const key of ['x', 'y', 'width', 'height', 'fontSize', 'opacity']) {
       if (item[key] !== undefined && (typeof item[key] !== 'number' || !Number.isFinite(item[key]) || Math.abs(item[key]) > 10000)) return false;
     }
+    if (item.rotation !== undefined && ![0, 90, 180, 270].includes(item.rotation)) return false;
     for (const key of ['color', 'bgColor']) {
       if (item[key] !== undefined && (typeof item[key] !== 'string' || item[key].length > 80 ||
           !/^(#[0-9a-f]{3,8}|transparent|rgba?\([\d\s.,%]+\))$/i.test(item[key]))) return false;
@@ -88,3 +89,4 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.SunriseEditState = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);
+

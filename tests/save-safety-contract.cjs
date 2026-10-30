@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const src=fs.readFileSync('src/editor/index.html','utf8');
+const start=src.indexOf('    function captureSaveState('),end=src.indexOf('    function openInsertBlankPageModal(',start);assert(start>=0&&end>start);
+const els={}; for(const id of ['saveAsConfirmBtn','saveAsCancelBtn','saveAsDownloadLink','saveAsDownloadedBtn','saveAsFilenameInput','saveAsStatus','modalBackdrop']) els[id]={style:{},listeners:{},value:'saved.pdf',classList:{contains:()=>true},addEventListener(n,fn){this.listeners[n]=fn},focus(){}};
+els.saveAsDownloadedBtn.style.display='none';
+let renderCount=0,closeCount=0, compiled, resolveCompile;
+const doc={name:'a.pdf',bytes:new Uint8Array([1,2]),pdfJsDoc:{},overlays:[{text:'old'}],bookmarks:[],metadata:{title:'old'},attachments:[{name:'x',bytes:new Uint8Array([3])}],dirty:true};
+const ctx=vm.createContext({doc,console,JSON,Blob,Uint8Array,URL:{createObjectURL:()=> 'blob:test'},document:{getElementById:id=>els[id]},
+ openModal: opts=>opts.onMount(),closeModal:()=>closeCount++,escapeHtml:x=>x,renderDocTabs:()=>renderCount++,updateCommandStates:()=>{},showToast:()=>{},
+ compileDocumentWithOverlays: snapshot=>{compiled=snapshot;return new Promise(r=>resolveCompile=r)}});
+vm.runInContext('let pendingSaveUrl = null;\n'+src.slice(start,end),ctx);
+(async()=>{
+ const capture=vm.runInContext('captureSaveState(doc)',ctx);doc.overlays[0].text='changed';assert.equal(capture.snapshot.overlays[0].text,'old');assert.equal(vm.runInContext('saveStateIsCurrent(doc, capture)',vm.createContext({...ctx,capture})),false);
+ doc.overlays[0].text='old';vm.runInContext('openSaveAsModal(doc)',ctx);
+ let prepare=els.saveAsConfirmBtn.listeners.click();assert.notEqual(compiled.bytes,doc.bytes);doc.metadata.title='changed';resolveCompile(new Uint8Array([8]));await prepare;
+ assert(els.saveAsStatus.textContent.includes('변경'));assert.equal(els.saveAsDownloadLink.style.display,undefined);assert.equal(doc.dirty,true);
+ doc.metadata.title='old';prepare=els.saveAsConfirmBtn.listeners.click();resolveCompile(new Uint8Array([8]));await prepare;
+ assert.equal(els.saveAsDownloadedBtn.style.display,'none');
+ let prevented=false;els.saveAsDownloadLink.listeners.click({preventDefault(){prevented=true}});assert.equal(prevented,false);assert.equal(doc.dirty,true);assert.equal(els.saveAsDownloadedBtn.style.display,'inline-flex');
+ doc.overlays[0].text='new';els.saveAsDownloadedBtn.listeners.click();assert.equal(doc.dirty,true);assert.equal(closeCount,0);
+ doc.overlays[0].text='old';els.saveAsDownloadedBtn.listeners.click();assert.equal(doc.dirty,false);assert.equal(closeCount,1);
+ console.log('PASS: consistent snapshot, stale preparation, explicit download confirmation, later edits preserved');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const src=fs.readFileSync('src/editor/index.html','utf8');
+const start=src.indexOf('    function formatSelectedPages('),end=src.indexOf('    async function splitDocumentPages(',start); assert(start>=0 && end>start);
+const doc={pageCount:10,currentPage:0,selectedPages:new Set([0])}, state={selectedInsertId:'old'};
+const ctx=vm.createContext({doc,state,Set,console,activeDoc:()=>doc,renderCurrentPageCanvas:()=>{},renderLeftPane:()=>{},updateCommandStates:()=>{},showToast:()=>{}});
+vm.runInContext(src.slice(start,end),ctx);
+assert.equal(vm.runInContext('formatSelectedPages(new Set([0,1,2,4,7,8]))',ctx),'1-3, 5, 8-9');
+const parse=(s,n=10)=>Array.from(vm.runInContext(`parseRangeInput(${JSON.stringify(s)},${n})`,ctx));
+assert.deepEqual(parse('1-3, 5, 3-7'),[0,1,2,3,4,5,6]);
+assert.deepEqual(parse('8-6, 2, 2'),[1,5,6,7]);
+for(const s of ['', '1,,2','1,11','0','1a','1-2-3','1.5','9007199254740992','1-99999999999999','1,'.repeat(3000)]) assert.deepEqual(parse(s),[],s);
+vm.runInContext('applyPageSelection(doc, [1,3,5])',ctx);assert.deepEqual([...doc.selectedPages],[1,3,5]);assert.equal(doc.currentPage,1);
+ctx.doc.operationBusy=true;vm.runInContext('applyPageSelection(doc, [0])',ctx);assert.deepEqual([...doc.selectedPages],[1,3,5]);
+console.log('PASS: bounded strict ranges, overlap, reverse ranges, validation and selection');

@@ -920,6 +920,16 @@
       color: #687582; font-size: 12px; pointer-events: none;
     }
 
+    #searchIndicator { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+    .search-hit-box { position:absolute; background:rgba(255,210,0,.46); outline:1px solid rgba(180,120,0,.7); }
+    .search-text-layer { position:absolute; left:0; top:0; line-height:1; opacity:0; pointer-events:none;
+      transform-origin:0 0; --scale-round-x:1px; --scale-round-y:1px;
+      --text-scale-factor:calc(var(--total-scale-factor) * var(--min-font-size)); --min-font-size-inv:calc(1 / var(--min-font-size)); }
+    .search-text-layer span { position:absolute; white-space:pre; transform-origin:0 0;
+      font-size:calc(var(--text-scale-factor) * var(--font-height)); transform:rotate(var(--rotate, 0deg)) scaleX(var(--scale-x, 1)) scale(var(--min-font-size-inv)); }
+    .search-text-layer[data-main-rotation="90"] { transform:rotate(90deg) translateY(-100%); }
+    .search-text-layer[data-main-rotation="180"] { transform:rotate(180deg) translate(-100%, -100%); }
+    .search-text-layer[data-main-rotation="270"] { transform:rotate(270deg) translateX(-100%); }
     #annotationOverlay {
       position: absolute;
       inset: 0;
@@ -1628,6 +1638,9 @@
         <button type="button" class="quick-icon-btn" id="inlineSearchNextBtn" style="width:22px;height:22px" title="다음 검색 결과">
           <i class="fa-solid fa-chevron-down" style="font-size:10px"></i>
         </button>
+        <button type="button" class="quick-icon-btn" id="highlightSearchBtn" style="width:24px;height:22px" title="현재 검색 결과에 PDF 형광펜 추가" aria-label="현재 검색 결과에 PDF 형광펜 추가">
+          <i class="fa-solid fa-highlighter" style="font-size:11px"></i>
+        </button>
       </div>
 
       <div class="doc-title-area">
@@ -1739,6 +1752,7 @@
           <div id="pagesFlow"><div id="pageStage">
             <canvas id="pdfRenderCanvas"></canvas>
             <div id="annotationOverlay"></div>
+            <div id="searchIndicator" aria-hidden="true"></div>
           </div></div>
         </div>
       </section>
@@ -1879,6 +1893,7 @@
               { id: "openPdf", label: "PDF 열기", icon: "fa-folder-open", shortcut: "Ctrl+O" },
               { id: "newBlankDoc", label: "새 빈 문서", icon: "fa-file-circle-plus", shortcut: "Ctrl+Alt+Shift+N" },
               { id: "saveAs", label: "다른 이름으로 저장", icon: "fa-floppy-disk", shortcut: "Ctrl+Shift+S", docReq: true },
+              { id: "compressPdf", label: "PDF 압축", icon: "fa-file-zipper", docReq: true },
               { id: "mergePdf", label: "PDF 병합", icon: "fa-object-group", shortcut: "Ctrl+M" },
               { id: "printPdf", label: "인쇄", icon: "fa-print", shortcut: "Ctrl+P", docReq: true },
               { id: "closeDoc", label: "현재 PDF 닫기", icon: "fa-circle-xmark", shortcut: "Ctrl+W", docReq: true },
@@ -1898,6 +1913,15 @@
       {
         title: "페이지",
         groups: [
+          {
+            title: "페이지 선택",
+            actions: [
+              { id: "selectPageRange", label: "범위 선택", icon: "fa-list-ol", docReq: true },
+              { id: "selectAllPages", label: "전체 선택", icon: "fa-check-double", docReq: true },
+              { id: "selectOddPages", label: "홀수 선택", icon: "fa-filter", docReq: true },
+              { id: "selectEvenPages", label: "짝수 선택", icon: "fa-filter", docReq: true },
+            ],
+          },
           {
             title: "생성/삽입",
             actions: [
@@ -1986,8 +2010,8 @@
           {
             title: "북마크 생성",
             actions: [
-              { id: "addBookmark", label: "현재 쪽 임시 표시", icon: "fa-bookmark", shortcut: "Ctrl+B", docReq: true },
-              { id: "autoBookmarks", label: "전체 페이지 임시 표시", icon: "fa-book-open", docReq: true },
+              { id: "addBookmark", label: "현재 쪽 북마크", icon: "fa-bookmark", shortcut: "Ctrl+B", docReq: true },
+              { id: "autoBookmarks", label: "전체 페이지 북마크", icon: "fa-book-open", docReq: true },
               { id: "tocPageBookmarks", label: "목차 페이지 기반 북마크", icon: "fa-list-check", docReq: true },
             ],
           },
@@ -2634,22 +2658,239 @@
       const pageTexts = [];
       let attachments = [];
       let attachmentsReadable = true;
-      try {
-        const embedded = await pdfJsDoc.getAttachments();
-        attachments = Object.values(embedded || {}).map((item) => ({
-          name: item.filename, bytes: new Uint8Array(item.content), type: "", isNew: false,
-        }));
-      } catch (error) {
-        attachmentsReadable = false;
-        console.warn("Unable to read PDF attachments", error);
-      }
-      for (let p = 1; p <= pageCount; p++) {
-        const page = await pdfJsDoc.getPage(p);
-        const viewport = page.getViewport({ scale: 1 });
-        pageSizes.push({ width: viewport.width, height: viewport.height });
-        pageTexts.push(null);
+      const readAttachments = (async () => {
+        try {
+          const embedded = await pdfJsDoc.getAttachments();
+          attachments = Object.values(embedded || {}).map(item => ({
+            name:item.filename, bytes:new Uint8Array(item.content), type:"", isNew:false,
+          }));
+        } catch (error) {
+          attachmentsReadable = false;
+          console.warn("Unable to read PDF attachments", error);
+        }
+      })();
+      // Bound concurrent page-metadata requests while preserving the page order.
+      let nextPage = 1, pageError = null;
+      const loadPageSizes = async () => {
+        while (!pageError && nextPage <= pageCount) {
+          const pageNumber = nextPage++;
+          try {
+            const page = await pdfJsDoc.getPage(pageNumber);
+            const viewport = page.getViewport({scale:1});
+            if (!Number.isFinite(viewport.width) || !Number.isFinite(viewport.height) || viewport.width <= 0 || viewport.height <= 0)
+              throw new Error(`잘못된 페이지 크기 (${pageNumber}쪽)`);
+            pageSizes[pageNumber-1] = {width:viewport.width, height:viewport.height};
+            pageTexts[pageNumber-1] = null;
+          } catch (error) { pageError = error; }
+        }
+      };
+      await Promise.all([readAttachments, ...Array.from({length:Math.min(4,pageCount)}, () => loadPageSizes())]);
+      if (pageError) {
+        try { await pdfJsDoc.destroy(); } catch (error) { console.warn("PDF cleanup failed",error); }
+        throw new Error(`PDF 페이지 정보를 읽지 못했습니다: ${pageError.message || pageError}`);
       }
       return { pageCount, pageSizes, metadata, pdfJsDoc, pageTexts, attachments, attachmentsReadable };
+    }
+
+    // Read the original outline without changing its structure in the PDF.
+    async function readPdfOutline(reader) {
+      const outline = await reader.getOutline();
+      const rows = [], pending = (outline || []).map((item, index) => ({item, depth: 0, path: [index], titles: [String(item.title || "")]})).reverse();
+      while (pending.length) {
+        if (rows.length >= 10000) throw new Error("북마크가 너무 많아 목록을 표시할 수 없습니다.");
+        const {item, depth, path, titles} = pending.pop();
+        rows.push({title: String(item.title || "제목 없음"), dest: item.dest, depth, path, titles});
+        for (let i = (item.items || []).length - 1; i >= 0; i--)
+          pending.push({item: item.items[i], depth: depth + 1, path: [...path, i],
+            titles: [...titles, String(item.items[i].title || "")]});
+      }
+      return rows;
+    }
+
+    // Change the selected outline item only. Every ancestor title and sibling link must
+    // match the outline PDF.js displayed; otherwise leave the PDF untouched.
+    function renamePdfOutline(pdfDoc, path, titles, newTitle, displayedRows, remove = false, newPage = null, actionIndex = 0) {
+      const {PDFName, PDFDict, PDFRef, PDFString, PDFHexString, PDFNumber} = window.PDFLib;
+      const n = PDFName.of, ctx = pdfDoc.context;
+      if (!Array.isArray(path) || !path.length || path.length !== titles.length || (!remove && newPage === null && !newTitle.trim()))
+        throw new Error("북마크 위치 또는 이름이 올바르지 않습니다.");
+      let parentRef = pdfDoc.catalog.get(n("Outlines"));
+      if (!(parentRef instanceof PDFRef)) throw new Error("북마크 구조를 안전하게 확인할 수 없습니다.");
+      let parent = ctx.lookup(parentRef);
+      if (!(parent instanceof PDFDict)) throw new Error("북마크 구조를 안전하게 확인할 수 없습니다.");
+      // Compare the complete displayed tree, not only the selected title: PDF.js
+      // may omit malformed nodes, so matching a single path could target a peer.
+      if (!Array.isArray(displayedRows)) throw new Error("표시된 북마크 목록을 확인할 수 없습니다.");
+      const visited = new Set(), pending = [], nodes = [];
+      const first = parent.get(n("First")), last = parent.get(n("Last"));
+      if (Boolean(first) !== Boolean(last)) throw new Error("북마크 연결이 올바르지 않습니다.");
+      if (first) pending.push({ref:first, parent, parentRef, previous:null, path:[0]});
+      let rowIndex = 0;
+      while (pending.length) {
+        if (rowIndex >= 10000) throw new Error("북마크가 너무 많습니다.");
+        const node = pending.pop(), ref = node.ref;
+        if (!(ref instanceof PDFRef) || visited.has(ref.toString())) throw new Error("북마크 연결이 올바르지 않습니다.");
+        visited.add(ref.toString());
+        const item = ctx.lookup(ref), row = displayedRows[rowIndex++];
+        if (!(item instanceof PDFDict) || String(item.get(n("Parent"))) !== String(node.parentRef) ||
+            (node.previous ? String(item.get(n("Prev"))) !== String(node.previous) : Boolean(item.get(n("Prev")))))
+          throw new Error("북마크 연결이 올바르지 않습니다.");
+        const text = item.lookupMaybe(n("Title"), PDFString, PDFHexString);
+        if (!text || !row || text.decodeText() !== row.titles[row.titles.length - 1] ||
+            JSON.stringify(node.path) !== JSON.stringify(row.path))
+          throw new Error("표시된 북마크와 원본 목차가 일치하지 않습니다.");
+        nodes.push({item, ref, path:node.path});
+        const next = item.get(n("Next")), child = item.get(n("First")), childLast = item.get(n("Last"));
+        if (Boolean(child) !== Boolean(childLast) || (!next && String(node.parent.get(n("Last"))) !== String(ref)))
+          throw new Error("북마크 연결이 올바르지 않습니다.");
+        if (next) {
+          const nextPath = node.path.slice(); nextPath[nextPath.length - 1]++;
+          pending.push({ref:next, parent:node.parent, parentRef:node.parentRef, previous:ref, path:nextPath});
+        }
+        if (child) pending.push({ref:child, parent:item, parentRef:ref, previous:null, path:[...node.path, 0]});
+      }
+      if (rowIndex !== displayedRows.length) throw new Error("표시된 북마크와 원본 목차가 일치하지 않습니다.");
+      if (remove) {
+        // Validate all visible-descendant counts before changing any links.
+        const byPath = new Map(nodes.map(node => [JSON.stringify(node.path), node]));
+        const expected = new Map();
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const node = nodes[i], key = JSON.stringify(node.path);
+          const children = expected.get(key) || 0;
+          const countObject = node.item.get(n("Count"));
+          if (countObject && !(countObject instanceof PDFNumber)) throw new Error("북마크 개수를 확인할 수 없습니다.");
+          const count = countObject?.asNumber() || 0;
+          if (!Number.isSafeInteger(count) || Math.abs(count) !== children)
+            throw new Error("북마크 개수가 목차 구조와 일치하지 않습니다.");
+          const parentPath = JSON.stringify(node.path.slice(0, -1));
+          expected.set(parentPath, (expected.get(parentPath) || 0) + 1 + (count > 0 ? count : 0));
+        }
+        const rootCount = parent.get(n("Count"));
+        if (!(rootCount instanceof PDFNumber) || rootCount.asNumber() !== (expected.get("[]") || 0))
+          throw new Error("북마크 개수가 목차 구조와 일치하지 않습니다.");
+        const target = byPath.get(JSON.stringify(path));
+        if (!target || target.path.length !== titles.length ||
+            titles.some((title, i) => displayedRows.find(row => JSON.stringify(row.path) === JSON.stringify(path.slice(0, i + 1)))?.titles[i] !== title))
+          throw new Error("표시된 북마크와 원본 목차가 일치하지 않습니다.");
+        const item = target.item, prev = item.get(n("Prev")), next = item.get(n("Next"));
+        const parentNode = path.length === 1 ? parent : byPath.get(JSON.stringify(path.slice(0, -1))).item;
+        if (prev) { if (next) ctx.lookup(prev).set(n("Next"), next); else ctx.lookup(prev).delete(n("Next")); }
+        else if (next) parentNode.set(n("First"), next); else parentNode.delete(n("First"));
+        if (next) { if (prev) ctx.lookup(next).set(n("Prev"), prev); else ctx.lookup(next).delete(n("Prev")); }
+        else if (prev) parentNode.set(n("Last"), prev); else parentNode.delete(n("Last"));
+        const targetCount = item.get(n("Count"))?.asNumber() || 0;
+        let delta = 1 + (targetCount > 0 ? targetCount : 0);
+        for (let depth = path.length - 1; depth >= 0 && delta; depth--) {
+          const ancestor = depth === 0 ? parent : byPath.get(JSON.stringify(path.slice(0, depth))).item;
+          const old = ancestor.get(n("Count")).asNumber();
+          const nextCount = Math.abs(old) - delta;
+          if (depth > 0 && nextCount === 0) ancestor.delete(n("Count"));
+          else ancestor.set(n("Count"), PDFNumber.of(old < 0 ? -nextCount : nextCount));
+          if (old < 0) delta = 0;
+        }
+        return;
+      }
+      const seen = new Set();
+      for (let depth = 0; depth < path.length; depth++) {
+        const index = path[depth];
+        if (!Number.isSafeInteger(index) || index < 0 || index >= 10000) throw new Error("북마크 위치가 올바르지 않습니다.");
+        let ref = parent.get(n("First")), previous = null, item;
+        for (let i = 0; i <= index; i++) {
+          if (!(ref instanceof PDFRef) || seen.has(ref.toString())) throw new Error("북마크 연결이 올바르지 않습니다.");
+          seen.add(ref.toString()); item = ctx.lookup(ref);
+          if (!(item instanceof PDFDict) || String(item.get(n("Parent"))) !== String(parentRef) ||
+              (previous ? String(item.get(n("Prev"))) !== String(previous) : Boolean(item.get(n("Prev")))))
+            throw new Error("북마크 연결이 올바르지 않습니다.");
+          if (i < index) { previous = ref; ref = item.get(n("Next")); }
+        }
+        const title = item.lookupMaybe(n("Title"), PDFString, PDFHexString);
+        if (!title || title.decodeText() !== titles[depth]) throw new Error("표시된 북마크와 원본 목차가 일치하지 않습니다.");
+        if (depth === path.length - 1) {
+          if (newPage === null) item.set(n("Title"), PDFHexString.fromText(newTitle.trim()));
+          else {
+            const pages = pdfDoc.getPages();
+            if (!Number.isInteger(newPage) || newPage < 0 || newPage >= pages.length) throw new Error("북마크 페이지가 올바르지 않습니다.");
+            const actionRef = item.get(n("A")), existingDest = item.get(n("Dest"));
+            const dest = ctx.obj([pages[newPage].ref, n("Fit")]);
+            if (actionRef) {
+              const action = ctx.lookup(actionRef);
+              if (existingDest || !(action instanceof PDFDict) || action.get(n("S")) !== n("GoTo") || !action.get(n("D")))
+                throw new Error("이 북마크의 동작은 페이지를 안전하게 변경할 수 없습니다.");
+              // Enumerate the chain in execution order and copy only the selected
+              // path. This isolates actions shared by other bookmarks or branches.
+              const { PDFArray } = window.PDFLib;
+              const active = new WeakSet(), stack = [{value:action, path:[], exit:false}], choices = [];
+              while (stack.length) {
+                const entry = stack.pop(), node = ctx.lookup(entry.value);
+                if (!(node instanceof PDFDict)) throw new Error("북마크 동작 연결이 올바르지 않습니다.");
+                if (entry.exit) { active.delete(node); continue; }
+                if (active.has(node)) throw new Error("순환하는 북마크 동작은 수정할 수 없습니다.");
+                if (choices.length >= 10000 || node.get(n("S")) !== n("GoTo") || !node.get(n("D")))
+                  throw new Error("이 북마크의 동작은 페이지를 안전하게 변경할 수 없습니다.");
+                choices.push({node, path:entry.path});
+                active.add(node); stack.push({value:node, exit:true});
+                const nextRef = node.get(n("Next"));
+                if (nextRef) {
+                  const next = ctx.lookup(nextRef);
+                  if (next instanceof PDFArray) {
+                    if (!next.size() || next.size() > 10000) throw new Error("북마크 동작 연결이 올바르지 않습니다.");
+                    for (let i = next.size() - 1; i >= 0; i--)
+                      stack.push({value:next.get(i), path:[...entry.path,{node, array:next, index:i}], exit:false});
+                  } else stack.push({value:nextRef, path:[...entry.path,{node, array:null}], exit:false});
+                }
+              }
+              if (!Number.isSafeInteger(actionIndex) || actionIndex < 0 || actionIndex >= choices.length)
+                throw new Error(`이동 동작 순번은 1~${choices.length} 범위여야 합니다.`);
+              const selected = choices[actionIndex];
+              let copy = selected.node.clone(); copy.set(n("D"), dest);
+              for (let i = selected.path.length - 1; i >= 0; i--) {
+                const edge = selected.path[i], parentCopy = edge.node.clone();
+                if (edge.array) { const list = edge.array.clone(); list.set(edge.index, copy); parentCopy.set(n("Next"), list); }
+                else parentCopy.set(n("Next"), copy);
+                copy = parentCopy;
+              }
+              item.set(n("A"), copy);
+            } else {
+              if (actionIndex !== 0) throw new Error("이 북마크에는 이동 동작이 하나뿐입니다.");
+              item.set(n("Dest"), dest);
+            }
+          }
+        } else { parent = item; parentRef = ref; }
+      }
+    }
+
+    async function renameExistingBookmark(doc, reader, bookmark, title, rows, remove = false, newPage = null, actionIndex = 0) {
+      if (doc.operationBusy || doc.pdfJsDoc !== reader || activeDoc() !== doc) return;
+      const bytes = doc.bytes;
+      doc.operationBusy = true;
+      let info;
+      try {
+        const pdf = await window.PDFLib.PDFDocument.load(bytes);
+        renamePdfOutline(pdf, bookmark.path, bookmark.titles, title, rows, remove, newPage, actionIndex);
+        const nextBytes = await pdf.save();
+        info = await parsePageCountAndMeta(nextBytes);
+        if (doc.bytes !== bytes || doc.pdfJsDoc !== reader || activeDoc() !== doc) {
+          await info.pdfJsDoc.destroy(); info = null;
+          showToast("문서가 변경되어 북마크 수정을 취소했습니다.", "fa-circle-exclamation"); return;
+        }
+        saveUndoSnapshot(doc, remove ? "기존 북마크 삭제" : newPage === null ? "기존 북마크 이름 변경" : "기존 북마크 페이지 변경");
+        doc.bytes = nextBytes;
+        await reloadDocPdfJs(doc, {info}); info = null;
+        await refreshAllViews();
+        showToast(remove ? "북마크를 삭제했습니다. PDF를 저장해 주세요." : newPage === null ? "북마크 이름을 변경했습니다. PDF를 저장해 주세요." : "북마크 페이지를 변경했습니다. PDF를 저장해 주세요.", "fa-bookmark");
+      } catch (error) {
+        if (info?.pdfJsDoc && doc.pdfJsDoc !== info.pdfJsDoc) await info.pdfJsDoc.destroy();
+        console.warn("Unable to modify PDF bookmark", error);
+        showToast(`북마크를 ${remove ? "삭제" : "변경"}하지 못했습니다: ${error.message || error}`, "fa-circle-exclamation");
+      } finally { doc.operationBusy = false; }
+    }
+
+    async function outlinePage(reader, dest) {
+      if (!dest) return null;
+      const resolved = typeof dest === "string" ? await reader.getDestination(dest) : dest;
+      if (!Array.isArray(resolved) || !resolved.length) return null;
+      const page = typeof resolved[0] === "number" ? resolved[0] : await reader.getPageIndex(resolved[0]);
+      return Number.isInteger(page) && page >= 0 && page < reader.numPages ? page : null;
     }
 
     async function ensurePageTexts(doc) {
@@ -2761,6 +3002,7 @@
     async function reloadDocPdfJs(doc, options = {}) {
       const info = options.info || await parsePageCountAndMeta(doc.bytes);
       const previous = doc.pdfJsDoc;
+      if (activeDoc() === doc) clearSearchResults();
       doc.pdfJsDoc = info.pdfJsDoc;
       doc.pageCount = info.pageCount;
       doc.pageSizes = info.pageSizes;
@@ -2942,6 +3184,7 @@
 
     async function setActiveDocument(index) {
       cancelPlacement();
+      if (index !== state.activeDocIndex) clearSearchResults();
       if (index < 0 || index >= state.docs.length) {
         state.activeDocIndex = -1;
       } else {
@@ -2959,6 +3202,28 @@
       await renderCurrentPageCanvas();
       await renderLeftPane();
       renderRightPane();
+    }
+
+    let pageJumpDraftDoc = null;
+    function syncPageJumpInput(doc, input) {
+      if (pageJumpDraftDoc !== doc) pageJumpDraftDoc = null;
+      if (!pageJumpDraftDoc) input.value = String(doc ? doc.currentPage + 1 : 1);
+    }
+
+    function applyPageJump(doc, input) {
+      if (!doc || pageJumpDraftDoc && pageJumpDraftDoc !== doc) return false;
+      const value = input.value.trim();
+      if (!/^\d+$/.test(value)) { showToast("페이지 번호를 정수로 입력해 주세요.", "fa-triangle-exclamation"); input.focus(); return false; }
+      const page = Number(value);
+      if (!Number.isSafeInteger(page) || page < 1 || page > doc.pageCount) {
+        showToast(`1부터 ${doc.pageCount}까지 페이지 번호를 입력해 주세요.`, "fa-triangle-exclamation"); input.focus(); return false;
+      }
+      pageJumpDraftDoc = null;
+      doc.currentPage = page - 1;
+      doc.selectedPages = new Set([doc.currentPage]);
+      if (isMobileViewport()) toggleLeftPane(true);
+      renderCurrentPageCanvas(); renderLeftPane();
+      return true;
     }
 
     function updateCommandStates() {
@@ -3007,6 +3272,7 @@
           stageEl.remove(); flowEl.replaceChildren(stageEl); flowDoc = null; flowBytes = null; flowKey = "";
         }
         statusBanner.textContent = "현재 페이지: - / 전체: -";
+        pageJumpDraftDoc = null; syncPageJumpInput(null, jumpSpin);
         document.getElementById("statusDocSummary").textContent = "열려 있는 문서 없음";
         document.getElementById("statusZoomSummary").textContent = "배율: -";
         document.getElementById("statusSelectionSummary").textContent = "선택 없음";
@@ -3022,12 +3288,13 @@
       metaEl.textContent = `· ${doc.pageCount}쪽 · 현재 ${doc.currentPage + 1}쪽`;
       statusBanner.textContent = `현재 페이지: ${doc.currentPage + 1} / 전체: ${doc.pageCount}`;
       jumpSpin.max = String(doc.pageCount);
-      jumpSpin.value = String(doc.currentPage + 1);
+      syncPageJumpInput(doc, jumpSpin);
       zoomSpin.value = String(Math.round(doc.zoom * 100));
 
       document.getElementById("statusDocSummary").textContent = `${doc.name} (${doc.currentPage + 1}/${doc.pageCount}쪽)`;
       document.getElementById("statusZoomSummary").textContent = `배율: ${Math.round(doc.zoom * 100)}%`;
-      const selPages = Array.from(doc.selectedPages).sort((a, b) => a - b).map((p) => `${p + 1}쪽`).join(", ");
+      const selected = Array.from(doc.selectedPages).sort((a, b) => a - b);
+      const selPages = selected.length > 10 ? `${selected.length}쪽` : selected.map((p) => `${p + 1}쪽`).join(", ");
       document.getElementById("statusSelectionSummary").textContent = `선택: ${selPages || (doc.currentPage + 1) + "쪽"}`;
 
       const palette = document.getElementById("contextToolPalette");
@@ -3174,6 +3441,7 @@
     let renderGeneration = 0;
     async function renderCurrentPageCanvas() {
       const generation = ++renderGeneration;
+      document.getElementById("searchIndicator")?.replaceChildren();
       if (currentRenderTask) {
         currentRenderTask.cancel();
         try { await currentRenderTask.promise; } catch (error) {
@@ -3249,6 +3517,7 @@
       }
 
       renderOverlayItems(doc, pageIdx, scale);
+      renderSearchIndicator(doc, pageIdx, scale, generation);
       updateCommandStates();
       syncThumbnailSelection(doc);
     }
@@ -3264,6 +3533,7 @@
           "overlay-item" +
           (state.selectedInsertId === item.id ? " selected" : "") +
           (state.insertMoveMode ? " move-mode" : "");
+        el.dataset.overlayId = item.id;
         el.style.left = `${Math.round(item.x * scale)}px`;
         el.style.top = `${Math.round(item.y * scale)}px`;
         if (item.width) el.style.width = `${Math.round(item.width * scale)}px`;
@@ -3272,10 +3542,13 @@
         el.style.color = item.color || "#1B2631";
         el.style.background = item.bgColor || "transparent";
         el.style.opacity = String(item.opacity ?? 1);
+        const itemRotation = item.rotation || 0;
+        el.style.transformOrigin = "0 0";
+        if (itemRotation) el.style.transform = `rotate(${itemRotation}deg)`;
 
         if (item.type === "Watermark") {
           el.style.fontWeight = "800";
-          el.style.transform = "rotate(-24deg)";
+          el.style.transform = `rotate(${itemRotation}deg) translate(50%, 50%) rotate(-24deg) translate(-50%, -50%)`;
           el.style.letterSpacing = "2px";
           el.textContent = item.text;
         } else if (item.type === "Stamp") {
@@ -3392,8 +3665,10 @@
           let resized = false;
           return {
             applyResize: (cx, cy) => {
-              const dw = (cx - startX) / scale;
-              const dh = (cy - startY) / scale;
+              const dx = (cx - startX) / scale, dy = (cy - startY) / scale;
+              const rad = (item.rotation || 0) * Math.PI / 180;
+              const dw = dx * Math.cos(rad) + dy * Math.sin(rad);
+              const dh = -dx * Math.sin(rad) + dy * Math.cos(rad);
               if (Math.abs(dw) > 2 || Math.abs(dh) > 2) {
                 if (!resized) {
                   saveUndoSnapshot(doc, `항목 크기 조절 (${item.type})`);
@@ -3595,17 +3870,39 @@
           return;
         }
         thumbWrap.dataset.docId = doc.id;
+        const thumbReader = doc.pdfJsDoc;
         thumbObserver = new IntersectionObserver(entries => {
           for (const entry of entries) {
-            if (!entry.isIntersecting || entry.target.dataset.rendered) continue;
-            entry.target.dataset.rendered = "1";
-            const canvas = entry.target.querySelector("canvas"), index = Number(entry.target.dataset.pageIndex);
-            doc.pdfJsDoc.getPage(index + 1).then(page => {
-              if (!canvas.isConnected) return;
-              const vp = page.getViewport({scale: 0.22}); canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
-              return page.render({canvas, canvasContext:canvas.getContext("2d"), viewport:vp}).promise;
-            }).catch(error => console.warn("축소판 표시 실패", error));
-            thumbObserver?.unobserve(entry.target);
+            const card = entry.target, canvas = card.querySelector("canvas");
+            if (!entry.isIntersecting) {
+              delete card.dataset.visible;
+              if (!card.dataset.rendering) { canvas.width = 1; canvas.height = 1; delete card.dataset.rendered; }
+              continue;
+            }
+            card.dataset.visible = "1";
+            if (card.dataset.rendered || card.dataset.rendering) continue;
+            card.dataset.rendering = "1";
+            const index = Number(card.dataset.pageIndex);
+            let retry = false;
+            thumbReader.getPage(index + 1).then(async page => {
+              if (!canvas.isConnected || doc.pdfJsDoc !== thumbReader) return;
+              if (!card.dataset.visible) { retry = true; return; }
+              const vp = page.getViewport({scale:0.22});
+              const buffer = document.createElement("canvas");
+              buffer.width = Math.round(vp.width); buffer.height = Math.round(vp.height);
+              await page.render({canvas:buffer,canvasContext:buffer.getContext("2d"),viewport:vp}).promise;
+              if (!canvas.isConnected || !card.dataset.visible || doc.pdfJsDoc !== thumbReader) return;
+              canvas.width = buffer.width; canvas.height = buffer.height;
+              canvas.getContext("2d").drawImage(buffer,0,0);
+              card.dataset.rendered = "1";
+            }).catch(error => console.warn("축소판 표시 실패",error)).finally(() => {
+              delete card.dataset.rendering;
+              if (!card.dataset.visible) { canvas.width=1; canvas.height=1; delete card.dataset.rendered; }
+              // A card can leave and re-enter while a render is running.
+              if (retry && card.isConnected && card.dataset.visible && !card.dataset.rendered && doc.pdfJsDoc === thumbReader) {
+                thumbObserver?.unobserve(card); thumbObserver?.observe(card);
+              }
+            });
           }
         }, {root:container, rootMargin:"200px"});
         for (let i = 0; i < doc.pageCount; i++) {
@@ -3662,39 +3959,121 @@
           container.innerHTML = `<div style="padding:14px;color:var(--text-muted)">문서를 먼저 열어주세요.</div>`;
           return;
         }
-        let html = `
-          <div style="padding:6px;color:var(--text-muted);font-size:11px">이 표시는 현재 세션에서만 유지되며 PDF 북마크로 저장되지 않습니다.</div>
-          <div style="display:flex;gap:6px;margin-bottom:8px">
-            <button type="button" class="compact-btn" id="bmAddNowBtn" style="flex:1"><i class="fa-solid fa-plus"></i> 현재 쪽 임시 표시</button>
-            <button type="button" class="compact-btn" id="bmAutoGenBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> 전체 표시</button>
-          </div>
-        `;
-        if (doc.bookmarks.length === 0) {
-          html += `<div style="padding:12px;color:var(--text-muted)">등록된 북마크가 없습니다.</div>`;
-        } else {
-          doc.bookmarks.forEach((bm, idx) => {
-            html += `
-              <div class="list-row-item" data-bm-idx="${idx}">
-                <span><i class="fa-solid fa-bookmark" style="color:var(--primary);margin-right:6px"></i>${escapeHtml(bm.title)}</span>
-                <span style="font-size:11px;color:var(--text-muted)">${bm.page + 1}쪽</span>
-              </div>
-            `;
+        const reader = doc.pdfJsDoc;
+        if (!doc.outlineCache || doc.outlineCache.reader !== reader) {
+          const cache = {reader, status: "loading", rows: []};
+          doc.outlineCache = cache;
+          readPdfOutline(reader).then(rows => { cache.rows = rows; cache.status = "ready"; }, error => {
+            console.warn("Unable to read PDF outline", error); cache.status = "error";
+          }).finally(() => {
+            if (doc.outlineCache === cache && activeDoc() === doc && state.activeLeftTab === "bookmarks") renderLeftPane();
           });
         }
+        const cache = doc.outlineCache;
+        let html = `
+          <div style="padding:6px;color:var(--text-muted);font-size:11px">북마크 이름·페이지 변경과 삭제는 PDF 저장 시 반영됩니다. 연쇄 동작은 페이지와 순번을 입력해 변경할 수 있습니다(예: 3,2). 다른 이동은 유지됩니다. 페이지는 전체 맞춤으로 엽니다. 상위 북마크를 삭제하면 하위 북마크도 함께 삭제됩니다.</div>
+          <div style="display:flex;gap:6px;margin-bottom:8px">
+            <button type="button" class="compact-btn" id="bmAddNowBtn" style="flex:1"><i class="fa-solid fa-plus"></i> 현재 쪽 북마크</button>
+            <button type="button" class="compact-btn" id="bmAutoGenBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> 전체 표시</button>
+          </div>`;
+        if (cache.status === "loading") html += `<div style="padding:8px">기존 북마크를 읽는 중...</div>`;
+        else if (cache.status === "error") html += `<div style="padding:8px">기존 북마크를 읽지 못했습니다. 원본 북마크는 유지됩니다.</div>`;
+        else cache.rows.forEach((bm, idx) => {
+          html += `<div class="list-row-item" data-outline-idx="${idx}" style="padding-left:${Math.min(bm.depth, 8) * 12 + 8}px" title="기존 북마크">
+            <span><i class="fa-solid fa-bookmark" style="margin-right:6px"></i>${escapeHtml(bm.title)}</span><span><button type="button" class="compact-btn" data-outline-edit="${idx}" aria-label="기존 북마크 이름 변경">이름</button> <button type="button" class="compact-btn" data-outline-page="${idx}" aria-label="기존 북마크 페이지 변경">쪽</button> <button type="button" class="compact-btn" data-outline-delete="${idx}" aria-label="기존 북마크 삭제">삭제</button></span></div>`;
+        });
+        if (cache.status === "ready" && !cache.rows.length && !doc.bookmarks.length)
+          html += `<div style="padding:12px;color:var(--text-muted)">등록된 북마크가 없습니다.</div>`;
+        doc.bookmarks.forEach((bm, idx) => {
+          html += `<div class="list-row-item" data-bm-idx="${idx}">
+            <span><i class="fa-solid fa-bookmark" style="color:var(--primary);margin-right:6px"></i>${escapeHtml(bm.title)} <small>${bm.page + 1}쪽</small></span>
+            <span><button type="button" class="compact-btn" data-bm-edit="${idx}" aria-label="북마크 이름 변경">이름</button>
+            <button type="button" class="compact-btn" data-bm-page="${idx}" aria-label="북마크 페이지 변경">쪽</button>
+            <button type="button" class="compact-btn" data-bm-delete="${idx}" aria-label="북마크 삭제">삭제</button></span></div>`;
+        });
         container.innerHTML = html;
         document.getElementById("bmAddNowBtn")?.addEventListener("click", () => executeCommand("addBookmark"));
         document.getElementById("bmAutoGenBtn")?.addEventListener("click", () => executeCommand("autoBookmarks"));
-        container.querySelectorAll("[data-bm-idx]").forEach((row) => {
-          row.addEventListener("click", () => {
-            const bm = doc.bookmarks[Number(row.dataset.bmIdx)];
-            if (bm) {
-              doc.currentPage = Math.max(0, Math.min(bm.page, doc.pageCount - 1));
-              doc.selectedPages = new Set([doc.currentPage]);
-              if (isMobileViewport()) toggleLeftPane(true);
-              renderCurrentPageCanvas();
-            }
-          });
-        });
+        const goToBookmark = (page) => {
+          doc.currentPage = page; doc.selectedPages = new Set([page]);
+          if (isMobileViewport()) toggleLeftPane(true);
+          renderCurrentPageCanvas();
+        };
+        container.querySelectorAll("[data-outline-idx]").forEach(row => row.addEventListener("click", async () => {
+          try {
+            const page = await outlinePage(reader, cache.rows[Number(row.dataset.outlineIdx)].dest);
+            if (doc.pdfJsDoc !== reader || activeDoc() !== doc) return;
+            if (page === null) showToast("이 북마크의 페이지 위치를 열 수 없습니다.", "fa-circle-info");
+            else goToBookmark(page);
+          } catch (error) { console.warn("Unable to resolve bookmark", error); showToast("북마크 위치를 찾을 수 없습니다.", "fa-circle-exclamation"); }
+        }));
+        container.querySelectorAll("[data-outline-edit]").forEach(button => button.addEventListener("click", async event => {
+          event.stopPropagation();
+          const bm = cache.rows[Number(button.dataset.outlineEdit)];
+          if (!bm || doc.operationBusy) return;
+          const title = window.prompt("북마크 이름", bm.title);
+          if (title === null || title.trim() === bm.title) return;
+          if (!title.trim()) { showToast("북마크 이름을 입력해 주세요.", "fa-circle-info"); return; }
+          await renameExistingBookmark(doc, reader, bm, title, cache.rows);
+        }));
+        const askBookmarkPage = (initial) => {
+          const text = window.prompt(`이동할 페이지 (1~${doc.pageCount})`, String(initial + 1));
+          if (text === null) return null;
+          if (!/^\d+$/.test(text.trim())) { showToast("유효한 페이지 번호를 입력해 주세요.", "fa-circle-info"); return null; }
+          const page = Number(text.trim()) - 1;
+          if (!Number.isSafeInteger(page) || page < 0 || page >= doc.pageCount) { showToast("유효한 페이지 번호를 입력해 주세요.", "fa-circle-info"); return null; }
+          return page;
+        };
+        container.querySelectorAll("[data-outline-page]").forEach(button => button.addEventListener("click", async event => {
+          event.stopPropagation();
+          const bm = cache.rows[Number(button.dataset.outlinePage)];
+          if (!bm || doc.operationBusy) return;
+          const text = window.prompt(`이동할 페이지, 동작 순번 (1~${doc.pageCount}쪽; 예: 3 또는 3,2)`, String(doc.currentPage + 1));
+          if (text === null) return;
+          const match = text.trim().match(/^(\d+)\s*(?:,\s*(\d+))?$/);
+          const page = match ? Number(match[1]) - 1 : -1, actionIndex = match ? Number(match[2] || "1") - 1 : -1;
+          if (!Number.isSafeInteger(page) || page < 0 || page >= doc.pageCount || !Number.isSafeInteger(actionIndex) || actionIndex < 0) {
+            showToast("페이지 번호와 동작 순번을 확인해 주세요.", "fa-circle-info"); return;
+          }
+          await renameExistingBookmark(doc, reader, bm, "", cache.rows, false, page, actionIndex);
+        }));
+        container.querySelectorAll("[data-bm-page]").forEach(button => button.addEventListener("click", event => {
+          event.stopPropagation();
+          const bm = doc.bookmarks[Number(button.dataset.bmPage)];
+          if (!bm || doc.operationBusy) return;
+          const page = askBookmarkPage(bm.page);
+          if (page === null || page === bm.page) return;
+          saveUndoSnapshot(doc, "북마크 페이지 변경"); bm.page = page; renderLeftPane();
+        }));
+        container.querySelectorAll("[data-outline-delete]").forEach(button => button.addEventListener("click", async event => {
+          event.stopPropagation();
+          const bm = cache.rows[Number(button.dataset.outlineDelete)];
+          if (!bm || doc.operationBusy) return;
+          const descendants = cache.rows.filter(row => row.path.length > bm.path.length &&
+            bm.path.every((part, i) => row.path[i] === part)).length;
+          const message = descendants ? `"${bm.title}" 및 하위 북마크 ${descendants}개를 삭제하시겠습니까?` : `"${bm.title}" 북마크를 삭제하시겠습니까?`;
+          if (!window.confirm(message)) return;
+          await renameExistingBookmark(doc, reader, bm, "", cache.rows, true);
+        }));
+        container.querySelectorAll("[data-bm-idx]").forEach(row => row.addEventListener("click", () => {
+          const bm = doc.bookmarks[Number(row.dataset.bmIdx)];
+          if (bm) goToBookmark(bm.page);
+        }));
+        container.querySelectorAll("[data-bm-edit]").forEach(button => button.addEventListener("click", event => {
+          event.stopPropagation();
+          const bm = doc.bookmarks[Number(button.dataset.bmEdit)];
+          if (!bm) return;
+          const title = window.prompt("북마크 이름", bm.title);
+          if (title === null || title.trim() === bm.title) return;
+          if (!title.trim()) { showToast("북마크 이름을 입력해 주세요.", "fa-circle-info"); return; }
+          saveUndoSnapshot(doc, "북마크 이름 변경"); bm.title = title.trim(); renderLeftPane();
+        }));
+        container.querySelectorAll("[data-bm-delete]").forEach(button => button.addEventListener("click", event => {
+          event.stopPropagation();
+          const index = Number(button.dataset.bmDelete);
+          if (!doc.bookmarks[index]) return;
+          saveUndoSnapshot(doc, "북마크 삭제"); doc.bookmarks.splice(index, 1); renderLeftPane();
+        }));
         return;
       }
 
@@ -3754,7 +4133,7 @@
             html += `
               <div class="list-row-item" data-search-idx="${idx}">
                 <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                  <strong style="color:var(--primary)">${res.pageIndex + 1}쪽:</strong> ${escapeHtml(res.snippet)}
+                  <strong style="color:var(--primary)">${res.pageIndex + 1}쪽${res.kind === "page" ? " · 페이지 위치" : ""}:</strong> ${escapeHtml(res.snippet)}
                 </div>
               </div>
             `;
@@ -3767,12 +4146,17 @@
         });
         container.querySelectorAll("[data-search-idx]").forEach((row) => {
           row.addEventListener("click", () => {
-            const hit = state.searchResults[Number(row.dataset.searchIdx)];
-            if (hit && doc) {
+            const index = Number(row.dataset.searchIdx);
+            const hit = state.searchResults[index];
+            if (hit && doc && hit.docId === doc.id && hit.reader === doc.pdfJsDoc) {
+              state.activeSearchHitIndex = index;
+              state.searchScrollHit = hit;
+              document.getElementById("inlineSearchCount").textContent = `${index + 1}/${state.searchResults.length}`;
               doc.currentPage = hit.pageIndex;
               doc.selectedPages = new Set([hit.pageIndex]);
               if (isMobileViewport()) toggleLeftPane(true);
               renderCurrentPageCanvas();
+              if (hit.kind === "page") showToast("이 결과는 페이지 위치만 표시됩니다.", "fa-circle-info");
             }
           });
         });
@@ -3989,6 +4373,50 @@
     // =========================================================================
     // PDF Binary Manipulation Helpers (pdf-lib + Canvas Bake)
     // =========================================================================
+    // Append new top-level destinations without rewriting the original outline tree.
+    function appendPdfBookmarks(pdfDoc, bookmarks) {
+      if (!bookmarks?.length) return;
+      const { PDFName, PDFDict, PDFNumber, PDFHexString, PDFRef } = window.PDFLib;
+      const name = PDFName.of, ctx = pdfDoc.context, pages = pdfDoc.getPages();
+      for (const bm of bookmarks) {
+        if (!Number.isInteger(bm.page) || bm.page < 0 || bm.page >= pages.length || !String(bm.title || '').trim())
+          throw new Error("북마크 제목 또는 페이지가 올바르지 않습니다.");
+      }
+      let rootRef = pdfDoc.catalog.get(name('Outlines')), root, priorRef;
+      if (rootRef) {
+        if (!(rootRef instanceof PDFRef)) throw new Error("기존 PDF 북마크 구조를 안전하게 수정할 수 없습니다.");
+        root = ctx.lookup(rootRef);
+        if (!(root instanceof PDFDict)) throw new Error("기존 PDF 북마크를 안전하게 보존할 수 없습니다.");
+        priorRef = root.get(name('Last'));
+        const first = root.get(name('First'));
+        if (Boolean(first) !== Boolean(priorRef)) throw new Error("기존 PDF 북마크 구조가 올바르지 않습니다.");
+        if (priorRef && (!(priorRef instanceof PDFRef) || !(first instanceof PDFRef) ||
+            !(ctx.lookup(priorRef) instanceof PDFDict) || ctx.lookup(priorRef).get(name('Next'))))
+          throw new Error("기존 PDF 북마크 구조가 올바르지 않습니다.");
+      } else {
+        root = ctx.obj({Type:'Outlines'}); rootRef = ctx.register(root);
+        pdfDoc.catalog.set(name('Outlines'), rootRef);
+      }
+      const countObject = root.lookupMaybe(name('Count'), PDFNumber);
+      if (priorRef && !countObject) throw new Error("기존 PDF 북마크 개수를 확인할 수 없습니다.");
+      const oldCount = countObject?.asNumber() || 0;
+      if (oldCount < 0 || !Number.isSafeInteger(oldCount)) throw new Error("기존 PDF 북마크 개수를 확인할 수 없습니다.");
+      const entries = bookmarks.map(bm => {
+        const item = ctx.obj({Title: PDFHexString.fromText(String(bm.title)), Parent:rootRef,
+          Dest:[pages[bm.page].ref, name('Fit')]});
+        return {item, ref:ctx.register(item)};
+      });
+      entries.forEach((entry, i) => {
+        const prev = i ? entries[i-1].ref : priorRef;
+        if (prev) entry.item.set(name('Prev'), prev);
+        if (i+1 < entries.length) entry.item.set(name('Next'), entries[i+1].ref);
+      });
+      if (priorRef) ctx.lookup(priorRef).set(name('Next'), entries[0].ref);
+      else root.set(name('First'), entries[0].ref);
+      root.set(name('Last'), entries[entries.length-1].ref);
+      root.set(name('Count'), PDFNumber.of(oldCount + entries.length));
+    }
+
     async function compileDocumentWithOverlays(doc) {
       if (!window.PDFLib) throw new Error("PDF 편집 엔진을 사용할 수 없습니다.");
       if (!window.SunriseEditState || !window.SunriseKoreanFont) throw new Error("PDF 편집 구성요소를 불러오지 못했습니다.");
@@ -4003,6 +4431,12 @@
       }
 
       const pages = pdfDoc.getPages();
+      const overlayPoint = (item, x, y) => {
+        const radians = (item.rotation || 0) * Math.PI / 180;
+        return [item.x + x * Math.cos(radians) - y * Math.sin(radians),
+          item.y + x * Math.sin(radians) + y * Math.cos(radians)];
+      };
+      appendPdfBookmarks(pdfDoc, doc.bookmarks);
       const textTypes = new Set(["Text", "Header", "Footer", "PageNumber"]);
       const textItems = doc.overlays.filter((item) => textTypes.has(item.type));
       const textFont = textItems.length
@@ -4041,9 +4475,10 @@
             parseInt(colorValue.slice(2, 4), 16) / 255, parseInt(colorValue.slice(4, 6), 16) / 255);
           for (const [lineIndex, line] of lines.entries()) {
             if (!line) continue;
-            const [x, y] = viewport.convertToPdfPoint(item.x + 7, item.y + 4 + fontSize * 1.05 + lineIndex * lineHeight);
+            const [viewX,viewY] = overlayPoint(item, 7, 4 + fontSize * 1.05 + lineIndex * lineHeight);
+            const [x,y] = viewport.convertToPdfPoint(viewX, viewY);
             page.drawText(line, { x, y, font: textFont, size: fontSize, color,
-              rotate: degrees(viewPage.rotate || 0), opacity: item.opacity ?? 1 });
+              rotate: degrees((viewPage.rotate || 0) - (item.rotation || 0)), opacity: item.opacity ?? 1 });
           }
           continue;
         }
@@ -4122,11 +4557,13 @@
         const pngImage = await pdfDoc.embedPng(offCanvas.toDataURL("image/png"));
         const viewPage = await doc.pdfJsDoc.getPage(item.pageIndex + 1);
         const viewport = viewPage.getViewport({ scale: 1 });
-        let [x, y] = viewport.convertToPdfPoint(item.x, item.y + h);
-        let angle = viewPage.rotate || 0;
+        const [baseX, baseY] = overlayPoint(item, 0, h);
+        let [x, y] = viewport.convertToPdfPoint(baseX, baseY);
+        let angle = (viewPage.rotate || 0) - (item.rotation || 0);
         if (item.type === "Watermark") {
           angle += 24;
-          const [centerX, centerY] = viewport.convertToPdfPoint(item.x + w / 2, item.y + h / 2);
+          const [viewCenterX, viewCenterY] = overlayPoint(item, w / 2, h / 2);
+          const [centerX, centerY] = viewport.convertToPdfPoint(viewCenterX, viewCenterY);
           const radians = angle * Math.PI / 180;
           x = centerX - (w * Math.cos(radians) - h * Math.sin(radians)) / 2;
           y = centerY - (w * Math.sin(radians) + h * Math.cos(radians)) / 2;
@@ -4451,6 +4888,11 @@
           openSaveAsModal(doc);
           break;
 
+        case "compressPdf":
+          if (!doc) return;
+          openSaveAsModal(doc, true);
+          break;
+
         case "mergePdf":
           openMergePdfModal();
           break;
@@ -4705,26 +5147,41 @@
           showToast("PDF 내부 원본 이미지 추출은 아직 지원하지 않습니다. 페이지 이미지 저장을 이용해 주세요.", "fa-circle-info");
           break;
 
+        case "selectPageRange":
+          if (doc) openPageSelectionModal(doc);
+          break;
+        case "selectAllPages":
+        case "selectOddPages":
+        case "selectEvenPages":
+          if (doc) {
+            const indices = Array.from({length: doc.pageCount}, (_, i) => i)
+              .filter(i => cmdId === "selectAllPages" || (i + 1) % 2 === (cmdId === "selectOddPages" ? 1 : 0));
+            applyPageSelection(doc, indices);
+          }
+          break;
+
         case "addBookmark":
           if (!doc) return;
+          saveUndoSnapshot(doc, "북마크 추가");
           doc.bookmarks.push({
             id: `bm_${Date.now()}`,
             title: `${doc.currentPage + 1}쪽 북마크 (${doc.name})`,
             page: doc.currentPage,
           });
           ensureLeftPanelOpen("bookmarks");
-          showToast(`${doc.currentPage + 1}쪽 임시 표시를 추가했습니다. PDF 북마크로 저장되지는 않습니다.`, "fa-bookmark");
+          showToast(`${doc.currentPage + 1}쪽 북마크를 추가했습니다. PDF를 저장해 주세요.`, "fa-bookmark");
           break;
 
         case "autoBookmarks":
           if (!doc) return;
-          doc.bookmarks = Array.from({ length: doc.pageCount }, (_, idx) => ({
-            id: `bm_auto_${idx}`,
+          saveUndoSnapshot(doc, "전체 페이지 북마크 추가");
+          doc.bookmarks.push(...Array.from({ length: doc.pageCount }, (_, idx) => ({
+            id: `bm_auto_${Date.now()}_${idx}`,
             title: `${idx + 1}쪽`,
             page: idx,
-          }));
+          })));
           ensureLeftPanelOpen("bookmarks");
-          showToast(`전체 ${doc.pageCount}쪽의 임시 표시를 만들었습니다. PDF 북마크로 저장되지는 않습니다.`, "fa-book-open");
+          showToast(`전체 ${doc.pageCount}쪽의 북마크를 만들었습니다. PDF를 저장해 주세요.`, "fa-book-open");
           break;
 
         case "tocPageBookmarks":
@@ -4850,16 +5307,66 @@
       original.splice(insertAt, 0, ...Array(count).fill(null));
       return original;
     }
-    function openSaveAsModal(doc) {
-      const suggested = doc.name.replace(/\.pdf$/i, "") + "_edited.pdf";
+    // Capture the editable state so an asynchronous save cannot mix document versions.
+    function captureSaveState(doc) {
+      return {
+        originalBytes: doc.bytes, reader: doc.pdfJsDoc,
+        data: JSON.stringify({overlays:doc.overlays, bookmarks:doc.bookmarks, metadata:doc.metadata,
+          attachments:doc.attachments.map(({bytes, ...item}) => ({...item, size:bytes.byteLength}))}),
+        attachmentBytes: doc.attachments.map(item => item.bytes),
+        snapshot: {...doc, bytes:doc.bytes.slice(), overlays:JSON.parse(JSON.stringify(doc.overlays)),
+          bookmarks:JSON.parse(JSON.stringify(doc.bookmarks)), metadata:JSON.parse(JSON.stringify(doc.metadata)),
+          attachments:doc.attachments.map(item => ({...item, bytes:item.bytes.slice()}))},
+      };
+    }
+
+    function saveStateIsCurrent(doc, captured) {
+      return doc.bytes === captured.originalBytes && doc.pdfJsDoc === captured.reader &&
+        doc.attachments.length === captured.attachmentBytes.length &&
+        doc.attachments.every((item,i) => item.bytes === captured.attachmentBytes[i]) &&
+        JSON.stringify({overlays:doc.overlays, bookmarks:doc.bookmarks, metadata:doc.metadata,
+          attachments:doc.attachments.map(({bytes, ...item}) => ({...item, size:bytes.byteLength}))}) === captured.data;
+    }
+
+    // Losslessly deflate unfiltered streams, retaining the compiled PDF if not smaller.
+    async function compressPdfLossless(bytes) {
+      if (typeof CompressionStream !== "function") throw new Error("이 브라우저는 PDF 압축을 지원하지 않습니다. 최신 Chrome 또는 Edge를 이용해 주세요.");
+      const {PDFDocument, PDFRawStream, PDFName} = window.PDFLib;
+      const n = PDFName.of, pdf = await PDFDocument.load(bytes, {updateMetadata:false});
+      let total = 0, changed = 0;
+      for (const [ref, object] of pdf.context.enumerateIndirectObjects()) {
+        if (!(object instanceof PDFRawStream)) continue;
+        const dict = object.dict, type = dict.get(n("Type"));
+        if (dict.get(n("Filter")) || dict.get(n("DecodeParms")) || dict.get(n("F")) || dict.get(n("FFilter")) || dict.get(n("FDecodeParms")) ||
+            type === n("XRef") || type === n("ObjStm") || type === n("Metadata")) continue;
+        const content = object.getContents();
+        if (content.length < 128 || content.length > 16 * 1024 * 1024 || total + content.length > 50 * 1024 * 1024) continue;
+        total += content.length;
+        const stream = new Blob([content]).stream().pipeThrough(new CompressionStream("deflate"));
+        const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+        if (compressed.length + 32 >= content.length) continue;
+        const updated = dict.clone(); updated.set(n("Filter"), n("FlateDecode"));
+        pdf.context.assign(ref, PDFRawStream.of(updated, compressed)); changed++;
+      }
+      if (!changed) return {bytes, originalSize:bytes.length, changed:0};
+      const output = await pdf.save({useObjectStreams:true});
+      if (output.length >= bytes.length) return {bytes, originalSize:bytes.length, changed:0};
+      const verified = await PDFDocument.load(output, {updateMetadata:false});
+      if (verified.getPageCount() !== pdf.getPageCount()) throw new Error("압축 결과의 페이지 수가 일치하지 않습니다.");
+      return {bytes:output, originalSize:bytes.length, changed};
+    }
+
+    function openSaveAsModal(doc, compress = false) {
+      const suggested = doc.name.replace(/\.pdf$/i, "") + (compress ? "_compressed.pdf" : "_edited.pdf");
       openModal({
-        title: "다른 이름으로 PDF 저장",
-        icon: "fa-floppy-disk",
+        title: compress ? "PDF 무손실 압축" : "다른 이름으로 PDF 저장",
+        icon: compress ? "fa-file-zipper" : "fa-floppy-disk",
         width: "460px",
         bodyHtml: `
           <div class="dialog-info-box">
             원본은 그대로 두고 새 PDF로 저장합니다. 삽입한 텍스트·머리말·꼬리말·페이지 번호는 검색 가능한 텍스트로 저장됩니다.
             저장한 파일을 이 편집기에서 다시 열면 삽입 항목을 다시 수정할 수 있습니다.
+            ${compress ? "무손실 압축을 사용하며, 이미 압축된 파일은 용량이 줄지 않을 수 있습니다." : ""}
           </div>
           <div class="dialog-form-grid">
             <label for="saveAsFilenameInput">저장 파일명:</label>
@@ -4872,6 +5379,7 @@
           <div class="modal-footer-right">
             <button type="button" class="dialog-btn primary" id="saveAsConfirmBtn"><i class="fa-solid fa-file-pdf"></i> PDF 준비</button>
             <a class="dialog-btn primary" id="saveAsDownloadLink" style="display:none;text-decoration:none" download>PDF 다운로드</a>
+            <button type="button" class="dialog-btn primary" id="saveAsDownloadedBtn" style="display:none">다운로드 완료 확인</button>
             <button type="button" class="dialog-btn" id="saveAsCancelBtn">취소</button>
           </div>
         `,
@@ -4885,26 +5393,39 @@
             button.disabled = true;
             status.textContent = "PDF를 준비하고 있습니다. 잠시만 기다려 주세요.";
             try {
-              const bytes = await compileDocumentWithOverlays(doc);
+              const captured = captureSaveState(doc);
+              let bytes = await compileDocumentWithOverlays(captured.snapshot);
+              const result = compress ? await compressPdfLossless(bytes) : null;
+              if (result) bytes = result.bytes;
               if (!document.getElementById("modalBackdrop").classList.contains("open") ||
                   document.getElementById("saveAsConfirmBtn") !== button) return;
+              if (!saveStateIsCurrent(doc, captured)) throw new Error("준비 중 문서가 변경되었습니다. 다시 준비해 주세요.");
               const link = document.getElementById("saveAsDownloadLink");
+              const confirm = document.getElementById("saveAsDownloadedBtn");
               pendingSaveUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-              link.href = pendingSaveUrl;
-              link.download = name;
-              link.style.display = "inline-flex";
-              button.style.display = "none";
-              document.getElementById("saveAsFilenameInput").disabled = true;
+              link.href = pendingSaveUrl; link.download = name; link.style.display = "inline-flex";
+              button.style.display = "none"; document.getElementById("saveAsFilenameInput").disabled = true;
               document.getElementById("saveAsCancelBtn").textContent = "닫기";
-              status.textContent = "PDF가 준비되었습니다. 다운로드 버튼을 눌러 기기에 저장하세요.";
+              status.textContent = result
+                ? `압축 전 ${(result.originalSize / 1024).toFixed(1)} KB → 압축 후 ${(bytes.length / 1024).toFixed(1)} KB. 다운로드 후 완료를 확인해 주세요.`
+                : "PDF가 준비되었습니다. 다운로드 후 완료를 확인해 주세요.";
               link.focus();
-              link.addEventListener("click", () => {
-                doc.dirty = false;
-                renderDocTabs();
-                updateCommandStates();
-                showToast(`다운로드를 시작했습니다: ${name}`, "fa-floppy-disk");
-                setTimeout(closeModal, 0);
-              }, { once: true });
+              link.addEventListener("click", event => {
+                if (!saveStateIsCurrent(doc, captured)) {
+                  event.preventDefault();
+                  status.textContent = "문서가 변경되었습니다. 창을 닫고 PDF를 다시 준비해 주세요.";
+                  link.style.display = "none"; confirm.style.display = "none"; return;
+                }
+                confirm.style.display = "inline-flex";
+                status.textContent = "다운로드를 시작했습니다. 파일 저장이 끝났는지 확인한 후 완료를 눌러 주세요.";
+              });
+              confirm.addEventListener("click", () => {
+                if (!saveStateIsCurrent(doc, captured)) {
+                  status.textContent = "문서가 변경되어 저장 완료로 표시하지 않습니다. 다시 저장해 주세요."; return;
+                }
+                doc.dirty = false; renderDocTabs(); updateCommandStates();
+                showToast(`다운로드 완료를 확인했습니다: ${name}`, "fa-floppy-disk"); closeModal();
+              });
             } catch (error) {
               showToast(`저장 실패: ${error.message || error}`, "fa-circle-exclamation");
               status.textContent = `PDF 준비 실패: ${error.message || error}`;
@@ -4951,10 +5472,11 @@
             const posMode = document.getElementById("blankPosSelect").value;
             const sizeMode = document.getElementById("blankSizeSelect").value;
             const count = Math.max(1, Math.min(20, Number(document.getElementById("blankCountInput").value) || 1));
-            saveUndoSnapshot(doc, `빈 페이지 ${count}장 삽입`);
-
             const { PDFDocument } = window.PDFLib;
-            const pdfDoc = await PDFDocument.load(doc.bytes);
+            const originalBytes = doc.bytes;
+            const pdfDoc = await PDFDocument.load(originalBytes);
+            if (doc.bytes !== originalBytes || !allowPageStructureChange(pdfDoc)) return;
+            saveUndoSnapshot(doc, `빈 페이지 ${count}장 삽입`);
             const dims = sizeMode === "a4l" ? [841.89, 595.28] : [595.28, 841.89];
             let targetIdx = doc.currentPage + 1;
             if (posMode === "before") targetIdx = doc.currentPage;
@@ -4985,10 +5507,11 @@
     async function duplicateSelectedPages(doc) {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
-      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 복제`);
-
       const { PDFDocument } = window.PDFLib;
-      const pdfDoc = await PDFDocument.load(doc.bytes);
+      const originalBytes = doc.bytes;
+      const pdfDoc = await PDFDocument.load(originalBytes);
+      if (doc.bytes !== originalBytes || !allowPageStructureChange(pdfDoc)) return;
+      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 복제`);
       const copied = await pdfDoc.copyPages(pdfDoc, indices);
       const insertAt = Math.max(...indices) + 1;
       copied.forEach((p, offset) => pdfDoc.insertPage(insertAt + offset, p));
@@ -5004,6 +5527,166 @@
       showToast(`선택한 ${indices.length}개 페이지를 복제했습니다.`, "fa-clone");
     }
 
+    // Resolve supported local destinations to stable page references. Refuse
+    // unsupported actions, broken trees and deleted targets.
+    function allowPageStructureChange(pdfDoc, removedPages = []) {
+      const {PDFName, PDFDict, PDFRef, PDFArray, PDFString, PDFHexString, PDFNumber} = window.PDFLib;
+      const n = PDFName.of, ctx = pdfDoc.context, rootRef = pdfDoc.catalog.get(n("Outlines"));
+      if (!rootRef) return true;
+      const blocked = message => { showToast(message, "fa-circle-exclamation"); return false; };
+      try {
+        if (!(rootRef instanceof PDFRef)) throw new Error("unsupported root");
+        const root = ctx.lookup(rootRef);
+        if (!(root instanceof PDFDict)) throw new Error("invalid root");
+        const pages = pdfDoc.getPages(), pageRefs = new Set(pages.map(page => page.ref.toString()));
+        const removedRefs = new Set(removedPages.map(index => pages[index]?.ref.toString()));
+        if (removedRefs.has(undefined)) throw new Error("invalid page selection");
+        const nameText = obj => {
+          if (obj instanceof PDFName || obj instanceof PDFString || obj instanceof PDFHexString) return obj.decodeText();
+          throw new Error("invalid destination name");
+        };
+        let namedDestinations;
+        const resolveNamed = target => {
+          const key = nameText(target);
+          if (namedDestinations) {
+            const matches = namedDestinations.get(key) || [];
+            if (matches.length !== 1) throw new Error("missing or ambiguous destination");
+            return matches[0];
+          }
+          const collected = new Map(); let entriesCount = 0;
+          const add = (name, value) => {
+            if (++entriesCount > 10000) throw new Error("too many named destinations");
+            const matches = collected.get(name) || []; matches.push(value); collected.set(name, matches);
+          };
+          const legacyRef = pdfDoc.catalog.get(n("Dests"));
+          if (legacyRef) {
+            const legacy = ctx.lookup(legacyRef);
+            if (!(legacy instanceof PDFDict)) throw new Error("invalid destination dictionary");
+            for (const [name, value] of legacy.entries()) add(nameText(name), value);
+          }
+          const namesRef = pdfDoc.catalog.get(n("Names"));
+          if (namesRef) {
+            const names = ctx.lookup(namesRef);
+            if (!(names instanceof PDFDict)) throw new Error("invalid names dictionary");
+            const treeRef = names.get(n("Dests"));
+            if (treeRef) {
+              const queue = [treeRef], visited = new Set(); let traversed = 0;
+              while (queue.length) {
+                const next = queue.pop();
+                if (next instanceof PDFRef) { if (visited.has(next.toString())) throw new Error("cyclic names tree"); visited.add(next.toString()); }
+                if (++traversed > 10000) throw new Error("names tree too large");
+                const tree = ctx.lookup(next);
+                if (!(tree instanceof PDFDict)) throw new Error("invalid names tree");
+                const entriesRef = tree.get(n("Names")), kidsRef = tree.get(n("Kids"));
+                if (entriesRef && kidsRef) throw new Error("invalid names tree");
+                if (entriesRef) {
+                  const entries = ctx.lookup(entriesRef);
+                  if (!(entries instanceof PDFArray) || entries.size() % 2 || entries.size() > 20000) throw new Error("invalid name entries");
+                  for (let i = 0; i < entries.size(); i += 2)
+                    add(nameText(ctx.lookup(entries.get(i))), entries.get(i + 1));
+                } else if (kidsRef) {
+                  const kids = ctx.lookup(kidsRef);
+                  if (!(kids instanceof PDFArray) || !kids.size() || kids.size() > 10000) throw new Error("invalid names children");
+                  for (let i = 0; i < kids.size(); i++) queue.push(kids.get(i));
+                } else throw new Error("empty names tree node");
+              }
+            }
+          }
+          namedDestinations = collected;
+          const matches = collected.get(key) || [];
+          if (matches.length !== 1) throw new Error("missing or ambiguous destination");
+          return matches[0];
+        };
+        const numericUpdates = new Map();
+        const destinationPage = value => {
+          let destination = ctx.lookup(value);
+          if (destination instanceof PDFName || destination instanceof PDFString || destination instanceof PDFHexString)
+            destination = ctx.lookup(resolveNamed(destination));
+          if (destination instanceof PDFDict) destination = ctx.lookup(destination.get(n("D")));
+          if (!(destination instanceof PDFArray) || destination.size() < 2) throw new Error("unsupported destination");
+          const target = destination.get(0);
+          let ref = target;
+          if (target instanceof PDFNumber) {
+            const index = target.asNumber();
+            if (!Number.isSafeInteger(index) || index < 0 || index >= pages.length) throw new Error("invalid numeric destination");
+            ref = pages[index].ref;
+            numericUpdates.set(destination, ref);
+          }
+          if (!(ref instanceof PDFRef)) throw new Error("unsupported destination");
+          const pageRef = ref.toString();
+          if (!pageRefs.has(pageRef)) throw new Error("unknown page");
+          return pageRef;
+        };
+        // Validate every action in a GoTo-only chain, including /Next arrays.
+        // Shared actions are allowed; cycles and other action types are rejected.
+        const verifiedActions = new WeakSet(), activeActions = new WeakSet();
+        let actionCount = 0;
+        const checkActions = initial => {
+          const stack = [{value:initial, exit:false}];
+          while (stack.length) {
+            const entry = stack.pop();
+            const action = ctx.lookup(entry.value);
+            if (!(action instanceof PDFDict)) throw new Error("invalid action");
+            if (entry.exit) { activeActions.delete(action); verifiedActions.add(action); continue; }
+            if (activeActions.has(action)) throw new Error("cyclic action chain");
+            if (verifiedActions.has(action)) continue;
+            if (++actionCount > 10000 || action.get(n("S")) !== n("GoTo") || !action.get(n("D")))
+              throw new Error("unsupported action");
+            if (removedRefs.has(destinationPage(action.get(n("D"))))) {
+              const error = new Error("bookmark target removed"); error.bookmarkTargetRemoved = true; throw error;
+            }
+            activeActions.add(action);
+            stack.push({value:action, exit:true});
+            const nextRef = action.get(n("Next"));
+            if (nextRef) {
+              const next = ctx.lookup(nextRef);
+              if (next instanceof PDFArray) {
+                if (!next.size() || next.size() > 10000) throw new Error("invalid action chain");
+                for (let i = next.size() - 1; i >= 0; i--) stack.push({value:next.get(i), exit:false});
+              } else stack.push({value:nextRef, exit:false});
+            }
+          }
+        };
+        const pending = [{parent:root, parentRef:rootRef}], seen = new Set();
+        while (pending.length) {
+          const {parent, parentRef} = pending.pop();
+          let ref = parent.get(n("First")), prev = null;
+          const last = parent.get(n("Last"));
+          if (Boolean(ref) !== Boolean(last)) throw new Error("incomplete siblings");
+          while (ref) {
+            if (!(ref instanceof PDFRef) || seen.has(ref.toString()) || seen.size >= 10000) throw new Error("invalid outline");
+            seen.add(ref.toString());
+            const item = ctx.lookup(ref);
+            if (!(item instanceof PDFDict) || String(item.get(n("Parent"))) !== String(parentRef) ||
+                (prev ? String(item.get(n("Prev"))) !== String(prev) : Boolean(item.get(n("Prev"))))) throw new Error("invalid links");
+            let dest = item.get(n("Dest"));
+            const actionRef = item.get(n("A"));
+            if (actionRef) {
+              if (dest) throw new Error("ambiguous action and destination");
+              checkActions(actionRef);
+            }
+            if (dest) {
+              const pageRef = destinationPage(dest);
+              if (removedRefs.has(pageRef)) return blocked("선택한 페이지를 가리키는 기존 북마크가 있어 삭제·잘라내기를 중단했습니다. 해당 북마크의 페이지를 변경하거나 북마크를 먼저 삭제해 주세요.");
+            }
+            const child = item.get(n("First")), childLast = item.get(n("Last"));
+            if (Boolean(child) !== Boolean(childLast)) throw new Error("invalid children");
+            if (child) pending.push({parent:item, parentRef:ref});
+            const next = item.get(n("Next"));
+            if (!next && String(last) !== String(ref)) throw new Error("invalid last");
+            prev = ref; ref = next;
+          }
+        }
+        // Apply only after the whole outline and all target pages have been checked.
+        for (const [destination, ref] of numericUpdates) destination.set(0, ref);
+        return true;
+      } catch (error) {
+        if (error.bookmarkTargetRemoved) return blocked("선택한 페이지가 북마크 동작의 목적지여서 삭제·잘라내기를 중단했습니다. 관련 북마크와 동작을 확인해 주세요.");
+        console.warn("Unable to verify outline destinations", error);
+        return blocked("기존 PDF 북마크 보호를 위해 이 문서의 페이지 변경을 중단했습니다. 지원하지 않는 목차 구조입니다.");
+      }
+    }
+
     async function copySelectedPagesToClipboard(doc, isCut = false) {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
@@ -5013,11 +5696,15 @@
       }
 
       const { PDFDocument } = window.PDFLib;
-      const srcDoc = await PDFDocument.load(doc.bytes);
+      const originalBytes = doc.bytes;
+      const srcDoc = await PDFDocument.load(originalBytes);
+      if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
+      if (isCut && !allowPageStructureChange(srcDoc, indices)) return;
       const clipDoc = await PDFDocument.create();
       const copied = await clipDoc.copyPages(srcDoc, indices);
       copied.forEach((p) => clipDoc.addPage(p));
       const clipBytes = await clipDoc.save();
+      if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
 
       state.pageClipboard = {
         sourceName: doc.name,
@@ -5078,9 +5765,11 @@
           document.getElementById("pasteCancelBtn").addEventListener("click", closeModal);
           document.getElementById("pasteConfirmBtn").addEventListener("click", async () => {
             const posMode = document.getElementById("pastePosSelect").value;
-            saveUndoSnapshot(doc, `페이지 붙여넣기 (${state.pageClipboard.count}쪽)`);
             const { PDFDocument } = window.PDFLib;
-            const targetDoc = await PDFDocument.load(doc.bytes);
+            const originalBytes = doc.bytes;
+            const targetDoc = await PDFDocument.load(originalBytes);
+            if (doc.bytes !== originalBytes || !allowPageStructureChange(targetDoc)) return;
+            saveUndoSnapshot(doc, `페이지 붙여넣기 (${state.pageClipboard.count}쪽)`);
             const clipDoc = await PDFDocument.load(state.pageClipboard.bytes);
             const copied = await targetDoc.copyPages(clipDoc, clipDoc.getPageIndices());
             let insertAt = doc.currentPage + 1;
@@ -5108,10 +5797,7 @@
     }
 
     function openExtractPagesModal(doc) {
-      const selDefault = Array.from(doc.selectedPages)
-        .sort((a, b) => a - b)
-        .map((i) => i + 1)
-        .join(", ");
+      const selDefault = formatSelectedPages(doc.selectedPages);
       openModal({
         title: "페이지 추출",
         icon: "fa-file-export",
@@ -5160,26 +5846,72 @@
       });
     }
 
+    function formatSelectedPages(selection) {
+      const sorted = [...selection].sort((a,b) => a-b);
+      const groups = [];
+      for (const index of sorted) {
+        const page = index + 1, last = groups[groups.length - 1];
+        if (last && page === last[1] + 1) last[1] = page;
+        else groups.push([page,page]);
+      }
+      return groups.map(([a,b]) => a === b ? String(a) : `${a}-${b}`).join(", ");
+    }
+
     function parseRangeInput(str, maxPages) {
-      const result = new Set();
-      String(str || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .forEach((part) => {
-          if (part.includes("-")) {
-            const [a, b] = part.split("-").map((n) => parseInt(n.trim(), 10));
-            if (!isNaN(a) && !isNaN(b)) {
-              for (let p = Math.min(a, b); p <= Math.max(a, b); p++) {
-                if (p >= 1 && p <= maxPages) result.add(p - 1);
-              }
-            }
-          } else {
-            const p = parseInt(part, 10);
-            if (!isNaN(p) && p >= 1 && p <= maxPages) result.add(p - 1);
-          }
-        });
-      return Array.from(result).sort((a, b) => a - b);
+      const input = String(str || "").trim();
+      if (!input || input.length > 4096 || !Number.isSafeInteger(maxPages) || maxPages < 1) return [];
+      const intervals = [];
+      for (const segment of input.split(",")) {
+        const match = segment.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
+        if (!match) return [];
+        const a = Number(match[1]), b = Number(match[2] || match[1]);
+        if (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 1 || b < 1 || a > maxPages || b > maxPages) return [];
+        intervals.push([Math.min(a,b), Math.max(a,b)]);
+      }
+      intervals.sort((a,b) => a[0] - b[0] || a[1] - b[1]);
+      const merged = [];
+      for (const interval of intervals) {
+        const last = merged[merged.length - 1];
+        if (last && interval[0] <= last[1] + 1) last[1] = Math.max(last[1], interval[1]);
+        else merged.push(interval);
+      }
+      const result = [];
+      for (const [a,b] of merged) for (let page = a; page <= b; page++) result.push(page - 1);
+      return result;
+    }
+
+    function applyPageSelection(doc, indices) {
+      if (activeDoc() !== doc || doc.operationBusy) return;
+      if (!indices.length) { showToast("선택할 페이지가 없습니다.", "fa-circle-info"); return; }
+      doc.selectedPages = new Set(indices);
+      doc.currentPage = indices[0];
+      state.selectedInsertId = null;
+      renderCurrentPageCanvas(); renderLeftPane(); updateCommandStates();
+      showToast(`${indices.length}개 페이지를 선택했습니다.`, "fa-check-double");
+    }
+
+    function openPageSelectionModal(doc) {
+      openModal({
+        title: "페이지 범위 선택", icon: "fa-list-ol", width: "440px",
+        bodyHtml: `<div class="dialog-info-box">선택할 페이지를 입력하세요. 예: 1-3, 5, 8-10</div>
+          <label for="selectionRangeInput">페이지 범위 (1~${doc.pageCount}쪽)</label>
+          <input id="selectionRangeInput" class="dialog-input" type="text" maxlength="4096" placeholder="예: 1-3, 5" />
+          <div id="selectionRangeError" role="status" style="color:var(--danger);margin-top:6px"></div>`,
+        footerHtml: `<div></div><div class="modal-footer-right"><button class="dialog-btn primary" type="button" id="selectionRangeApply">선택</button><button class="dialog-btn" type="button" id="selectionRangeCancel">취소</button></div>`,
+        onMount: () => {
+          const input = document.getElementById("selectionRangeInput");
+          const apply = () => {
+            const indices = parseRangeInput(input.value, doc.pageCount);
+            if (!indices.length) { document.getElementById("selectionRangeError").textContent = "형식과 페이지 범위를 확인해 주세요."; return; }
+            if (activeDoc() !== doc || doc.operationBusy) { closeModal(); return; }
+            closeModal(); applyPageSelection(doc, indices);
+          };
+          document.getElementById("selectionRangeApply").addEventListener("click", apply);
+          document.getElementById("selectionRangeCancel").addEventListener("click", closeModal);
+          input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); apply(); } });
+          input.focus();
+        },
+      });
     }
 
     async function splitDocumentPages(doc) {
@@ -5203,9 +5935,12 @@
         showToast("문서의 모든 페이지를 삭제할 수 없습니다 (최소 1쪽 유지).", "fa-triangle-exclamation");
         return;
       }
-      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 삭제`);
       const { PDFDocument } = window.PDFLib;
-      const pdfDoc = await PDFDocument.load(doc.bytes);
+      const originalBytes = doc.bytes;
+      const pdfDoc = await PDFDocument.load(originalBytes);
+      if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
+      if (!allowPageStructureChange(pdfDoc, indices)) return;
+      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 삭제`);
       const delSet = new Set(indices);
       for (const idx of indices.slice().reverse()) {
         pdfDoc.removePage(idx);
@@ -5266,9 +6001,12 @@
               showToast("페이지 번호를 빠짐없이 한 번씩 입력해 주세요.", "fa-triangle-exclamation");
               return;
             }
-            saveUndoSnapshot(doc, "페이지 순서 변경");
             const { PDFDocument } = window.PDFLib;
-            const pdfDoc = await PDFDocument.load(doc.bytes);
+            const originalBytes = doc.bytes;
+            const pdfDoc = await PDFDocument.load(originalBytes);
+            if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
+            if (!allowPageStructureChange(pdfDoc)) return;
+            saveUndoSnapshot(doc, "페이지 순서 변경");
             const pages = pdfDoc.getPages();
             for (let i = pages.length - 1; i >= 0; i--) pdfDoc.removePage(i);
             nums.forEach((i) => pdfDoc.addPage(pages[i]));
@@ -5289,12 +6027,24 @@
       if (doc.operationBusy) return;
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
-      if (doc.overlays.some(item => indices.includes(item.pageIndex))) {
-        showToast("삽입 항목이 있는 페이지는 먼저 저장 후 다시 열어 회전해 주세요.", "fa-triangle-exclamation");
-        return;
+      const supportedTypes = new Set(["Text","Header","Footer","PageNumber","Note","Highlight","Stamp","Table","Watermark"]);
+      const affected = doc.overlays.filter(item => indices.includes(item.pageIndex));
+      if (![90,-90].includes(deltaDegrees) || affected.some(item => !supportedTypes.has(item.type) ||
+          !Number.isFinite(item.x) || !Number.isFinite(item.y) ||
+          ![0,90,180,270].includes(item.rotation || 0) ||
+          !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.width) || !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.height))) {
+        showToast("삽입 항목의 위치 또는 방향을 확인할 수 없어 회전을 중단했습니다.", "fa-triangle-exclamation"); return;
       }
       doc.operationBusy = true;
-      const anchorPage = doc.currentPage;
+      const anchorPage = doc.currentPage, oldBytes = doc.bytes, oldReader = doc.pdfJsDoc;
+      const overlayState = JSON.stringify(doc.overlays);
+      const nextOverlays = doc.overlays.map(item => {
+        if (!indices.includes(item.pageIndex)) return item;
+        const size = doc.pageSizes[item.pageIndex];
+        return {...item, x: deltaDegrees > 0 ? size.height-item.y : item.y,
+          y: deltaDegrees > 0 ? item.x : size.width-item.x,
+          rotation: ((item.rotation || 0)+deltaDegrees+360)%360};
+      });
       try {
         const { PDFDocument, degrees } = window.PDFLib;
         const pdfDoc = await PDFDocument.load(doc.bytes);
@@ -5304,8 +6054,12 @@
         });
         const nextBytes = await pdfDoc.save();
         const info = await parsePageCountAndMeta(nextBytes);
+        if (doc.bytes !== oldBytes || doc.pdfJsDoc !== oldReader || activeDoc() !== doc || JSON.stringify(doc.overlays) !== overlayState) {
+          await info.pdfJsDoc.destroy(); throw new Error("문서가 변경되어 회전을 취소했습니다.");
+        }
         saveUndoSnapshot(doc, `페이지 회전 (${deltaDegrees > 0 ? "시계" : "반시계"} 90°)`);
         doc.bytes = nextBytes;
+        doc.overlays = nextOverlays;
         await reloadDocPdfJs(doc, {info, selection: indices});
         doc.currentPage = anchorPage;
         doc.scrollSyncSuspended = true;
@@ -5715,83 +6469,182 @@
       });
     }
 
-    async function runDocumentSearch(term, options = {}) {
-      const doc = activeDoc();
-      const countEl = document.getElementById("inlineSearchCount");
-      const inlineInput = document.getElementById("inlineSearchInput");
-      if (!doc || !term) {
-        state.searchResults = [];
-        state.activeSearchHitIndex = -1;
-        if (countEl) countEl.textContent = "-";
-        return;
-      }
-      state.lastSearchTerm = term;
-      if (inlineInput && inlineInput.value !== term) inlineInput.value = term;
-      state.searchResults = [];
-      if (countEl) countEl.textContent = "검색 중";
-      const ready = await ensurePageTexts(doc);
-      if (!ready || activeDoc() !== doc || state.lastSearchTerm !== term) return;
-      const caseSensitive = Boolean(options.caseSensitive);
-      const needle = caseSensitive ? term : term.toLowerCase();
+    let searchEpoch = 0;
+    function clearSearchResults() {
+      searchEpoch++;
+      state.searchResults = []; state.activeSearchHitIndex = -1; state.searchScrollHit = null;
+      const count = document.getElementById("inlineSearchCount"); if (count) count.textContent = "-";
+      document.getElementById("searchIndicator")?.replaceChildren();
+    }
 
-      for (let i = 0; i < doc.pageCount; i++) {
-        const baseText = doc.pageTexts[i] || "";
-        const ovText = doc.overlays
-          .filter((o) => o.pageIndex === i)
-          .map((o) => o.text)
-          .join(" ");
-        const combined = `${baseText} ${ovText}`.trim();
-        const haystack = caseSensitive ? combined : combined.toLowerCase();
-        const pos = haystack.indexOf(needle);
-        if (pos !== -1) {
-          const start = Math.max(0, pos - 20);
-          state.searchResults.push({
-            pageIndex: i,
-            snippet: combined.slice(start, start + 90),
-          });
+    async function renderSearchIndicator(doc, pageIndex, scale, generation) {
+      const target = document.getElementById("searchIndicator"), hit = state.searchResults[state.activeSearchHitIndex];
+      if (!target || !hit || hit.docId !== doc.id || hit.reader !== doc.pdfJsDoc || hit.pageIndex !== pageIndex) return;
+      const current = () => generation === renderGeneration && activeDoc() === doc && doc.pdfJsDoc === hit.reader &&
+        state.searchResults[state.activeSearchHitIndex] === hit && doc.currentPage === pageIndex;
+      let textLayer;
+      try {
+        if (hit.kind === "overlay") {
+          const element = [...document.querySelectorAll("#annotationOverlay .overlay-item")].find(el => el.dataset.overlayId === hit.overlayId);
+          if (!element || !current()) return;
+          const box = element.getBoundingClientRect(), parent = target.getBoundingClientRect();
+          const marker = document.createElement("div"); marker.className = "search-hit-box";
+          Object.assign(marker.style,{left:`${box.left-parent.left}px`,top:`${box.top-parent.top}px`,width:`${box.width}px`,height:`${box.height}px`});
+          target.replaceChildren(marker);
+          if (state.searchScrollHit === hit) { state.searchScrollHit = null; marker.scrollIntoView({block:"nearest",inline:"nearest"}); }
+          return;
         }
-      }
+        if (hit.kind !== "text" || !window.pdfjsLib?.TextLayer) return;
+        const page = await hit.reader.getPage(pageIndex+1), content = await page.getTextContent();
+        if (!current()) return;
+        textLayer = document.createElement("div"); textLayer.className = "search-text-layer";
+        textLayer.style.setProperty("--total-scale-factor",String(scale));
+        document.getElementById("pageStage").appendChild(textLayer);
+        const layer = new window.pdfjsLib.TextLayer({textContentSource:content,container:textLayer,viewport:page.getViewport({scale})});
+        await layer.render();
+        if (!current()) return;
+        const text = layer.textDivs[hit.itemIndex]?.firstChild;
+        if (!text || hit.end > text.length) return;
+        const range = document.createRange(); range.setStart(text,hit.start); range.setEnd(text,hit.end);
+        const parent = target.getBoundingClientRect();
+        const rects = [...range.getClientRects()].filter(box => box.width > 0 && box.height > 0);
+        const item = content.items.filter(item => typeof item.str === "string")[hit.itemIndex];
+        const transform = item?.transform;
+        hit.highlightRect = null;
+        if (rects.length === 1 && item?.dir !== "rtl" && transform && transform[0] > 0 && transform[3] > 0 &&
+            Math.abs(transform[1]) < 0.001 && Math.abs(transform[2]) < 0.001) {
+          const box = rects[0], viewport = page.getViewport({scale});
+          const points = [[box.left-parent.left,box.top-parent.top],[box.right-parent.left,box.top-parent.top],
+            [box.left-parent.left,box.bottom-parent.top],[box.right-parent.left,box.bottom-parent.top]]
+            .map(([x,y]) => viewport.convertToPdfPoint(x,y));
+          const xs=points.map(p=>p[0]), ys=points.map(p=>p[1]);
+          const rect=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];
+          if (rect.every(Number.isFinite) && rect[2]>rect[0] && rect[3]>rect[1]) hit.highlightRect=rect;
+        }
+        const markers = rects.map(box => {
+          const marker = document.createElement("div"); marker.className = "search-hit-box";
+          Object.assign(marker.style,{left:`${box.left-parent.left}px`,top:`${box.top-parent.top}px`,width:`${box.width}px`,height:`${box.height}px`}); return marker;
+        });
+        if (current()) {
+          target.replaceChildren(...markers);
+          if (markers.length && state.searchScrollHit === hit) { state.searchScrollHit = null; markers[0].scrollIntoView({block:"nearest",inline:"nearest"}); }
+        }
+      } catch (error) { console.warn("검색 위치 표시 실패",error); }
+      finally { textLayer?.remove(); }
+    }
 
-      if (state.searchResults.length > 0) {
-        state.activeSearchHitIndex = 0;
-        const firstHit = state.searchResults[0];
-        doc.currentPage = firstHit.pageIndex;
-        doc.selectedPages = new Set([firstHit.pageIndex]);
-        if (countEl) countEl.textContent = `1/${state.searchResults.length}`;
-        renderCurrentPageCanvas();
-      } else {
-        state.activeSearchHitIndex = -1;
-        if (countEl) countEl.textContent = "0건";
-      }
+    function addPdfHighlight(pdfDoc, pageIndex, rect) {
+      if (!Array.isArray(rect) || rect.length !== 4 || !rect.every(Number.isFinite) || rect[2] <= rect[0] || rect[3] <= rect[1])
+        throw new Error("형광펜 위치가 올바르지 않습니다.");
+      const page = pdfDoc.getPage(pageIndex), context = pdfDoc.context;
+      const [x1,y1,x2,y2] = rect, width = x2-x1, height = y2-y1;
+      const appearance = context.flateStream(`q /GS0 gs 1 1 0 rg 0 0 ${width} ${height} re f Q`, {
+        Type:"XObject", Subtype:"Form", FormType:1, BBox:[0,0,width,height],
+        Resources:{ExtGState:{GS0:{Type:"ExtGState",ca:0.35,CA:0.35,BM:"Multiply"}}},
+      });
+      const annotation = context.obj({Type:"Annot",Subtype:"Highlight",Rect:rect,
+        QuadPoints:[x1,y2,x2,y2,x1,y1,x2,y1],C:[1,1,0],CA:0.35,F:4,
+        AP:{N:context.register(appearance)},P:page.ref});
+      page.node.addAnnot(context.register(annotation));
+    }
 
-      if (options.openSidePanel !== false) {
-        ensureLeftPanelOpen("search");
-      } else {
-        renderLeftPane();
+    async function highlightCurrentSearchHit() {
+      const doc=activeDoc(), hit=state.searchResults[state.activeSearchHitIndex];
+      if (!doc || doc.operationBusy) return;
+      if (!hit || hit.docId!==doc.id || hit.reader!==doc.pdfJsDoc || hit.pageIndex!==doc.currentPage ||
+          hit.kind!=="text" || !hit.highlightRect || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
+        showToast("위치를 확인할 수 있는 본문 검색 결과에서만 형광펜을 추가할 수 있습니다.","fa-circle-info"); return;
       }
-      showToast(`'${term}' 검색 결과: ${state.searchResults.length}건`, "fa-magnifying-glass");
+      doc.operationBusy=true;
+      const oldBytes=doc.bytes, reader=doc.pdfJsDoc;
+      try {
+        const pdfDoc=await window.PDFLib.PDFDocument.load(oldBytes);
+        addPdfHighlight(pdfDoc,hit.pageIndex,hit.highlightRect);
+        const nextBytes=await pdfDoc.save(), info=await parsePageCountAndMeta(nextBytes);
+        if (activeDoc()!==doc || doc.bytes!==oldBytes || doc.pdfJsDoc!==reader || doc.currentPage!==hit.pageIndex ||
+            state.searchResults[state.activeSearchHitIndex]!==hit || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
+          await info.pdfJsDoc.destroy(); throw new Error("문서 또는 검색 결과가 변경되어 작업을 취소했습니다.");
+        }
+        saveUndoSnapshot(doc,"검색 결과 형광펜 추가"); doc.bytes=nextBytes;
+        await reloadDocPdfJs(doc,{info,selection:[hit.pageIndex]});
+        await refreshAllViews();
+        showToast("형광펜을 추가했습니다. PDF를 저장하면 주석이 보존됩니다.","fa-highlighter");
+      } catch (error) {
+        console.error("형광펜 추가 실패",error);
+        showToast(`형광펜 추가 실패: ${error.message || error}`,"fa-circle-exclamation");
+      } finally { doc.operationBusy=false; }
+    }
+
+    async function runDocumentSearch(term, options = {}) {
+      const epoch = ++searchEpoch, doc = activeDoc();
+      const countEl = document.getElementById("inlineSearchCount"), inlineInput = document.getElementById("inlineSearchInput");
+      state.searchResults = []; state.activeSearchHitIndex = -1; state.searchScrollHit = null;
+      document.getElementById("searchIndicator")?.replaceChildren();
+      if (!doc || !term) { if (countEl) countEl.textContent = "-"; return; }
+      state.lastSearchTerm = term; if (inlineInput && inlineInput.value !== term) inlineInput.value = term;
+      if (countEl) countEl.textContent = "검색 중";
+      const reader = doc.pdfJsDoc;
+      const valid = () => epoch === searchEpoch && activeDoc() === doc && doc.pdfJsDoc === reader;
+      const ready = await ensurePageTexts(doc);
+      if (!ready || !valid()) return;
+      const caseSensitive = Boolean(options.caseSensitive), needle = caseSensitive ? term : term.toLowerCase();
+      let truncated = false;
+      for (let i=0; i<doc.pageCount; i++) {
+        const baseText = doc.pageTexts[i] || "", searchable = caseSensitive ? baseText : baseText.toLowerCase();
+        const pageResults = [];
+        if (searchable.includes(needle)) {
+          try {
+            const content = await (await reader.getPage(i+1)).getTextContent();
+            if (!valid()) return;
+            let itemIndex=0,cursor=0; const parts=[];
+            for (const item of content.items) {
+              const text=item.str || "";
+              if (typeof item.str === "string") parts.push({itemIndex:itemIndex++,start:cursor,end:cursor+text.length});
+              cursor += text.length+1;
+            }
+            let offset=0,partIndex=0,found;
+            while ((found=searchable.indexOf(needle,offset)) !== -1 && pageResults.length < 5000) {
+              while (partIndex<parts.length && parts[partIndex].end<=found) partIndex++;
+              const part=parts[partIndex], within=searchable.length===baseText.length && part && found>=part.start && found+term.length<=part.end;
+              const snippet=baseText.slice(Math.max(0,found-20),found+term.length+40);
+              pageResults.push(within ? {kind:"text",itemIndex:part.itemIndex,start:found-part.start,end:found-part.start+term.length,snippet} : {kind:"page",snippet});
+              offset=found+Math.max(1,needle.length);
+            }
+            if (pageResults.length >= 5000 && searchable.indexOf(needle, offset) !== -1) truncated = true;
+          } catch (error) { console.warn(`검색 위치 분석 실패 (${i+1}쪽)`,error); pageResults.push({kind:"page",snippet:baseText.slice(0,90)}); }
+        }
+        for (const overlay of doc.overlays.filter(item => item.pageIndex===i)) {
+          const value=String(overlay.text || ""), check=caseSensitive ? value : value.toLowerCase();
+          if (check.includes(needle)) pageResults.push({kind:"overlay",overlayId:overlay.id,snippet:value.slice(0,90)});
+        }
+        for (const result of pageResults) {
+          if (state.searchResults.length>=5000) { truncated=true; break; }
+          state.searchResults.push({...result,pageIndex:i,docId:doc.id,reader});
+        }
+        if (truncated) break;
+      }
+      if (!valid()) return;
+      if (state.searchResults.length) {
+        state.activeSearchHitIndex=0; const hit=state.searchResults[0]; state.searchScrollHit=hit;
+        doc.currentPage=hit.pageIndex; doc.selectedPages=new Set([hit.pageIndex]);
+        if (countEl) countEl.textContent=`1/${state.searchResults.length}`; renderCurrentPageCanvas();
+      } else if (countEl) countEl.textContent="0건";
+      if (options.openSidePanel!==false) ensureLeftPanelOpen("search"); else renderLeftPane();
+      showToast(`'${term}' 검색 결과: ${state.searchResults.length}건${truncated ? " (최대 5000건)" : ""}`,"fa-magnifying-glass");
     }
 
     function stepSearchHit(delta) {
-      const doc = activeDoc();
-      const countEl = document.getElementById("inlineSearchCount");
-      if (!doc || state.searchResults.length === 0) {
-        const inlineTerm = document.getElementById("inlineSearchInput")?.value.trim();
-        if (inlineTerm) {
-          runDocumentSearch(inlineTerm, { openSidePanel: false });
-        }
-        return;
+      const doc=activeDoc(), countEl=document.getElementById("inlineSearchCount"), first=state.searchResults[0];
+      if (!doc || !first || first.docId!==doc.id || first.reader!==doc.pdfJsDoc) {
+        const term=document.getElementById("inlineSearchInput")?.value.trim();
+        if (term) runDocumentSearch(term,{openSidePanel:false}); return;
       }
-      state.activeSearchHitIndex =
-        (state.activeSearchHitIndex + delta + state.searchResults.length) % state.searchResults.length;
-      const hit = state.searchResults[state.activeSearchHitIndex];
-      if (hit) {
-        doc.currentPage = hit.pageIndex;
-        doc.selectedPages = new Set([hit.pageIndex]);
-        if (countEl) countEl.textContent = `${state.activeSearchHitIndex + 1}/${state.searchResults.length}`;
-        renderCurrentPageCanvas();
-        renderLeftPane();
-      }
+      state.activeSearchHitIndex=(state.activeSearchHitIndex+delta+state.searchResults.length)%state.searchResults.length;
+      const hit=state.searchResults[state.activeSearchHitIndex]; state.searchScrollHit=hit;
+      doc.currentPage=hit.pageIndex; doc.selectedPages=new Set([hit.pageIndex]);
+      if (countEl) countEl.textContent=`${state.activeSearchHitIndex+1}/${state.searchResults.length}`;
+      renderCurrentPageCanvas(); renderLeftPane();
+      if (hit.kind==="page") showToast("이 결과는 페이지 위치만 표시됩니다.","fa-circle-info");
     }
 
     async function openExtractTextModal(doc) {
@@ -6028,6 +6881,7 @@
       if (state.pendingPlacement?.doc === doc) cancelPlacement();
       if (doc.operationBusy) { showToast("페이지 작업을 처리하고 있습니다. 잠시 기다려 주세요.", "fa-hourglass-half"); return; }
       if (doc.dirty && !window.confirm(`“${doc.name}”에 저장하지 않은 변경사항이 있습니다. 닫으시겠습니까?`)) return;
+      if (idx === state.activeDocIndex) clearSearchResults();
       const removed = state.docs.splice(idx, 1)[0];
       if (state.docs.length === 0) {
         state.activeDocIndex = -1;
@@ -6247,6 +7101,7 @@
       });
       document.getElementById("inlineSearchPrevBtn").addEventListener("click", () => stepSearchHit(-1));
       document.getElementById("inlineSearchNextBtn").addEventListener("click", () => stepSearchHit(1));
+      document.getElementById("highlightSearchBtn").addEventListener("click", highlightCurrentSearchHit);
 
       // Empty state & bottom bar buttons
       document.getElementById("emptyOpenPdfBtn").addEventListener("click", () => executeCommand("openPdf"));
@@ -6281,16 +7136,18 @@
       });
 
       // Left Panel Page Jump & Zoom Spinners
-      document.getElementById("pageJumpBtn").addEventListener("click", () => {
-        const doc = activeDoc();
-        if (!doc) return;
-        const v = Number(document.getElementById("pageJumpSpin").value) || 1;
-        doc.currentPage = Math.max(0, Math.min(doc.pageCount - 1, v - 1));
-        doc.selectedPages = new Set([doc.currentPage]);
-        if (isMobileViewport()) toggleLeftPane(true);
-        renderCurrentPageCanvas();
-        renderLeftPane();
+      const pageJumpInput = document.getElementById("pageJumpSpin");
+      const pageJumpButton = document.getElementById("pageJumpBtn");
+      pageJumpInput.addEventListener("input", () => { pageJumpDraftDoc = activeDoc(); });
+      pageJumpInput.addEventListener("blur", event => {
+        if (event.relatedTarget === pageJumpButton) return;
+        pageJumpDraftDoc = null; syncPageJumpInput(activeDoc(), pageJumpInput);
       });
+      pageJumpInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") { event.preventDefault(); applyPageJump(activeDoc(), pageJumpInput); }
+        else if (event.key === "Escape") { pageJumpDraftDoc = null; syncPageJumpInput(activeDoc(), pageJumpInput); }
+      });
+      pageJumpButton.addEventListener("click", () => applyPageJump(activeDoc(), pageJumpInput));
       document.getElementById("zoomPercentBtn").addEventListener("click", () => {
         const doc = activeDoc();
         if (!doc) return;
@@ -6333,9 +7190,11 @@
         const file = e.target.files?.[0];
         if (doc && file && window.PDFLib) {
           const buf = await file.arrayBuffer();
-          saveUndoSnapshot(doc, `다른 PDF 삽입 (${file.name})`);
           const { PDFDocument } = window.PDFLib;
-          const targetDoc = await PDFDocument.load(doc.bytes);
+          const originalBytes = doc.bytes;
+          const targetDoc = await PDFDocument.load(originalBytes);
+          if (doc.bytes !== originalBytes || !allowPageStructureChange(targetDoc)) { e.target.value = ""; return; }
+          saveUndoSnapshot(doc, `다른 PDF 삽입 (${file.name})`);
           const srcDoc = await PDFDocument.load(buf);
           const copied = await targetDoc.copyPages(srcDoc, srcDoc.getPageIndices());
           const insertAt = doc.currentPage + 1;
@@ -6742,3 +7601,4 @@
   </script>
 </body>
 </html>
+

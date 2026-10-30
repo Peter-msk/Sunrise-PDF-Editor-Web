@@ -29,3 +29,4 @@ const target={closest:()=>null};const t=(x,y)=>({clientX:x,clientY:y});
  now+=400;events.touchstart({touches:[t(10,100)],target});await events.touchend({touches:[],changedTouches:[t(10,20)]});assert.deepEqual(navigation,[1,1]);
  console.log('PASS: click placement coordinates/cancellation and pinch swipe guard');
 })().catch(error=>{console.error(error);process.exit(1)});
+

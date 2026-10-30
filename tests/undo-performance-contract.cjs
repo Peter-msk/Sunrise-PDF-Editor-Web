@@ -24,3 +24,4 @@ vm.runInContext(text.slice(a,b),ctx);
  assert.strictEqual(ctx.doc.bytes,bytes); assert.equal(reloads,1);
  console.log('PASS: overlay undo/redo avoids PDF reload; changed PDF bytes still reload');
 })().catch(error=>{console.error(error);process.exit(1)});
+

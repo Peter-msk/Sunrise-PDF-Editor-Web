@@ -21,3 +21,4 @@ async function compact(code, module = false) {
     fs.writeFileSync(path.join(root, 'dist/assets', name), await compact(source) + '\n');
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+

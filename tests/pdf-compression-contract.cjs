@@ -1,0 +1,26 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),zlib=require('node:zlib');
+const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');const editState=require('../dist/assets/sunrise-edit-state.js');const src=fs.readFileSync('src/editor/index.html','utf8');
+const a=src.indexOf('    async function compressPdfLossless('),b=src.indexOf('    function openSaveAsModal(',a);assert(a>=0&&b>a);
+const ctx=vm.createContext({window:{PDFLib:lib},CompressionStream,Blob,Response,Uint8Array});vm.runInContext(src.slice(a,b),ctx);const n=lib.PDFName.of;
+(async()=>{
+ const pdf=await lib.PDFDocument.create();const page=pdf.addPage([200,200]);pdf.setTitle('제목');
+ const content=Buffer.from('% repeated data for lossless test\n'.repeat(4000));
+ const stream=pdf.context.stream(content),ref=pdf.context.register(stream);page.node.set(n('Contents'),ref);
+ const overlay={pageIndex:0,type:'Text',text:'편집 항목',x:10,y:10,width:100,height:20};
+ const editStream=page.getContentStream(false);editState.record(pdf,new Map([[0,{stream:editStream,ref:page.contentStreamRef}]]),[overlay],lib);
+ const root=pdf.context.obj({Type:'Outlines'}),rr=pdf.context.register(root);pdf.catalog.set(n('Outlines'),rr);
+ const mark=pdf.context.obj({Title:lib.PDFHexString.fromText('첫 장'),Parent:rr,Dest:[page.ref,n('Fit')]}),mr=pdf.context.register(mark);
+ root.set(n('First'),mr);root.set(n('Last'),mr);root.set(n('Count'),lib.PDFNumber.of(1));
+ await pdf.attach(Uint8Array.from([1,2,3,4]),'data.bin');
+ const bytes=await pdf.save();ctx.bytes=bytes;const out=await vm.runInContext('compressPdfLossless(bytes)',ctx);
+ assert(out.changed>0);assert(out.bytes.length<bytes.length);const restored=await lib.PDFDocument.load(out.bytes);
+ assert.equal(restored.getPageCount(),1);assert.equal(restored.getTitle(),'제목');
+ const read=restored.context.lookup(ref);assert.equal(read.dict.get(n('Filter')).toString(),'/FlateDecode');assert.deepEqual(zlib.inflateSync(read.getContents()),content);
+ const rr2=restored.catalog.lookup(n('Outlines'));assert.equal(restored.context.lookup(rr2.get(n('First'))).lookup(n('Title')).decodeText(),'첫 장');
+ assert(restored.catalog.get(n('Names')));
+ const edits=await editState.restore(out.bytes,lib);assert.equal(edits.warning,false);assert.equal(edits.overlays[0].text,'편집 항목');
+ ctx.bytes=out.bytes;const again=await vm.runInContext('compressPdfLossless(bytes)',ctx);assert(again.bytes.length<=out.bytes.length);
+ const empty=await lib.PDFDocument.create();empty.addPage();ctx.bytes=await empty.save();const noop=await vm.runInContext('compressPdfLossless(bytes)',ctx);assert.equal(noop.bytes,ctx.bytes);
+ const unsupported=vm.createContext({window:{PDFLib:lib},Blob,Response,Uint8Array});vm.runInContext(src.slice(a,b),unsupported);unsupported.bytes=bytes;await assert.rejects(vm.runInContext('compressPdfLossless(bytes)',unsupported),/브라우저/);
+ console.log(`PASS: lossless stream compression ${bytes.length} -> ${out.bytes.length}, metadata/bookmark/attachment retained, no-op and unavailable API`);
+})().catch(e=>{console.error(e);process.exitCode=1});
