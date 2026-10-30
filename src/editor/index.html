@@ -5405,10 +5405,18 @@
         const [ref, object] = images[index], dict = object.dict;
         onProgress(index + 1, images.length);
         const w = dict.lookup(n('Width'))?.asNumber(), h = dict.lookup(n('Height'))?.asNumber();
-        const cs = dict.get(n('ColorSpace')), filter = dict.get(n('Filter'));
+        const cs = dict.lookup(n('ColorSpace')), filter = dict.get(n('Filter'));
+        const softMask = dict.lookup(n('SMask'));
+        // Keep the alpha stream and both dimensions unchanged. Matte images require
+        // unblending, so leave those parents untouched rather than alter edge colors.
+        const supportedMask = !softMask || (softMask instanceof PDFRawStream &&
+          softMask.dict.get(n('Subtype')) === n('Image') && softMask.dict.lookup(n('ColorSpace')) === n('DeviceGray') &&
+          softMask.dict.lookup(n('BitsPerComponent'))?.asNumber() === 8 &&
+          softMask.dict.lookup(n('Width'))?.asNumber() === w && softMask.dict.lookup(n('Height'))?.asNumber() === h &&
+          !softMask.dict.get(n('Matte')) && !softMask.dict.get(n('SMask')) && !softMask.dict.get(n('Mask')));
         const supported = (cs === n('DeviceRGB') || cs === n('DeviceGray')) &&
           dict.lookup(n('BitsPerComponent'))?.asNumber() === 8 && !dict.get(n('Decode')) &&
-          !dict.get(n('Mask')) && !dict.get(n('SMask')) && !dict.get(n('ImageMask')) &&
+          !dict.get(n('Mask')) && supportedMask && !dict.get(n('ImageMask')) &&
           !dict.get(n('F')) && !dict.get(n('Alternates')) && !dict.get(n('SMaskInData')) && !masks.has(ref.toString());
         if (!supported || !Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 128 || h < 128 ||
             w * h > 16000000 || pixels + w * h > 64000000 ||
@@ -5437,7 +5445,7 @@
             context.putImageData(image, 0, 0);
             bitmap = await createImageBitmap(canvas); source = bitmap;
           }
-          const scale = settings.maxEdge ? Math.min(1, settings.maxEdge / Math.max(w,h)) : 1;
+          const scale = !softMask && settings.maxEdge ? Math.min(1, settings.maxEdge / Math.max(w,h)) : 1;
           canvas.width = Math.max(1, Math.round(w * scale)); canvas.height = Math.max(1, Math.round(h * scale));
           const context = canvas.getContext('2d'); context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
           context.drawImage(source, 0, 0, canvas.width, canvas.height);
@@ -5515,7 +5523,7 @@
           <div class="dialog-info-box">
             원본은 그대로 두고 새 PDF로 저장합니다. 삽입한 텍스트·머리말·꼬리말·페이지 번호는 검색 가능한 텍스트로 저장됩니다.
             저장한 파일을 이 편집기에서 다시 열면 삽입 항목을 다시 수정할 수 있습니다.
-            ${compress ? "이미지를 JPEG로 재인코딩하고 해상도를 줄입니다. 강도가 높을수록 이미지 속 작은 글자·도면이 흐려질 수 있습니다. PDF 글자·벡터는 이미지로 바꾸지 않습니다. 투명 이미지·특수 색상 등 지원하지 않는 이미지는 유지합니다." : ""}
+            ${compress ? "이미지를 JPEG로 재인코딩하고 해상도를 줄입니다. 강도가 높을수록 이미지 속 작은 글자·도면이 흐려질 수 있습니다. PDF 글자·벡터는 이미지로 바꾸지 않습니다. 지원하는 투명 이미지는 투명도와 해상도를 유지하며 색상만 압축합니다. 특수 색상·마스크는 유지합니다." : ""}
           </div>
           ${compress ? `<div style="margin-top:12px">
             <label for="compressionPreset">압축 방식</label>
@@ -5569,9 +5577,10 @@
             for (const id of ['compressionQuality','compressionMaxEdge']) document.getElementById(id).addEventListener('change', () => { preset.value = 'custom'; reset(); calculate(); });
           }
           document.getElementById("saveAsConfirmBtn").addEventListener("click", async () => {
+            const button = document.getElementById("saveAsConfirmBtn");
+            if (button.disabled) return;
             let name = (document.getElementById("saveAsFilenameInput").value || suggested).trim();
             if (!name.toLowerCase().endsWith(".pdf")) name += ".pdf";
-            const button = document.getElementById("saveAsConfirmBtn");
             const status = document.getElementById("saveAsStatus");
             button.disabled = true;
             const controls = compress ? ['compressionPreset','compressionStrength','compressionQuality','compressionMaxEdge'].map(id => document.getElementById(id)) : [];
@@ -5580,9 +5589,15 @@
             try {
               const captured = captureSaveState(doc);
               let bytes = await compileDocumentWithOverlays(captured.snapshot);
+              const isOpen = () => document.getElementById('modalBackdrop').classList.contains('open') && document.getElementById('saveAsConfirmBtn') === button;
+              if (!isOpen()) return;
               const settings = compress ? {...pdfCompressionSettings(Number(document.getElementById('compressionStrength').value)),
                 quality:Number(document.getElementById('compressionQuality').value), maxEdge:Number(document.getElementById('compressionMaxEdge').value)} : null;
-              const result = compress ? await compressPdfImages(bytes, settings, (index,total) => { status.textContent = `이미지 압축 ${index}/${total} · 용량 계산 중…`; }) : null;
+              const result = compress ? await compressPdfImages(bytes, settings, (index,total) => {
+                if (!isOpen()) throw new Error('압축 창이 닫혀 작업을 중단했습니다.');
+                if (!saveStateIsCurrent(doc, captured)) throw new Error('문서가 변경되어 압축을 중단했습니다.');
+                status.textContent = `이미지 압축 ${index}/${total} · 용량 계산 중…`;
+              }) : null;
               if (result) bytes = result.bytes;
               if (!document.getElementById("modalBackdrop").classList.contains("open") ||
                   document.getElementById("saveAsConfirmBtn") !== button) return;
@@ -5614,6 +5629,7 @@
                 showToast(`다운로드 완료를 확인했습니다: ${name}`, "fa-floppy-disk"); closeModal();
               };
             } catch (error) {
+              if (!document.getElementById('modalBackdrop').classList.contains('open') || document.getElementById('saveAsConfirmBtn') !== button) return;
               showToast(`저장 실패: ${error.message || error}`, "fa-circle-exclamation");
               status.textContent = `PDF 준비 실패: ${error.message || error}`;
               button.disabled = false;

@@ -43,9 +43,30 @@ async function run(bytes,strength){ctx.input=bytes;ctx.strength=strength;return 
   png.context.register(image);const cmyk=lib.PDFRawStream.of(png.context.obj({Type:'XObject',Subtype:'Image',Width:128,Height:128,ColorSpace:'DeviceCMYK',BitsPerComponent:8}),Buffer.alloc(65536,100));const cr=png.context.register(cmyk);
   const out=await run(await png.save(),60);assert.equal(out.images,1);assert.equal(out.skipped,1);
   const parsed=await lib.PDFDocument.load(out.bytes);assert.equal(parsed.context.lookup(cr).dict.get(n('ColorSpace')),n('DeviceCMYK'));
-  // Masks and their parent image must remain at their original dimensions/filter.
+  // Alpha masks stay lossless; their parent may change codec but not dimensions.
   const mask=png.context.register(lib.PDFRawStream.of(png.context.obj({Type:'XObject',Subtype:'Image',Width:128,Height:128,ColorSpace:'DeviceGray',BitsPerComponent:8}),Buffer.alloc(16384,255)));
-  image.dict.set(n('SMask'),mask);const protectedResult=await run(await png.save(),90);assert.equal(protectedResult.images,0);
+  image.dict.set(n('SMask'),mask);const protectedResult=await run(await png.save(),90);assert.equal(protectedResult.images,1);
+  const protectedPdf=await lib.PDFDocument.load(protectedResult.bytes);
+  assert.deepEqual(Buffer.from(lib.decodePDFRawStream(protectedPdf.context.lookup(mask)).decode()),Buffer.alloc(16384,255));
+  png.context.lookup(mask).dict.set(n('Matte'),png.context.obj([1,1,1]));
+  const matteResult=await run(await png.save(),90);assert.equal(matteResult.images,0);
+  // A real RGBA PNG; the max-edge request must not resample its alpha channel.
+  const rgba=canvas(600,400),rgbaPaint=rgba.getContext('2d'),rgbaData=rgbaPaint.createImageData(600,400);
+  for(let i=0;i<600*400;i++){rgbaData.data[i*4]=(i*31)%256;rgbaData.data[i*4+1]=(i*7)%256;rgbaData.data[i*4+2]=100;rgbaData.data[i*4+3]=Math.floor((i%600)*255/599);}
+  rgbaPaint.putImageData(rgbaData,0,0);
+  const transparent=await lib.PDFDocument.create(),tp=transparent.addPage([600,400]);
+  const ti=await transparent.embedPng(rgba.toBuffer('image/png'));tp.drawImage(ti,{x:0,y:0,width:600,height:400});
+  const transparentBytes=await transparent.save();
+  const before=await lib.PDFDocument.load(transparentBytes),alphaRef=before.context.lookup(ti.ref).dict.get(n('SMask'));
+  const beforeAlpha=Buffer.from(lib.decodePDFRawStream(before.context.lookup(alphaRef)).decode());
+  ctx.input=transparentBytes;
+  const transparentResult=await vm.runInContext('compressPdfImages(input,{...pdfCompressionSettings(60),maxEdge:128})',ctx);
+  const after=await lib.PDFDocument.load(transparentResult.bytes),afterImage=after.context.lookup(ti.ref);
+  assert.equal(transparentResult.images,1);assert.equal(afterImage.dict.lookup(n('Width')).asNumber(),600);
+  assert.equal(afterImage.dict.lookup(n('Height')).asNumber(),400);
+  assert.deepEqual(Buffer.from(lib.decodePDFRawStream(after.context.lookup(alphaRef)).decode()),beforeAlpha);
+  if(process.env.SUNRISE_IMAGE_FIXTURES){fs.writeFileSync(process.env.SUNRISE_IMAGE_FIXTURES+'-alpha-original.pdf',transparentBytes);fs.writeFileSync(process.env.SUNRISE_IMAGE_FIXTURES+'-alpha-compressed.pdf',transparentResult.bytes);}
+  console.log(`transparent PNG: ${transparentBytes.length} -> ${transparentResult.bytes.length}, alpha bytes identical`);
   await assert.rejects(run(bytes,101),/강도/);
   console.log('PASS: real JPEG codec, ordered presets, Flate PNG predictor, masks/CMYK preserved, PDF metadata/bookmark/attachment retained');
 })().catch(e=>{console.error(e);process.exitCode=1});
