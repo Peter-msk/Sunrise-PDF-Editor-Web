@@ -74,17 +74,19 @@ export async function authRoutes(request,env,url){
  }
  const data=await payload(request);
  if(!data)return json({error:'입력 형식을 확인하세요.'},400);
- if(await throttle(request,env,path==='/api/auth/setup'?'setup':'login'))return json({error:'로그인 시도 제한입니다. 15분 후 다시 시도하세요.'},429);
  if(path==='/api/auth/setup'){
   if(await configured(env))return json({error:'관리자 계정은 이미 등록되어 있습니다.'},409);
+  // A missing bootstrap secret is a setup problem, not a failed login attempt.
+  if(!env.ADMIN_BOOTSTRAP_TOKEN)return json({error:'초기 등록용 비밀값이 아직 적용되지 않았습니다. Cloudflare Worker 설정을 확인해 주세요.'},503);
   const token=data.bootstrapToken;
-  if(typeof token!=='string'||token.length<32||token.length>256||!env.ADMIN_BOOTSTRAP_TOKEN){
-   return json({error:'관리자 초기 설정을 확인하세요.'},403);
-  }
+  if(typeof token!=='string'||token.length<32||token.length>256)return json({error:'초기 설정 토큰은 32~256자로 입력해야 합니다.'},400);
+  if(!credentialsOK(data.username,data.password))return json({error:'관리자 아이디는 영문 소문자 4~32자, 비밀번호는 16~128자로 지정하세요.'},400);
+  // Valid possession of the strong bootstrap token overrides stale setup
+  // rate limits. Only incorrect tokens are throttled in a fresh namespace.
   if(!equalDigest(await digest(token),await digest(env.ADMIN_BOOTSTRAP_TOKEN))){
-   return json({error:'관리자 초기 설정을 확인하세요.'},403);
+   if(await throttle(request,env,'setup-invalid-v2'))return json({error:'초기 설정 토큰 오류가 반복되었습니다. 15분 후 다시 시도하세요.'},429);
+   return json({error:'초기 설정 토큰이 올바르지 않습니다.'},403);
   }
-  if(!credentialsOK(data.username,data.password))return json({error:'아이디는 영문 소문자 4~32자, 비밀번호는 16~128자로 지정하세요.'},400);
   const salt=randomHex(16),hash=await passwordHash(data.password,salt,ITERATIONS);
   const result=await db.prepare('INSERT OR IGNORE INTO admin_accounts(id,username,password_salt,password_hash,iterations) VALUES (1,?,?,?,?)').bind(data.username,salt,hash,ITERATIONS).run();
   if(!result.meta?.changes)return json({error:'관리자 계정은 이미 등록되어 있습니다.'},409);
@@ -92,6 +94,7 @@ export async function authRoutes(request,env,url){
  }
  const account=await db.prepare('SELECT id,username,password_salt,password_hash,iterations FROM admin_accounts WHERE id=1').first();
  if(!account)return json({error:'관리자 계정 등록이 필요합니다.'},503);
+ if(await throttle(request,env,'login'))return json({error:'로그인 시도 제한입니다. 15분 후 다시 시도하세요.'},429);
  // Calculate the PBKDF2 hash even for an unknown user to reduce username probing.
  const candidate=typeof data.password==='string'&&data.password.length<=128&&data.password.length>0?data.password:'invalid';
  const derived=await passwordHash(candidate,account.password_salt,account.iterations);

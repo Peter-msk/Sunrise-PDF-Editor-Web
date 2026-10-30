@@ -3,11 +3,11 @@ const {webcrypto}=require('node:crypto');globalThis.crypto ||=webcrypto;
 (async()=>{
  const {default:worker}=await import('../src/worker.mjs');
  const origin='https://example.test';
- const accounts={value:null},sessions=new Map(),attempts=[];
+ const accounts={value:null},sessions=new Map(),attempts=[],rate=new Map();
  const db={prepare(sql){const statement={args:[],bind(...args){this.args=args;return this},
   async first(){
    if(sql.includes('SELECT id FROM admin_accounts'))return accounts.value?{id:1}:null;
-   if(sql.startsWith('INSERT INTO admin_login_limits')){attempts.push(this.args);return {attempts:1,blocked_until_ms:0}}
+   if(sql.startsWith('INSERT INTO admin_login_limits')){attempts.push(this.args);const key=this.args[0],count=(rate.get(key)||0)+1;rate.set(key,count);return {attempts:count,blocked_until_ms:count>4?Date.now()+900000:0}}
    if(sql.includes('SELECT id,username,password_salt,password_hash,iterations'))return accounts.value;
    if(sql.startsWith('UPDATE admin_sessions SET last_seen_ms')){
     const [,key,now,cutoff]=this.args;const item=sessions.get(key);
@@ -38,10 +38,17 @@ const {webcrypto}=require('node:crypto');globalThis.crypto ||=webcrypto;
  assert.equal(r.status,302);
  r=await worker.fetch(request('/api/admin/overview'),env,{});
  assert.equal(r.status,401);
- r=await post('/api/auth/setup',{bootstrapToken:'wrong',username:'admin',password:'correct-horse-battery-staple'});
- assert.equal(r.status,403);
+ // Missing bootstrap settings must not consume rate limit attempts.
+ r=await worker.fetch(request('/api/auth/setup',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({bootstrapToken:'long-but-invalid-token-at-least-32-characters',username:'admin',password:'correct-horse-battery-staple'})}),{...env,ADMIN_BOOTSTRAP_TOKEN:undefined},{});
+ assert.equal(r.status,503);assert.equal(attempts.length,0);
+ // Repeated invalid tokens remain throttled, but correct token must still work.
+ for(let i=0;i<5;i++){
+   r=await post('/api/auth/setup',{bootstrapToken:'invalid-bootstrap-token-length-123456',username:'admin',password:'correct-horse-battery-staple'});
+   assert.equal(r.status,i===4?429:403);
+ }
+ assert.equal(attempts.length,5);
  r=await post('/api/auth/setup',{bootstrapToken:env.ADMIN_BOOTSTRAP_TOKEN,username:'admin',password:'correct-horse-battery-staple'});
- assert.equal(r.status,201);assert.equal(accounts.value.username,'admin');
+ assert.equal(r.status,201);assert.equal(attempts.length,5,'correct bootstrap token must bypass stale setup rate limits');assert.equal(accounts.value.username,'admin');
  assert.notEqual(accounts.value.password_hash,'correct-horse-battery-staple');
  assert.equal(accounts.value.password_hash.length,64);
  assert.equal(accounts.value.iterations,600000);
