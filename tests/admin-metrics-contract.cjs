@@ -39,7 +39,7 @@ const {webcrypto}=require('node:crypto');globalThis.crypto ||= webcrypto;
  res=await event({type:'failure',session,feature:'private PDF title'});assert.equal(res.status,400);
  res=await event({type:'visit',session},{'origin':'https://evil.test','content-type':'application/json'});assert.equal(res.status,403);
  res=await event({type:'pulse',session,area:'editor',seconds:999});assert.equal(res.status,400);
- assert.equal((await worker.fetch(request('/api/admin/inquiries?status=all'),env,ctx)).status,200);
+ assert.equal((await worker.fetch(request('/api/admin/inquiries?status=all'),env,ctx)).status,401,'Legacy Access alone must not read inquiries');
  const admin=fs.readFileSync('dist/admin/index.html','utf8'),integrate=fs.readFileSync('scripts/site-integration.cjs','utf8'),settings=fs.readFileSync('wrangler.toml','utf8');
  for(const label of ['오늘 방문 세션','금주 방문 세션','누적 방문 세션','오늘 편집기 활성 사용시간','누적 편집기 활성 사용시간','기능별 오류','문의사항'])assert(admin.includes(label),label);
  assert(integrate.includes('adminNavButton')&&integrate.includes('sunrise-telemetry.js'));
