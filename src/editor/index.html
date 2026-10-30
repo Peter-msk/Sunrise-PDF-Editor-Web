@@ -5337,14 +5337,32 @@
       for (const [ref, object] of pdf.context.enumerateIndirectObjects()) {
         if (!(object instanceof PDFRawStream)) continue;
         const dict = object.dict, type = dict.get(n("Type"));
-        if (dict.get(n("Filter")) || dict.get(n("DecodeParms")) || dict.get(n("F")) || dict.get(n("FFilter")) || dict.get(n("FDecodeParms")) ||
+        const filter = dict.get(n("Filter"));
+        if ((filter && filter !== n("FlateDecode")) || dict.get(n("DecodeParms")) || dict.get(n("F")) || dict.get(n("FFilter")) || dict.get(n("FDecodeParms")) ||
             type === n("XRef") || type === n("ObjStm") || type === n("Metadata")) continue;
-        const content = object.getContents();
+        let content = object.getContents();
+        if (filter) {
+          if (typeof DecompressionStream !== "function" || content.length > 16 * 1024 * 1024) continue;
+          const reader = new Blob([content]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
+          const chunks = []; let size = 0, tooLarge = false;
+          try {
+            while (true) {
+              const {value, done} = await reader.read();
+              if (done) break;
+              size += value.length;
+              if (size > 16 * 1024 * 1024 || total + size > 50 * 1024 * 1024) { tooLarge = true; await reader.cancel(); break; }
+              chunks.push(value);
+            }
+          } catch (error) { throw new Error(`PDF 압축 데이터 해제 실패: ${error.message || error}`); }
+          if (tooLarge) continue;
+          content = new Uint8Array(size); let offset = 0;
+          for (const chunk of chunks) { content.set(chunk, offset); offset += chunk.length; }
+        }
         if (content.length < 128 || content.length > 16 * 1024 * 1024 || total + content.length > 50 * 1024 * 1024) continue;
         total += content.length;
         const stream = new Blob([content]).stream().pipeThrough(new CompressionStream("deflate"));
         const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
-        if (compressed.length + 32 >= content.length) continue;
+        if (compressed.length + 32 >= object.getContents().length) continue;
         const updated = dict.clone(); updated.set(n("Filter"), n("FlateDecode"));
         pdf.context.assign(ref, PDFRawStream.of(updated, compressed)); changed++;
       }
@@ -5366,7 +5384,7 @@
           <div class="dialog-info-box">
             원본은 그대로 두고 새 PDF로 저장합니다. 삽입한 텍스트·머리말·꼬리말·페이지 번호는 검색 가능한 텍스트로 저장됩니다.
             저장한 파일을 이 편집기에서 다시 열면 삽입 항목을 다시 수정할 수 있습니다.
-            ${compress ? "무손실 압축을 사용하며, 이미 압축된 파일은 용량이 줄지 않을 수 있습니다." : ""}
+            ${compress ? "무손실 압축입니다. 일부 PDF 데이터만 최적화하며 JPEG 이미지 재인코딩은 지원하지 않습니다. 이미 최적화된 파일은 줄지 않을 수 있습니다." : ""}
           </div>
           <div class="dialog-form-grid">
             <label for="saveAsFilenameInput">저장 파일명:</label>
@@ -5407,7 +5425,7 @@
               button.style.display = "none"; document.getElementById("saveAsFilenameInput").disabled = true;
               document.getElementById("saveAsCancelBtn").textContent = "닫기";
               status.textContent = result
-                ? `압축 전 ${(result.originalSize / 1024).toFixed(1)} KB → 압축 후 ${(bytes.length / 1024).toFixed(1)} KB. 다운로드 후 완료를 확인해 주세요.`
+                ? `열린 PDF ${(doc.bytes.length / 1024).toFixed(1)} KB · 편집 내용 반영 후 ${(result.originalSize / 1024).toFixed(1)} KB → 최종 ${(bytes.length / 1024).toFixed(1)} KB. ${result.changed ? `데이터 ${result.changed}개를 최적화했습니다.` : "추가로 줄일 수 있는 데이터가 없어 압축하지 못했습니다."} 다운로드 후 완료를 확인해 주세요.`
                 : "PDF가 준비되었습니다. 다운로드 후 완료를 확인해 주세요.";
               link.focus();
               link.addEventListener("click", event => {

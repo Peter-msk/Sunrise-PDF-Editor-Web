@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),zlib=require('node:zlib');
 const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');const editState=require('../dist/assets/sunrise-edit-state.js');const src=fs.readFileSync('src/editor/index.html','utf8');
 const a=src.indexOf('    async function compressPdfLossless('),b=src.indexOf('    function openSaveAsModal(',a);assert(a>=0&&b>a);
-const ctx=vm.createContext({window:{PDFLib:lib},CompressionStream,Blob,Response,Uint8Array});vm.runInContext(src.slice(a,b),ctx);const n=lib.PDFName.of;
+const ctx=vm.createContext({window:{PDFLib:lib},CompressionStream,DecompressionStream,Blob,Response,Uint8Array});vm.runInContext(src.slice(a,b),ctx);const n=lib.PDFName.of;
 (async()=>{
  const pdf=await lib.PDFDocument.create();const page=pdf.addPage([200,200]);pdf.setTitle('제목');
  const content=Buffer.from('% repeated data for lossless test\n'.repeat(4000));
@@ -20,7 +20,13 @@ const ctx=vm.createContext({window:{PDFLib:lib},CompressionStream,Blob,Response,
  assert(restored.catalog.get(n('Names')));
  const edits=await editState.restore(out.bytes,lib);assert.equal(edits.warning,false);assert.equal(edits.overlays[0].text,'편집 항목');
  ctx.bytes=out.bytes;const again=await vm.runInContext('compressPdfLossless(bytes)',ctx);assert(again.bytes.length<=out.bytes.length);
+ const weak=await lib.PDFDocument.create(), weakPage=weak.addPage();
+ const weakData=Buffer.from('0 0 m 100 100 l S\n'.repeat(5000));
+ const weakRef=weak.context.register(lib.PDFRawStream.of(weak.context.obj({Filter:n('FlateDecode')}),zlib.deflateSync(weakData,{level:0})));
+ weakPage.node.set(n('Contents'),weakRef);ctx.bytes=await weak.save();const weakSize=ctx.bytes.length;const optimized=await vm.runInContext('compressPdfLossless(bytes)',ctx);
+ assert(optimized.bytes.length<ctx.bytes.length);const weakRestored=await lib.PDFDocument.load(optimized.bytes);
+ assert.deepEqual(zlib.inflateSync(weakRestored.context.lookup(weakRef).getContents()),weakData);
  const empty=await lib.PDFDocument.create();empty.addPage();ctx.bytes=await empty.save();const noop=await vm.runInContext('compressPdfLossless(bytes)',ctx);assert.equal(noop.bytes,ctx.bytes);
  const unsupported=vm.createContext({window:{PDFLib:lib},Blob,Response,Uint8Array});vm.runInContext(src.slice(a,b),unsupported);unsupported.bytes=bytes;await assert.rejects(vm.runInContext('compressPdfLossless(bytes)',unsupported),/브라우저/);
- console.log(`PASS: lossless stream compression ${bytes.length} -> ${out.bytes.length}, metadata/bookmark/attachment retained, no-op and unavailable API`);
+ console.log(`PASS: lossless stream compression ${bytes.length} -> ${out.bytes.length}; weak Flate ${weakSize} -> ${optimized.bytes.length}; metadata/bookmark/attachment retained, no-op and unavailable API`);
 })().catch(e=>{console.error(e);process.exitCode=1});
