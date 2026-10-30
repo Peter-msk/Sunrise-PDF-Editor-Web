@@ -3,11 +3,10 @@ const root=path.resolve(__dirname,'..');
 const homePath=path.join(root,'dist/index.html');
 const editorPath=path.join(root,'dist/editor/index.html');
 let home=fs.readFileSync(homePath,'utf8');
-if(!home.includes('id="adminNavButton"')){
-  const marker='<button type="button" class="contact-nav-button" id="contactNavButton">문의하기</button>';
-  if(!home.includes(marker))throw Error('Homepage admin button anchor changed');
-  home=home.replace(marker,marker+'<a id="adminNavButton" href="/admin/" title="Cloudflare Access 관리자 인증">관리자</a>');
-}
+// Preserve the administrator's server-side code but hide all public navigation until Access is configured.
+const hiddenAdminLink='<a id="adminNavButton" href="/admin/" title="Cloudflare Access 관리자 인증">관리자</a>';
+home=home.replaceAll(hiddenAdminLink,'');
+if(home.includes('id="adminNavButton"'))throw Error('Unexpected admin navigation element in public homepage');
 if(!home.includes('/assets/sunrise-home-admin.css')){
  home=home.replace('</head>','<link rel="stylesheet" href="/assets/sunrise-home-admin.css">\n</head>');
 }
@@ -25,4 +24,4 @@ if(!editor.includes('/assets/sunrise-telemetry.js')){
  editor=editor.replace('</body>','<script defer src="/assets/sunrise-telemetry.js"></script>\n</body>');
  fs.writeFileSync(editorPath,editor);
 }
-console.log('PASS: homepage admin link, collision-free gutter styles and editor analytics installed');
+console.log('PASS: public admin navigation hidden, collision-free notice rail and analytics build integrated');
