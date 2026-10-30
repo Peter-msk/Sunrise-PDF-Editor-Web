@@ -1,3 +1,4 @@
+import {telemetry,adminIdentity,adminApi} from './admin-api.mjs';
 // Sunrise PDF Editor Web: public release feed + private Cloudflare D1 inquiry inbox.
 // No PDF data is read, uploaded or retained by this Worker.
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
@@ -47,8 +48,15 @@ async function submitInquiry(request,env,url) {
   }
 }
 export default {
-  async fetch(request,env) {
+  async fetch(request,env,ctx) {
     const url=new URL(request.url);
+    if(url.pathname==='/admin' || url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')){
+      const admin=await adminIdentity(ctx,env);
+      if(!admin)return new Response('관리자 Access 인증이 필요합니다. Cloudflare Access를 먼저 설정하세요.',{status:403,headers:{'content-type':'text/plain; charset=utf-8','cache-control':'no-store'}});
+      if(url.pathname.startsWith('/api/admin/'))return adminApi(request,env,url,admin);
+      return env.ASSETS.fetch(request);
+    }
+    if(url.pathname==='/api/telemetry')return telemetry(request,env,url);
     if (url.pathname==='/api/site-updates') {
       if(request.method!=='GET') return respond({error:'허용되지 않은 요청입니다.'},405,{'allow':'GET'});
       try {return await publicUpdates(env.DB);}
@@ -65,5 +73,6 @@ export default {
     if(!env.DB) return;
     await env.DB.prepare("DELETE FROM inquiries WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-90 days')").run();
     await env.DB.prepare("DELETE FROM inquiry_rate_limits WHERE day < strftime('%Y-%m-%d','now','-2 days')").run();
+    await env.DB.prepare("DELETE FROM analytics_sessions WHERE day < date('now','+9 hours','-14 days')").run();
   }
 };

@@ -1,0 +1,33 @@
+/* Avoid covering the hero: left rail stays inside the available gutter. */
+@media (min-width:1520px) {
+ .notice-rail {
+   position:fixed!important;top:88px!important;bottom:auto!important;
+   left:max(12px,calc((100vw - 1136px)/2 - 26px - 228px))!important;
+   width:min(228px,calc((100vw - 1136px)/2 - 36px))!important;
+   max-height:calc(100dvh - 105px)!important;display:flex!important;
+   flex-direction:column!important;gap:12px!important
+ }
+ .rail-panel{min-width:0}
+}
+@media (max-width:1519px) {
+ .notice-rail {
+   position:sticky!important;top:76px!important;left:auto!important;bottom:auto!important;
+   display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;
+   margin:0 auto!important;padding:7px 0!important;
+   width:min(1136px,calc(100% - 40px))!important;max-height:42dvh!important;
+   gap:9px!important;background:var(--bg)!important;
+ }
+ .rail-panel:nth-child(n){max-height:34dvh!important;min-width:0}
+ .rail-panel summary{padding:8px 10px!important}
+ .rail-items{max-height:27dvh!important}
+}
+@media(max-width:650px){
+ .notice-rail{top:62px!important;width:calc(100% - 28px)!important;gap:6px!important}
+ .rail-panel:nth-child(n){max-height:32dvh!important}
+ .rail-items{max-height:26dvh!important}
+}
+#adminNavButton{display:inline-flex;align-items:center;justify-content:center;border:1px solid #bdd7e7;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:750;background:#f3f9fd;color:#1c5f88;text-decoration:none;white-space:nowrap}
+#adminNavButton:hover,#adminNavButton:focus-visible{background:#e4f3fc}
+@media(max-width:650px){#adminNavButton{padding:7px 8px;font-size:11px}.actions{gap:5px!important}}
+
+@media(max-width:860px){.actions #adminNavButton{display:inline-flex!important}}
