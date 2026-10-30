@@ -43,7 +43,7 @@ export async function getAdminSession(request,env){
 }
 async function throttle(request,env,namespace){
  const ip=request.headers.get('cf-connecting-ip')||'unknown';
- if(!env.INQUIRY_HASH_SALT)return false;
+ if(!env.INQUIRY_HASH_SALT)throw new Error('Admin rate limiter secret is required');
  const key=await digest(env.INQUIRY_HASH_SALT+':admin:'+namespace+':'+ip);
  const now=Date.now();
  const item=await env.DB.prepare(
