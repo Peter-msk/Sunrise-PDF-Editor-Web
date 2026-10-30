@@ -3,10 +3,15 @@ const root=path.resolve(__dirname,'..');
 const homePath=path.join(root,'dist/index.html');
 const editorPath=path.join(root,'dist/editor/index.html');
 let home=fs.readFileSync(homePath,'utf8');
-// Preserve the administrator's server-side code but hide all public navigation until Access is configured.
-const hiddenAdminLink='<a id="adminNavButton" href="/admin/" title="Cloudflare Access 관리자 인증">관리자</a>';
-home=home.replaceAll(hiddenAdminLink,'');
-if(home.includes('id="adminNavButton"'))throw Error('Unexpected admin navigation element in public homepage');
+// Administrator has completed initial registration. Keep a visible link on the
+// public homepage; actual authorization is always enforced by the Worker.
+const adminLink='<a id="adminNavButton" class="btn small" href="/admin/" aria-label="Sunrise PDF Editor 관리자 페이지">관리자</a>';
+if(!home.includes('id="adminNavButton"')){
+ const anchor='<button type="button" class="contact-nav-button" id="contactNavButton">문의하기</button>';
+ if(!home.includes(anchor))throw Error('Contact navigation anchor missing');
+ home=home.replace(anchor,anchor+adminLink);
+}
+if(!home.includes('href="/admin/"'))throw Error('Administrator link must point to the protected dashboard');
 if(!home.includes('/assets/sunrise-home-admin.css')){
  home=home.replace('</head>','<link rel="stylesheet" href="/assets/sunrise-home-admin.css">\n</head>');
 }
@@ -24,4 +29,4 @@ if(!editor.includes('/assets/sunrise-telemetry.js')){
  editor=editor.replace('</body>','<script defer src="/assets/sunrise-telemetry.js"></script>\n</body>');
  fs.writeFileSync(editorPath,editor);
 }
-console.log('PASS: public admin navigation hidden, collision-free notice rail and analytics build integrated');
+console.log('PASS: public administrator navigation enabled, protected admin destination and analytics integrated');
