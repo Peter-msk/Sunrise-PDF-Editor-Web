@@ -37,6 +37,21 @@
  };
  window.addEventListener('error',()=>report(lastFeature));
  window.addEventListener('unhandledrejection',()=>report(lastFeature));
+ // Count handled operation failures shown by the editor without transmitting their details.
+ const toastRoot=document.getElementById('toastContainer');
+ if(toastRoot){
+   const observer=new MutationObserver(changes=>{
+     for(const change of changes)for(const item of change.addedNodes){
+       if(item.nodeType!==1||!item.classList?.contains('sunrise-toast'))continue;
+       const visible=item.textContent||'';
+       if(item.querySelector('.fa-circle-exclamation')||/실패|오류|처리하지 못/.test(visible)){
+         const inferred=classify(visible);report(inferred==='기타'?lastFeature:inferred);
+       }
+     }
+   });
+   observer.observe(toastRoot,{childList:true});
+ }
+
  window.sunriseTelemetryFeatureError=feature=>report(classify(feature)); // future explicit integration
  setInterval(()=>{
    const now=performance.now(),diff=(now-last)/1000;last=now;
