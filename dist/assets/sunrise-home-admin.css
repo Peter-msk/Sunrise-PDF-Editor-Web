@@ -29,3 +29,5 @@
 #adminNavButton{display:inline-flex;align-items:center;justify-content:center;border:1px solid #bdd7e7;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:750;background:#f3f9fd;color:#1c5f88;text-decoration:none;white-space:nowrap}
 #adminNavButton:hover,#adminNavButton:focus-visible{background:#e4f3fc}
 @media(max-width:650px){#adminNavButton{padding:7px 8px;font-size:11px}.actions{gap:5px!important}}
+
+@media(max-width:860px){.actions #adminNavButton{display:inline-flex!important}}
