@@ -46,5 +46,33 @@
   .rail-panel:nth-child(n){max-height:30dvh!important}
   .rail-items{max-height:23dvh!important}
 }
-/* Defense in depth: do not surface the dormant administrator navigation. */
-#adminNavButton{display:none!important}
+/* Administrator entry is visible; the Worker still checks the login cookie. */
+#adminNavButton{
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  background:#fff;
+  border:1px solid #bad6e8;
+  color:#18567e;
+  box-shadow:none;
+  border-radius:8px;
+  padding:9px 12px;
+  text-decoration:none;
+  font-size:13px;
+  font-weight:750;
+  white-space:nowrap;
+}
+#adminNavButton:hover,#adminNavButton:focus-visible{
+  background:#eaf4fb;
+  box-shadow:none;
+  transform:none;
+}
+@media(max-width:650px){
+  #adminNavButton{padding:8px;font-size:11px}
+}
+@media(max-width:580px){
+  .nav .topbar{height:auto;min-height:62px;flex-wrap:wrap;padding:8px 0;gap:7px}
+  .nav .actions{width:100%;justify-content:flex-end;gap:7px}
+  .notice-rail{top:112px!important}
+}
