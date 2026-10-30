@@ -5328,7 +5328,146 @@
           attachments:doc.attachments.map(({bytes, ...item}) => ({...item, size:bytes.byteLength}))}) === captured.data;
     }
 
-    // Losslessly deflate unfiltered streams, retaining the compiled PDF if not smaller.
+    function pdfCompressionSettings(strength) {
+      if (!Number.isInteger(strength) || strength < 0 || strength > 100) throw new Error("압축 강도는 0~100 정수여야 합니다.");
+      return {strength, quality: Math.round(100 - strength * 0.6), maxEdge: strength ? Math.round(5200 - strength * 40) : 0};
+    }
+
+    async function readPdfImageSamples(object, width, height, colors) {
+      const {PDFName, PDFDict} = window.PDFLib, n = PDFName.of;
+      const rowBytes = width * colors, expected = rowBytes * height;
+      let bytes = object.getContents();
+      if (object.dict.get(n('Filter')) === n('FlateDecode')) {
+        const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate')).getReader();
+        const chunks = []; let size = 0;
+        try {
+          while (true) {
+            const {value, done} = await reader.read(); if (done) break;
+            size += value.length;
+            if (size > expected + height) { await reader.cancel(); throw new Error('이미지 데이터 크기가 올바르지 않습니다.'); }
+            chunks.push(value);
+          }
+        } finally { reader.releaseLock(); }
+        bytes = new Uint8Array(size); let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+      }
+      const parms = object.dict.lookup(n('DecodeParms'));
+      if (parms && !(parms instanceof PDFDict)) throw new Error('지원하지 않는 이미지 예측 형식입니다.');
+      const number = (key, fallback) => parms?.lookup(n(key))?.asNumber() ?? fallback;
+      const predictor = number('Predictor', 1);
+      if (predictor === 1) { if (bytes.length !== expected) throw new Error('이미지 크기 불일치'); return bytes; }
+      if (number('Columns', 1) !== width || number('Colors', 1) !== colors || number('BitsPerComponent', 8) !== 8)
+        throw new Error('지원하지 않는 이미지 예측 매개변수입니다.');
+      if (predictor === 2) {
+        if (bytes.length !== expected) throw new Error('이미지 크기 불일치');
+        bytes = bytes.slice();
+        for (let row = 0; row < height; row++) for (let x = colors; x < rowBytes; x++) {
+          const i = row * rowBytes + x; bytes[i] = (bytes[i] + bytes[i - colors]) & 255;
+        }
+        return bytes;
+      }
+      if (predictor < 10 || predictor > 15 || bytes.length !== expected + height) throw new Error('지원하지 않는 이미지 예측 형식입니다.');
+      const output = new Uint8Array(expected);
+      for (let row = 0; row < height; row++) {
+        const filter = bytes[row * (rowBytes + 1)]; if (filter > 4) throw new Error('이미지 PNG 필터 오류');
+        for (let x = 0; x < rowBytes; x++) {
+          const i = row * rowBytes + x, left = x >= colors ? output[i - colors] : 0;
+          const up = row ? output[i - rowBytes] : 0, corner = row && x >= colors ? output[i - rowBytes - colors] : 0;
+          let value = 0;
+          if (filter === 1) value = left;
+          if (filter === 2) value = up;
+          if (filter === 3) value = Math.floor((left + up) / 2);
+          if (filter === 4) {
+            const p = left + up - corner, a = Math.abs(p - left), b = Math.abs(p - up), c = Math.abs(p - corner);
+            value = a <= b && a <= c ? left : b <= c ? up : corner;
+          }
+          output[i] = (bytes[row * (rowBytes + 1) + x + 1] + value) & 255;
+        }
+      }
+      return output;
+    }
+
+    async function compressPdfImages(bytes, settings, onProgress = () => {}) {
+      const {PDFDocument, PDFRawStream, PDFName, PDFNumber} = window.PDFLib, n = PDFName.of;
+      pdfCompressionSettings(settings.strength);
+      if (!Number.isInteger(settings.quality) || settings.quality < 1 || settings.quality > 100 ||
+          !Number.isInteger(settings.maxEdge) || settings.maxEdge < 0 || settings.maxEdge > 10000) throw new Error('이미지 압축 설정이 올바르지 않습니다.');
+      if (!settings.strength) return {...await compressPdfLossless(bytes), images:0, skipped:0};
+      const pdf = await PDFDocument.load(bytes, {updateMetadata:false});
+      const images = pdf.context.enumerateIndirectObjects().filter(([,o]) => o instanceof PDFRawStream && o.dict.get(n('Subtype')) === n('Image'));
+      // Mask images can be referenced from another image; never JPEG-encode them.
+      const masks = new Set();
+      for (const [,image] of images) for (const key of ['Mask','SMask']) {
+        const value = image.dict.get(n(key)); if (value) masks.add(value.toString());
+      }
+      let changed = 0, skipped = 0, pixels = 0;
+      for (let index = 0; index < images.length; index++) {
+        const [ref, object] = images[index], dict = object.dict;
+        onProgress(index + 1, images.length);
+        const w = dict.lookup(n('Width'))?.asNumber(), h = dict.lookup(n('Height'))?.asNumber();
+        const cs = dict.lookup(n('ColorSpace')), filter = dict.get(n('Filter'));
+        const softMask = dict.lookup(n('SMask'));
+        // Keep the alpha stream and both dimensions unchanged. Matte images require
+        // unblending, so leave those parents untouched rather than alter edge colors.
+        const supportedMask = !softMask || (softMask instanceof PDFRawStream &&
+          softMask.dict.get(n('Subtype')) === n('Image') && softMask.dict.lookup(n('ColorSpace')) === n('DeviceGray') &&
+          softMask.dict.lookup(n('BitsPerComponent'))?.asNumber() === 8 &&
+          softMask.dict.lookup(n('Width'))?.asNumber() === w && softMask.dict.lookup(n('Height'))?.asNumber() === h &&
+          !softMask.dict.get(n('Matte')) && !softMask.dict.get(n('SMask')) && !softMask.dict.get(n('Mask')));
+        const supported = (cs === n('DeviceRGB') || cs === n('DeviceGray')) &&
+          dict.lookup(n('BitsPerComponent'))?.asNumber() === 8 && !dict.get(n('Decode')) &&
+          !dict.get(n('Mask')) && supportedMask && !dict.get(n('ImageMask')) &&
+          !dict.get(n('F')) && !dict.get(n('Alternates')) && !dict.get(n('SMaskInData')) && !masks.has(ref.toString());
+        if (!supported || !Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 128 || h < 128 ||
+            w * h > 16000000 || pixels + w * h > 64000000 ||
+            (filter && filter !== n('DCTDecode') && filter !== n('FlateDecode'))) { skipped++; continue; }
+        pixels += w * h;
+        const canvas = document.createElement('canvas'); let bitmap = null;
+        try {
+          let source;
+          if (filter === n('DCTDecode')) {
+            if (dict.get(n('DecodeParms'))) { skipped++; continue; }
+            const header = await window.PDFLib.JpegEmbedder.for(object.getContents());
+            if (header.width !== w || header.height !== h || (header.colorSpace !== 'DeviceRGB' && header.colorSpace !== 'DeviceGray'))
+              throw new Error('JPEG 이미지 크기 또는 색상이 PDF와 다릅니다.');
+            bitmap = await createImageBitmap(new Blob([object.getContents()], {type:'image/jpeg'}), {imageOrientation:'none'});
+            if (bitmap.width !== w || bitmap.height !== h) throw new Error('JPEG 이미지 크기가 PDF와 다릅니다.');
+            source = bitmap;
+          } else {
+            const colors = cs === n('DeviceRGB') ? 3 : 1;
+            const samples = await readPdfImageSamples(object, w, h, colors);
+            canvas.width = w; canvas.height = h;
+            const context = canvas.getContext('2d'), image = context.createImageData(w, h);
+            for (let i = 0; i < w * h; i++) {
+              image.data[i*4] = samples[i*colors]; image.data[i*4+1] = samples[i*colors + (colors === 3 ? 1 : 0)];
+              image.data[i*4+2] = samples[i*colors + (colors === 3 ? 2 : 0)]; image.data[i*4+3] = 255;
+            }
+            context.putImageData(image, 0, 0);
+            bitmap = await createImageBitmap(canvas); source = bitmap;
+          }
+          const scale = !softMask && settings.maxEdge ? Math.min(1, settings.maxEdge / Math.max(w,h)) : 1;
+          canvas.width = Math.max(1, Math.round(w * scale)); canvas.height = Math.max(1, Math.round(h * scale));
+          const context = canvas.getContext('2d'); context.imageSmoothingEnabled = true; context.imageSmoothingQuality = 'high';
+          context.drawImage(source, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', settings.quality / 100));
+          if (!blob || blob.type !== 'image/jpeg') throw new Error('JPEG 인코딩을 지원하지 않습니다.');
+          const jpeg = new Uint8Array(await blob.arrayBuffer());
+          if (jpeg.length + 64 >= object.getContents().length) { skipped++; continue; }
+          const updated = dict.clone(); updated.set(n('Filter'), n('DCTDecode')); updated.delete(n('DecodeParms'));
+          updated.set(n('ColorSpace'), n('DeviceRGB')); updated.set(n('BitsPerComponent'), PDFNumber.of(8));
+          updated.set(n('Width'), PDFNumber.of(canvas.width)); updated.set(n('Height'), PDFNumber.of(canvas.height));
+          pdf.context.assign(ref, PDFRawStream.of(updated, jpeg)); changed++;
+        } finally { bitmap?.close(); canvas.width = canvas.height = 1; }
+      }
+      let output = changed ? await pdf.save({useObjectStreams:true}) : bytes;
+      if (output.length >= bytes.length) { output = bytes; changed = 0; }
+      const result = await compressPdfLossless(output);
+      const verified = await PDFDocument.load(result.bytes, {updateMetadata:false});
+      if (verified.getPageCount() !== pdf.getPageCount()) throw new Error('압축 후 페이지 수가 다릅니다.');
+      return {...result, originalSize:bytes.length, changed:result.changed + changed, images:changed, skipped};
+    }
+
+    // Losslessly optimize eligible streams; never return a larger PDF.
     async function compressPdfLossless(bytes) {
       if (typeof CompressionStream !== "function") throw new Error("이 브라우저는 PDF 압축을 지원하지 않습니다. 최신 Chrome 또는 Edge를 이용해 주세요.");
       const {PDFDocument, PDFRawStream, PDFName} = window.PDFLib;
@@ -5377,15 +5516,26 @@
     function openSaveAsModal(doc, compress = false) {
       const suggested = doc.name.replace(/\.pdf$/i, "") + (compress ? "_compressed.pdf" : "_edited.pdf");
       openModal({
-        title: compress ? "PDF 무손실 압축" : "다른 이름으로 PDF 저장",
+        title: compress ? "PDF 이미지 압축" : "다른 이름으로 PDF 저장",
         icon: compress ? "fa-file-zipper" : "fa-floppy-disk",
-        width: "460px",
+        width: compress ? "560px" : "460px",
         bodyHtml: `
           <div class="dialog-info-box">
             원본은 그대로 두고 새 PDF로 저장합니다. 삽입한 텍스트·머리말·꼬리말·페이지 번호는 검색 가능한 텍스트로 저장됩니다.
             저장한 파일을 이 편집기에서 다시 열면 삽입 항목을 다시 수정할 수 있습니다.
-            ${compress ? "무손실 압축입니다. 일부 PDF 데이터만 최적화하며 JPEG 이미지 재인코딩은 지원하지 않습니다. 이미 최적화된 파일은 줄지 않을 수 있습니다." : ""}
+            ${compress ? "이미지를 JPEG로 재인코딩하고 해상도를 줄입니다. 강도가 높을수록 이미지 속 작은 글자·도면이 흐려질 수 있습니다. PDF 글자·벡터는 이미지로 바꾸지 않습니다. 지원하는 투명 이미지는 투명도와 해상도를 유지하며 색상만 압축합니다. 특수 색상·마스크는 유지합니다." : ""}
           </div>
+          ${compress ? `<div style="margin-top:12px">
+            <label for="compressionPreset">압축 방식</label>
+            <select id="compressionPreset" class="dialog-select"><option value="20">저효율 · 화질 우선</option><option value="60" selected>중효율 · 균형</option><option value="90">고효율 · 용량 우선</option><option value="custom">사용자 지정</option></select>
+            <label for="compressionStrength" style="display:block;margin-top:10px">압축 강도 <output id="compressionStrengthValue">60</output>%</label>
+            <input id="compressionStrength" type="range" min="0" max="100" step="1" value="60" style="width:100%" />
+            <div class="dialog-form-grid" style="margin-top:8px">
+              <label for="compressionQuality">이미지 JPEG 품질(1~100)</label><input id="compressionQuality" class="dialog-input" type="number" min="1" max="100" value="64" />
+              <label for="compressionMaxEdge">이미지 긴 변 최대(px, 0=원래 해상도)</label><input id="compressionMaxEdge" class="dialog-input" type="number" min="0" max="10000" value="2800" />
+            </div>
+            <small>0%는 이미지 변경 없는 무손실 최적화입니다. 강도는 파일 감소율이 아닙니다. 막대를 놓거나 설정을 변경하면 실제 파일을 계산해 예상 다운로드 용량을 표시합니다.</small>
+          </div>` : ""}
           <div class="dialog-form-grid">
             <label for="saveAsFilenameInput">저장 파일명:</label>
             <input type="text" id="saveAsFilenameInput" class="dialog-input" value="${escapeHtml(suggested)}" />
@@ -5403,17 +5553,57 @@
         `,
         onMount: () => {
           document.getElementById("saveAsCancelBtn").addEventListener("click", closeModal);
+          if (compress) {
+            const strength = document.getElementById('compressionStrength'), preset = document.getElementById('compressionPreset');
+            const reset = () => {
+              if (pendingSaveUrl) { URL.revokeObjectURL(pendingSaveUrl); pendingSaveUrl = null; }
+              document.getElementById('saveAsDownloadLink').style.display = 'none';
+              document.getElementById('saveAsDownloadedBtn').style.display = 'none';
+              document.getElementById('saveAsConfirmBtn').style.display = 'inline-flex';
+              document.getElementById('saveAsFilenameInput').disabled = false;
+              document.getElementById('saveAsStatus').textContent = '설정 변경됨 · 용량을 다시 계산합니다.';
+            };
+            const syncStrength = () => {
+              const settings = pdfCompressionSettings(Number(strength.value));
+              document.getElementById('compressionStrengthValue').textContent = strength.value;
+              document.getElementById('compressionQuality').value = settings.quality;
+              document.getElementById('compressionMaxEdge').value = settings.maxEdge;
+              reset();
+            };
+            const calculate = () => document.getElementById('saveAsConfirmBtn').click();
+            strength.addEventListener('input', () => { preset.value = 'custom'; syncStrength(); });
+            strength.addEventListener('change', calculate);
+            preset.addEventListener('change', () => { if (preset.value === 'custom') return; strength.value = preset.value; syncStrength(); calculate(); });
+            for (const id of ['compressionQuality','compressionMaxEdge']) {
+              const input = document.getElementById(id); let modified = false;
+              input.addEventListener('input', () => { modified = true; preset.value = 'custom'; reset(); });
+              const commit = () => { if (!modified) return; modified = false; calculate(); };
+              input.addEventListener('change', commit);
+              input.addEventListener('blur', commit);
+            }
+          }
           document.getElementById("saveAsConfirmBtn").addEventListener("click", async () => {
+            const button = document.getElementById("saveAsConfirmBtn");
+            if (button.disabled) return;
             let name = (document.getElementById("saveAsFilenameInput").value || suggested).trim();
             if (!name.toLowerCase().endsWith(".pdf")) name += ".pdf";
-            const button = document.getElementById("saveAsConfirmBtn");
             const status = document.getElementById("saveAsStatus");
             button.disabled = true;
+            const controls = compress ? ['compressionPreset','compressionStrength','compressionQuality','compressionMaxEdge'].map(id => document.getElementById(id)) : [];
+            controls.forEach(control => control.disabled = true);
             status.textContent = "PDF를 준비하고 있습니다. 잠시만 기다려 주세요.";
             try {
               const captured = captureSaveState(doc);
               let bytes = await compileDocumentWithOverlays(captured.snapshot);
-              const result = compress ? await compressPdfLossless(bytes) : null;
+              const isOpen = () => document.getElementById('modalBackdrop').classList.contains('open') && document.getElementById('saveAsConfirmBtn') === button;
+              if (!isOpen()) return;
+              const settings = compress ? {...pdfCompressionSettings(Number(document.getElementById('compressionStrength').value)),
+                quality:Number(document.getElementById('compressionQuality').value), maxEdge:Number(document.getElementById('compressionMaxEdge').value)} : null;
+              const result = compress ? await compressPdfImages(bytes, settings, (index,total) => {
+                if (!isOpen()) throw new Error('압축 창이 닫혀 작업을 중단했습니다.');
+                if (!saveStateIsCurrent(doc, captured)) throw new Error('문서가 변경되어 압축을 중단했습니다.');
+                status.textContent = `이미지 압축 ${index}/${total} · 용량 계산 중…`;
+              }) : null;
               if (result) bytes = result.bytes;
               if (!document.getElementById("modalBackdrop").classList.contains("open") ||
                   document.getElementById("saveAsConfirmBtn") !== button) return;
@@ -5425,10 +5615,10 @@
               button.style.display = "none"; document.getElementById("saveAsFilenameInput").disabled = true;
               document.getElementById("saveAsCancelBtn").textContent = "닫기";
               status.textContent = result
-                ? `열린 PDF ${(doc.bytes.length / 1024).toFixed(1)} KB · 편집 내용 반영 후 ${(result.originalSize / 1024).toFixed(1)} KB → 최종 ${(bytes.length / 1024).toFixed(1)} KB. ${result.changed ? `데이터 ${result.changed}개를 최적화했습니다.` : "추가로 줄일 수 있는 데이터가 없어 압축하지 못했습니다."} 다운로드 후 완료를 확인해 주세요.`
+                ? `열린 PDF ${(doc.bytes.length / 1024).toFixed(1)} KB · 편집 내용 반영 후 ${(result.originalSize / 1024).toFixed(1)} KB → 최종 ${(bytes.length / 1024).toFixed(1)} KB. 편집 반영본 대비 ${(100 * (1 - bytes.length / result.originalSize)).toFixed(1)}% 감소 · 열린 PDF 대비 ${(100 * (1 - bytes.length / doc.bytes.length)).toFixed(1)}% 감소(음수는 증가). 이미지 ${result.images}개 재인코딩, 유지 ${result.skipped}개. ${result.changed ? '실제 생성한 결과의 용량입니다.' : '추가로 줄일 수 있는 데이터가 없습니다.'} 다운로드 후 완료를 확인해 주세요.`
                 : "PDF가 준비되었습니다. 다운로드 후 완료를 확인해 주세요.";
               link.focus();
-              link.addEventListener("click", event => {
+              link.onclick = event => {
                 if (!saveStateIsCurrent(doc, captured)) {
                   event.preventDefault();
                   status.textContent = "문서가 변경되었습니다. 창을 닫고 PDF를 다시 준비해 주세요.";
@@ -5436,17 +5626,21 @@
                 }
                 confirm.style.display = "inline-flex";
                 status.textContent = "다운로드를 시작했습니다. 파일 저장이 끝났는지 확인한 후 완료를 눌러 주세요.";
-              });
-              confirm.addEventListener("click", () => {
+              };
+              confirm.onclick = () => {
                 if (!saveStateIsCurrent(doc, captured)) {
                   status.textContent = "문서가 변경되어 저장 완료로 표시하지 않습니다. 다시 저장해 주세요."; return;
                 }
                 doc.dirty = false; renderDocTabs(); updateCommandStates();
                 showToast(`다운로드 완료를 확인했습니다: ${name}`, "fa-floppy-disk"); closeModal();
-              });
+              };
             } catch (error) {
+              if (!document.getElementById('modalBackdrop').classList.contains('open') || document.getElementById('saveAsConfirmBtn') !== button) return;
               showToast(`저장 실패: ${error.message || error}`, "fa-circle-exclamation");
               status.textContent = `PDF 준비 실패: ${error.message || error}`;
+              button.disabled = false;
+            } finally {
+              controls.forEach(control => control.disabled = false);
               button.disabled = false;
             }
           });
