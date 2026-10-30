@@ -1,6 +1,17 @@
 name = "sunrise-pdf-editor"
-compatibility_date = "2026-10-29"
+main = "src/worker.mjs"
+compatibility_date = "2026-10-30"
 
 [assets]
 directory = "./dist"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
 
+[[d1_databases]]
+binding = "DB"
+database_name = "sunrise-pdf-editor-web-contact"
+database_id = "efaab4d4-9d79-46dd-b037-461c4cd4c683"
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["0 3 * * *"]
