@@ -34,3 +34,10 @@
 ## 현재 활성화 필요
 현재 연결 Cloudflare 계정의 Access API 응답은 `access.api.error.not_enabled` (Access 미활성화). Zero Trust 활성화 후 상기 self-hosted 경로 보호 정책을 만들어야 관리 화면을 사용할 수 있다.
 공식 문서: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
+
+## 2026-10-31 계정 등록 HTML 응답 오류 보완
+- 무료 Cloudflare Workers의 10ms CPU 한도와 고비용 PBKDF2 서버 연산이 충돌할 위험을 줄이기 위해 키 파생을 브라우저로 이동.
+- `/api/auth/challenge`가 고유 salt를 제공하며 브라우저는 600,000회 PBKDF2 수행 후 파생 키를 TLS 연결로 전송. 이 파생 키는 비밀번호에 준하는 민감정보이므로 브라우저 밖에 저장하지 않는다.
+- 서버는 Cloudflare Secret `INQUIRY_HASH_SALT` 기반으로 용도 분리된 HMAC 검증값만 D1에 보관한다. 기존 Secret을 삭제하면 관리자 로그인이 중단될 수 있으므로 보존한다.
+- 로그인 화면은 JSON이 아닌 오류 페이지를 수신할 때 원본 HTML을 표시하지 않고 안전한 HTTP 오류 안내를 표시한다.
+- 최초 계정 등록이 아직 이뤄지지 않은 경우에만 이 신규 구조를 사용한다. 이전 비밀번호 해시 기록과 자동 호환하지 않는다.
