@@ -20,5 +20,6 @@ async function compact(code, module = false) {
     const source = fs.readFileSync(path.join(root, 'src/assets', name), 'utf8');
     fs.writeFileSync(path.join(root, 'dist/assets', name), await compact(source) + '\n');
   }
+  require('./site-integration.cjs');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 
