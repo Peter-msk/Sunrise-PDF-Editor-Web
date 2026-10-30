@@ -8,11 +8,17 @@ const json=(value,status=200,extra={})=>new Response(JSON.stringify(value),{stat
 const digest=async data=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data))),x=>x.toString(16).padStart(2,'0')).join('');
 const randomHex=n=>Array.from(crypto.getRandomValues(new Uint8Array(n)),x=>x.toString(16).padStart(2,'0')).join('');
 const originOK=(req,url)=>req.headers.get('Origin')===url.origin;
-const credentialsOK=(username,password)=>typeof username==='string'&&/^[a-z][a-z0-9._-]{3,31}$/.test(username)&&typeof password==='string'&&password.length>=16&&password.length<=128&&!/[\u0000-\u001f\u007f]/.test(password);
-async function passwordHash(password,salt,iterations){
- const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
- const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:Uint8Array.from(salt.match(/../g),x=>parseInt(x,16)),iterations,hash:'SHA-256'},key,256);
- return Array.from(new Uint8Array(bits),x=>x.toString(16).padStart(2,'0')).join('');
+// PBKDF2 (600k SHA-256) runs in the user's browser to stay within
+// Cloudflare Workers Free 10ms CPU budget. Treat the derived key as a
+// password-equivalent secret, and bind it to a server-only keyed verifier.
+const SCHEME='browser-pbkdf2-v1:';
+const isHex=(value,length)=>typeof value==='string'&&value.length===length&&/^[a-f0-9]+$/.test(value);
+const credentialsOK=(username,proof,salt)=>typeof username==='string'&&/^[a-z][a-z0-9._-]{3,31}$/.test(username)&&isHex(proof,64)&&isHex(salt,32);
+async function passwordVerifier(proof,salt,env){
+ if(!env.INQUIRY_HASH_SALT)throw new Error('Admin verifier secret unavailable');
+ const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(env.INQUIRY_HASH_SALT),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const signature=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode('sunrise-admin-password-v1:'+salt+':'+proof));
+ return Array.from(new Uint8Array(signature),x=>x.toString(16).padStart(2,'0')).join('');
 }
 function equalDigest(a,b){if(!a||!b||a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
 async function payload(request){
@@ -60,6 +66,11 @@ export async function authRoutes(request,env,url){
  if(path==='/api/auth/status'&&method==='GET'){
   return json({configured:await configured(env),setupEnabled:!!env.ADMIN_BOOTSTRAP_TOKEN});
  }
+ if(path==='/api/auth/challenge'&&method==='GET'){
+  const account=await db.prepare('SELECT password_salt FROM admin_accounts WHERE id=1').first();
+  const salt=typeof account?.password_salt==='string'&&account.password_salt.startsWith(SCHEME)?account.password_salt.slice(SCHEME.length):randomHex(16);
+  return json({salt,iterations:ITERATIONS});
+ }
  if(path==='/api/auth/me'&&method==='GET'){
   const user=await getAdminSession(request,env);
   return user?json({authenticated:true,username:user}):json({authenticated:false},401);
@@ -80,25 +91,27 @@ export async function authRoutes(request,env,url){
   if(!env.ADMIN_BOOTSTRAP_TOKEN)return json({error:'초기 등록용 비밀값이 아직 적용되지 않았습니다. Cloudflare Worker 설정을 확인해 주세요.'},503);
   const token=data.bootstrapToken;
   if(typeof token!=='string'||token.length<32||token.length>256)return json({error:'초기 설정 토큰은 32~256자로 입력해야 합니다.'},400);
-  if(!credentialsOK(data.username,data.password))return json({error:'관리자 아이디는 영문 소문자 4~32자, 비밀번호는 16~128자로 지정하세요.'},400);
+  if(!credentialsOK(data.username,data.passwordProof,data.passwordSalt))return json({error:'관리자 인증 정보 형식을 확인해 주세요.'},400);
   // Valid possession of the strong bootstrap token overrides stale setup
   // rate limits. Only incorrect tokens are throttled in a fresh namespace.
   if(!equalDigest(await digest(token),await digest(env.ADMIN_BOOTSTRAP_TOKEN))){
    if(await throttle(request,env,'setup-invalid-v2'))return json({error:'초기 설정 토큰 오류가 반복되었습니다. 15분 후 다시 시도하세요.'},429);
    return json({error:'초기 설정 토큰이 올바르지 않습니다.'},403);
   }
-  const salt=randomHex(16),hash=await passwordHash(data.password,salt,ITERATIONS);
-  const result=await db.prepare('INSERT OR IGNORE INTO admin_accounts(id,username,password_salt,password_hash,iterations) VALUES (1,?,?,?,?)').bind(data.username,salt,hash,ITERATIONS).run();
+  const salt=data.passwordSalt,hash=await passwordVerifier(data.passwordProof,salt,env);
+  const result=await db.prepare('INSERT OR IGNORE INTO admin_accounts(id,username,password_salt,password_hash,iterations) VALUES (1,?,?,?,?)').bind(data.username,SCHEME+salt,hash,ITERATIONS).run();
   if(!result.meta?.changes)return json({error:'관리자 계정은 이미 등록되어 있습니다.'},409);
   return json({ok:true,message:'관리자 계정이 등록되었습니다. 로그인해 주세요.'},201);
  }
  const account=await db.prepare('SELECT id,username,password_salt,password_hash,iterations FROM admin_accounts WHERE id=1').first();
  if(!account)return json({error:'관리자 계정 등록이 필요합니다.'},503);
  if(await throttle(request,env,'login'))return json({error:'로그인 시도 제한입니다. 15분 후 다시 시도하세요.'},429);
- // Calculate the PBKDF2 hash even for an unknown user to reduce username probing.
- const candidate=typeof data.password==='string'&&data.password.length<=128&&data.password.length>0?data.password:'invalid';
- const derived=await passwordHash(candidate,account.password_salt,account.iterations);
- if(typeof data.username!=='string'||data.username!==account.username||!equalDigest(derived,account.password_hash)){
+ // A legacy server-side PBKDF2 record must be migrated, never silently weakened.
+ if(typeof account.password_salt!=='string'||!account.password_salt.startsWith(SCHEME))return json({error:'기존 인증 기록을 관리자가 점검해야 합니다.'},503);
+ const salt=account.password_salt.slice(SCHEME.length);
+ if(!isHex(data.passwordProof,64))return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401);
+ const verifier=await passwordVerifier(data.passwordProof,salt,env);
+ if(typeof data.username!=='string'||data.username!==account.username||!equalDigest(verifier,account.password_hash)){
   return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401);
  }
  const token=randomHex(32),now=Date.now();

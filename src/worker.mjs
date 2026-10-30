@@ -51,7 +51,13 @@ async function submitInquiry(request,env,url) {
 export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
-    if(url.pathname.startsWith('/api/auth/'))return authRoutes(request,env,url);
+    if(url.pathname.startsWith('/api/auth/')){
+      try{return await authRoutes(request,env,url)}
+      catch(error){
+        console.error('Authentication endpoint failed',error?.name||'unknown');
+        return respond({error:'관리자 인증 서버 처리 중 오류가 발생했습니다. 다시 시도해 주세요.'},503);
+      }
+    }
     if(url.pathname==='/admin')return Response.redirect(url.origin+'/admin/',302);
     if(url.pathname==='/admin/login/' || url.pathname==='/admin/setup/'){
       if(request.method!=='GET'&&request.method!=='HEAD')return new Response('Method Not Allowed',{status:405});
