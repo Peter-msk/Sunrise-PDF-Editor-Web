@@ -55,13 +55,13 @@ async function main(){
   assert.equal(await page.locator('#healthVersionCreated').innerText(),'미설정');
   // An HTTP 503 with well-formed health JSON must display a D1-specific
   // warning; the dashboard must not interpret the Worker as unreachable.
-  await page.request.get('/__test/health-degraded');
+  await page.request.get(new URL('/__test/health-degraded',page.url()).toString());
   await page.locator('#operationsReload').click();
   await page.waitForFunction(()=>document.querySelector('#healthDatabase')?.textContent==='연결 오류',null,{timeout:15000});
   assert.equal(await page.locator('#healthWorker').innerText(),'응답 정상');
   assert((await page.locator('#operationAlerts').innerText()).includes('D1 연결'));
   assert(Number(await page.locator('#operationAlertCount').innerText())>=2);
-  await page.request.get('/__test/health-recovered');
+  await page.request.get(new URL('/__test/health-recovered',page.url()).toString());
   await page.locator('#operationsReload').click();
   await page.waitForFunction(()=>document.querySelector('#healthDatabase')?.textContent==='연결 정상',null,{timeout:15000});
   assert.equal(await page.locator('#healthRelease').innerText(),'published-v2');
