@@ -88,21 +88,21 @@
       "id": "ADM-08",
       "name": "서비스 상태",
       "phase": 1,
-      "implementation": 10,
-      "automated": 0,
+      "implementation": 65,
+      "automated": 70,
       "practical": 0,
       "deployment": 0,
-      "note": "핵심 API·장애 운영 화면 미구현"
+      "note": "인증된 관리자에게 Worker 응답/D1 SELECT 1 읽기 전용 상태를 제공하고 장애 시 503·경고 표시. 이력·실운영 D1 장애 대응 검증 미완"
     },
     {
       "id": "ADM-09",
       "name": "배포·버전",
       "phase": 1,
-      "implementation": 5,
-      "automated": 0,
+      "implementation": 35,
+      "automated": 35,
       "practical": 0,
       "deployment": 0,
-      "note": "운영 버전 자동 동기화 미구현"
+      "note": "앱 버전과 선택적 CF_VERSION_METADATA·RELEASE_VERSION을 관리자 화면에 표시, 미설정은 명시. 실제 운영 배포 메타데이터 자동 연결·이력은 미완"
     },
     {
       "id": "ADM-10",
@@ -148,11 +148,11 @@
       "id": "ADM-14",
       "name": "운영 알림",
       "phase": 1,
-      "implementation": 10,
-      "automated": 0,
+      "implementation": 35,
+      "automated": 35,
       "practical": 0,
       "deployment": 0,
-      "note": "내부 운영 알림 미구현"
+      "note": "대시보드에 미확인 문의와 D1 상태 확인 알림을 표시. 외부 알림·자동 장애감시·임계치 관리 미구현"
     },
     {
       "id": "USR-01",
@@ -348,11 +348,11 @@
       "id": "TECH-01",
       "name": "코드·언어·성능 고도화",
       "phase": 5,
-      "implementation": 32,
-      "automated": 40,
+      "implementation": 40,
+      "automated": 50,
       "practical": 0,
       "deployment": 0,
-      "note": "기존 모듈에 결과 용량·취소 계약 강화, 120쪽 합성 PDF 처리시간 CI 측정(149ms); 런타임별 메모리·번들·타입 검사 심화 미완"
+      "note": "관리자·PDF 일괄·편집 선택 검사용 명령 및 PR 중복 CI 취소·Chromium 캐시 도입, 6개 파일 1회 커밋. 타입·모듈/병렬 성능 검증 미완"
     },
     {
       "id": "QA-01",
