@@ -1,7 +1,8 @@
 'use strict';
 // End-to-end administrator security with an ACTUAL Chromium browser and local
 // SQLite schema. Only synthetic credentials; never contacts production.
-const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
+const assert=require('node:assert/strict'),fs=require('node:fs'),https=require('node:https'),os=require('node:os'),path=require('node:path');
+const {execFileSync}=require('node:child_process');
 const {webcrypto}=require('node:crypto');globalThis.crypto ||=webcrypto;
 const {DatabaseSync}=require('node:sqlite');
 const {chromium}=require('playwright');
@@ -40,13 +41,21 @@ async function main(){
    res.end(Buffer.from(await output.arrayBuffer()));
   }catch(error){console.error('Local auth route failure',error);res.writeHead(500);res.end('Error')}
  };
- const server=http.createServer((req,res)=>{serve(req,res)});
+ // A __Host- Secure cookie requires real HTTPS, even for local E2E.
+ // Ephemeral self-signed cert is isolated to the CI temp directory.
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'sunrise-auth-https-'));
+ const certFile=path.join(temp,'cert.pem'),keyFile=path.join(temp,'key.pem');
+ execFileSync('openssl',['req','-x509','-nodes','-newkey','rsa:2048','-keyout',keyFile,
+   '-out',certFile,'-days','1','-subj','/CN=127.0.0.1',
+   '-addext','subjectAltName=IP:127.0.0.1'],{stdio:'ignore'});
+ const server=https.createServer({key:fs.readFileSync(keyFile),cert:fs.readFileSync(certFile)},(req,res)=>{serve(req,res)});
  let browser;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
-  const base='http://127.0.0.1:'+server.address().port;
-  browser=await chromium.launch({headless:true,args:['--no-sandbox','--unsafely-treat-insecure-origin-as-secure='+base]});
-  const first=await browser.newContext({viewport:{width:1250,height:820}}),second=await browser.newContext();
+  const base='https://127.0.0.1:'+server.address().port;
+  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  const first=await browser.newContext({viewport:{width:1250,height:820},ignoreHTTPSErrors:true}),
+   second=await browser.newContext({ignoreHTTPSErrors:true});
   const page=await first.newPage(),other=await second.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));other.on('pageerror',e=>errors.push(e.message));
 
@@ -98,6 +107,10 @@ async function main(){
   assert.equal(errors.length,0,'Browser JS errors: '+errors.join(' | '));
   console.log('PASS: real Chromium + SQLite setup/login in 2 browser contexts, secure cookie, rotate all sessions, new login and logout');
   await first.close();await second.close();
- }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));sqlite.close()}
+ }finally{
+  await browser?.close();
+  await new Promise(resolve=>server.close(resolve));
+  sqlite.close();fs.rmSync(temp,{recursive:true,force:true});
+ }
 }
 main().catch(error=>{console.error('Administrator real-browser security:',error);process.exitCode=1});
