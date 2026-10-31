@@ -80,13 +80,14 @@
       const perFile=Number(settings.pagesPerFile);
       if(!Number.isSafeInteger(perFile)||perFile<1||perFile>100)
         throw new Error('출력 PDF당 페이지 수는 1~100쪽이어야 합니다.');
+      let emitted=0;
       for(let i=0;i<files.length;i++){
         if(cancelled())break;
         const file=files[i];progress(i,files.length,file.name);
         try{
           const source=await readSource(file,opts);
           const chunkCount=Math.ceil(source.pages.length/perFile);
-          if(chunkCount>MAX_OUTPUTS)throw new Error('한 파일에서 결과 50개를 초과할 수 없습니다. 출력당 페이지 수를 늘려 주세요.');
+          if(emitted+chunkCount>MAX_OUTPUTS)throw new Error('이번 작업의 결과 파일 수가 최대 50개를 초과합니다. 출력당 페이지 수를 늘려 주세요.');
           const staged=[];
           for(let chunk=0;chunk<chunkCount;chunk++){
             if(cancelled())break;
@@ -99,6 +100,7 @@
           }
           if(cancelled())break;
           for(const item of staged)result(item);
+          emitted+=staged.length;
         }catch(e){if(cancelled())break;error({index:i,name:file.name,message:e?.message||'분할에 실패했습니다.'})}
       }
       return;
