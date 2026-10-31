@@ -1,0 +1,23 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js'),source=fs.readFileSync('src/editor/index.html','utf8');
+const s=source.indexOf('    async function batchCompressPdfs('),e=source.indexOf('    function openBatchCompressModal(',s);assert(s>=0&&e>s);
+let cancelled=false,results=[],errors=[],progress=[];
+const ctx=vm.createContext({window:{PDFLib:lib},Number,Error,readPdfInputFile:async f=>{if(f.size>50*1024*1024)throw Error('50 MiB 초과');return f.data},editablePdfForm:pdf=>{if(pdf.catalog.get(lib.PDFName.of('Perms')))throw Error('서명 문서')},compressPdfImages:async bytes=>({bytes})});
+vm.runInContext(source.slice(s,e),ctx);
+const handlers={cancelled:()=>cancelled,progress:(...x)=>progress.push(x),result:x=>results.push(x),error:x=>errors.push(x)};
+(async()=>{
+ const pdf=await lib.PDFDocument.create();pdf.addPage();const data=await pdf.save();
+ const file=(name,bytes=data)=>({name,size:bytes.byteLength,data:bytes});
+ await ctx.batchCompressPdfs([file('one.pdf'),file('bad.pdf',new Uint8Array([1,2])),file('two.pdf')],{strength:0},handlers);
+ assert.deepEqual(results.map(x=>x.name),['one.pdf','two.pdf']);assert.equal(errors.length,1);assert.equal(progress.length,3);
+ assert.deepEqual([...results[0].bytes],[...data]);
+ results=[];errors=[];progress=[];
+ const stop={...handlers,result:x=>{results.push(x);cancelled=true}};
+ await ctx.batchCompressPdfs([file('one.pdf'),file('two.pdf')],{strength:0},stop);
+ assert.equal(results.length,1);assert.equal(progress.length,1);cancelled=false;
+ await assert.rejects(ctx.batchCompressPdfs(Array(6).fill(file('x.pdf')),{strength:0},handlers),/최대 5개/);
+ await assert.rejects(ctx.batchCompressPdfs([{name:'large',size:101*1024*1024}],{strength:0},handlers),/100 MiB/);
+ const signed=await lib.PDFDocument.create();signed.addPage();signed.catalog.set(lib.PDFName.of('Perms'),signed.context.obj({}));
+ errors=[];await ctx.batchCompressPdfs([file('signed.pdf',await signed.save())],{strength:0},handlers);assert.match(errors[0].message,/서명/);
+ console.log('PASS: batch compression isolates file errors, honors cancellation and size limits, and protects signed files');
+})().catch(e=>{console.error(e);process.exitCode=1});
