@@ -5661,6 +5661,14 @@
       return {bytes:output, originalSize:bytes.length, changed};
     }
 
+    // Do not call pdf.getForm() for an ordinary PDF: pdf-lib creates an
+    // AcroForm dictionary on inspection, causing a false data-loss finding.
+    function guardBatchSource(pdf) {
+      const {PDFName}=window.PDFLib;
+      if(pdf.catalog.get(PDFName.of('Perms')) || pdf.catalog.get(PDFName.of('AcroForm')))
+        editablePdfForm(pdf);
+    }
+
     // Batch output must preserve structural and form invariants. This is
     // intentionally not a visual/pixel comparison; image quality is controlled
     // separately by the explicit compression strength.
@@ -5706,7 +5714,7 @@
         try {
           const bytes=await readPdfInputFile(file);
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
-          editablePdfForm(original);
+          guardBatchSource(original);
           if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
           const result=await compressPdfImages(bytes,settings);
           if(!ArrayBuffer.isView(result.bytes) || result.bytes.BYTES_PER_ELEMENT!==1 || result.bytes.byteLength>bytes.byteLength)
@@ -5738,7 +5746,7 @@
         try{
           const bytes=await readPdfInputFile(file);
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
-          editablePdfForm(original);
+          guardBatchSource(original);
           if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
           if(original.getPages().some(page=>((page.getRotation().angle%360)+360)%360!==0))
             throw new Error('회전된 페이지가 포함된 PDF는 위치가 잘못될 수 있어 일괄 표시를 지원하지 않습니다.');
@@ -5768,6 +5776,7 @@
           }
           if(handlers.cancelled())break;
           const output=await next.save({updateFieldAppearances:false});
+          validatePdfByteLength(output.byteLength);
           if(!ArrayBuffer.isView(output)||output.BYTES_PER_ELEMENT!==1)
             throw new Error('저장 결과 바이트를 확인하지 못했습니다.');
           const reopened=await PDFDocument.load(output,{updateMetadata:false});
