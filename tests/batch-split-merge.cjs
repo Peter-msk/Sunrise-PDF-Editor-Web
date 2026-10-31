@@ -20,6 +20,7 @@ const name=lib.PDFName.of;
  const results=[],errors=[],progress=[];
  const handlers={cancelled:()=>false,progress:(...x)=>progress.push(x),result:x=>results.push(x),error:x=>errors.push(x)};
  await pages.process(original,{mode:'split',pagesPerFile:2},handlers,options);
+ if(errors.length)console.error('Split diagnostics:',errors);
  assert.equal(errors.length,0,'valid documents must split');
  assert.equal(results.length,3,'3-page + 1-page inputs should create three output files');
  assert.deepEqual(results.map(r=>[r.name,r.startPage,r.endPage]),
