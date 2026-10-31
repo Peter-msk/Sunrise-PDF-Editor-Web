@@ -1,0 +1,26 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const PDFLib = require('../dist/assets/pdf-lib/pdf-lib.min.js');
+const source = fs.readFileSync('src/editor/index.html', 'utf8');
+const start = source.indexOf('    async function inspectSavedPdf(');
+const end = source.indexOf('    function openSavedPdfCheckModal(', start);
+assert.ok(start >= 0 && end > start);
+const context = vm.createContext({window: {PDFLib}, validatePdfByteLength: n => { if (!n || n > 50 * 1024 * 1024) throw Error('invalid size'); }});
+vm.runInContext(source.slice(start, end), context);
+(async () => {
+  const doc = await PDFLib.PDFDocument.create();
+  doc.addPage([100, 200]);
+  doc.addPage([100, 200]).setRotation(PDFLib.degrees(90));
+  doc.addPage([100, 100]);
+  const bytes = await doc.save();
+  const result = await context.inspectSavedPdf(bytes);
+  assert.equal(result.bytes, bytes.byteLength);
+  assert.equal(result.pageCount, 3);
+  assert.equal(result.orientation.portrait, 1);
+  assert.equal(result.orientation.landscape, 1);
+  assert.equal(result.orientation.square, 1);
+  await assert.rejects(context.inspectSavedPdf(new Uint8Array([1, 2, 3])));
+  await assert.rejects(context.inspectSavedPdf(new Uint8Array(0)));
+  console.log('PASS: saved PDF preflight reopens a file and checks rotated page orientation, size and invalid input');
+})().catch(error => { console.error(error); process.exitCode = 1; });
