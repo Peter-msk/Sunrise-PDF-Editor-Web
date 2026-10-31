@@ -18,14 +18,14 @@
         ? '병합은 PDF 2~5개, 파일당 50 MiB·합계 100 MiB 이하로 선택해 주세요.'
         : '분할은 PDF 1~5개, 파일당 50 MiB·합계 100 MiB 이하로 선택해 주세요.');
   }
-  function checkSource(pdf,lib){
+  function checkSource(pdf,lib,maxPages=MAX_SOURCE_PAGES){
     const n=lib.PDFName.of;
     for(const name of protectedCatalog){
       if(pdf.catalog.get(n(name)))throw new Error('문서 구조 보존을 위해 '+name+' 포함 PDF는 분할·병합하지 않습니다.');
     }
     const pages=pdf.getPages();
-    if(!pages.length||pages.length>MAX_SOURCE_PAGES)
-      throw new Error('페이지 수는 파일당 1~150쪽만 지원합니다.');
+    if(!pages.length||pages.length>maxPages)
+      throw new Error('페이지 수 제한을 초과했습니다. 최대 '+maxPages+'쪽까지 지원합니다.');
     for(const page of pages){
       for(const name of protectedPage){
         if(page.node.get(n(name)))throw new Error('페이지의 '+name+' 구조가 있어 분할·병합을 제한합니다.');
@@ -61,7 +61,7 @@
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength||bytes.byteLength>MAX_FILE_BYTES)
       throw new Error('저장 결과가 파일 크기 제한(50 MiB)을 초과하거나 손상되었습니다.');
     const restored=await opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
-    checkSource(restored,opts.PDFLib);
+    checkSource(restored,opts.PDFLib,MAX_MERGED_PAGES);
     verifyPages([expectedPages],restored.getPages());
     return bytes;
   }
