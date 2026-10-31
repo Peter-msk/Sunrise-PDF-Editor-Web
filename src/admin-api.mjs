@@ -18,7 +18,7 @@ export async function telemetry(request,env,url){
   if(request.method!=='POST')return response({error:'Method not allowed'},405);
   if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
   const data=await readPayload(request);
-  if(!data||!validSid(data.session)||!['visit','pulse','failure'].includes(data.type))return response({error:'Invalid event'},400);
+  if(!data||!validSid(data.session)||!['visit','pulse','failure','save_operation'].includes(data.type))return response({error:'Invalid event'},400);
   const now=Date.now(),today=day(),db=env.DB;
   try{
     if(data.type==='visit'){
@@ -30,6 +30,13 @@ export async function telemetry(request,env,url){
       if(data.area!=='editor'||!Number.isInteger(data.seconds)||data.seconds<1||data.seconds>15)return response({error:'Invalid duration'},400);
       const accepted=await db.prepare('UPDATE analytics_sessions SET last_pulse_ms=? WHERE day=? AND session_id=? AND last_pulse_ms<=? RETURNING session_id').bind(now,today,data.session,now-8000).first();
       if(accepted)await db.prepare('INSERT INTO analytics_daily(day,editor_seconds) VALUES (?,?) ON CONFLICT(day) DO UPDATE SET editor_seconds=editor_seconds+excluded.editor_seconds').bind(today,data.seconds).run();
+    } else if(data.type==='save_operation'){
+      if(typeof data.operationId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.operationId)||!['started','ready','failed','cancelled'].includes(data.stage))return response({error:'Invalid operation'},400);
+      if(data.stage==='started'){
+        await db.prepare("INSERT OR IGNORE INTO analytics_save_operations(day,session_id,operation_id,state) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_save_operations WHERE day=? AND session_id=?)<40").bind(today,data.session,data.operationId,'started',today,data.session,today,data.session).run();
+      }else{
+        await db.prepare("UPDATE analytics_save_operations SET state=? WHERE session_id=? AND operation_id=? AND state='started' AND day>=date(?,'-1 day') AND day<=?").bind(data.stage,data.session,data.operationId,today,today).run();
+      }
     } else {
       if(!FEATURES.includes(data.feature))return response({error:'Invalid feature'},400);
       const accepted=await db.prepare('UPDATE analytics_sessions SET last_error_ms=?,error_events=error_events+1 WHERE day=? AND session_id=? AND last_error_ms<=? AND error_events<40 RETURNING session_id').bind(now,today,data.session,now-3000).first();
@@ -52,6 +59,16 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/save-quality'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{
+      const counts=await db.prepare("SELECT COUNT(*) attempts, SUM(CASE WHEN state='ready' THEN 1 ELSE 0 END) ready, SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END) failed, SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END) cancelled, SUM(CASE WHEN state='started' THEN 1 ELSE 0 END) pending FROM analytics_save_operations WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first();
+      const number=value=>{const n=Number(value||0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid count');return n};
+      const result=Object.fromEntries(['attempts','ready','failed','cancelled','pending'].map(key=>[key,number(counts?.[key])]));
+      if(result.ready+result.failed+result.cancelled+result.pending!==result.attempts)throw Error('Inconsistent count');
+      return response({windowDays:14,...result});
+    }catch{return response({error:'save statistics unavailable'},503)}
+  }
   // Private, read-only point-in-time check; not an uptime claim.
   if(path==='/api/admin/health'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);

@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {DatabaseSync}=require('node:sqlite');
+(async()=>{
+ const sql=new DatabaseSync(':memory:');
+ for(const name of ['0001_inquiries_and_site_updates.sql','0002_admin_analytics.sql','0005_save_quality.sql'])sql.exec(fs.readFileSync('migrations/'+name,'utf8'));
+ const db={prepare(query){const stmt=sql.prepare(query);return {args:[],bind(...args){this.args=args;return this},async run(){const r=stmt.run(...this.args);return {meta:{changes:r.changes}}},async first(){return stmt.get(...this.args)||null}}}};
+ const {telemetry,adminApi}=await import('../src/admin-api.mjs');
+ const origin='https://example.test',sid='0d4de9dd-7908-4878-a1aa-1e9d15cdf527';
+ const post=(data,actualOrigin=origin)=>{const url=new URL(origin+'/api/telemetry');return telemetry(new Request(url,{method:'POST',headers:{origin:actualOrigin,'content-type':'application/json'},body:JSON.stringify({session:sid,...data})}),{DB:db},url)};
+ assert.equal((await post({type:'visit'})).status,200);
+ const ids=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333','44444444-4444-4444-8444-444444444444'];
+ for(const id of ids)assert.equal((await post({type:'save_operation',operationId:id,stage:'started'})).status,200);
+ await post({type:'save_operation',operationId:ids[0],stage:'started'});
+ for(const [id,stage] of [[ids[0],'ready'],[ids[1],'failed'],[ids[2],'cancelled']])await post({type:'save_operation',operationId:id,stage});
+ await post({type:'save_operation',operationId:ids[0],stage:'failed'});
+ assert.equal((await post({type:'save_operation',operationId:'bad',stage:'started'})).status,400);
+ assert.equal((await post({type:'save_operation',operationId:ids[0],stage:'ready'},'https://evil.test')).status,403);
+ const url=new URL(origin+'/api/admin/save-quality');const response=await adminApi(new Request(url),{DB:db},url,'admin');
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),{windowDays:14,attempts:4,ready:1,failed:1,cancelled:1,pending:1});
+ const columns=sql.prepare('PRAGMA table_info(analytics_save_operations)').all().map(x=>x.name);
+ assert.deepEqual(columns,['day','session_id','operation_id','state']);
+ sql.exec('DELETE FROM analytics_sessions');
+ assert.equal(sql.prepare('SELECT count(*) n FROM analytics_save_operations').get().n,0);
+ sql.close();console.log('PASS: save preparation events, deduplication, privacy fields, authenticated aggregate and retention cascade');
+})().catch(e=>{console.error(e);process.exitCode=1});

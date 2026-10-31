@@ -74,6 +74,15 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="figure" id="qualityTrend" aria-label="최근 14일 익명 세션별 오류 발생 비율" style="height:106px"></div>
 <p class="muted" id="qualityDefinition">오류가 기록된 익명 세션 비율이며 기능별 실행 실패율이나 사용자 실인원 비율을 뜻하지 않습니다.</p>
 <p class="status" id="qualityStatus" role="status" aria-live="polite">통계를 불러오는 중입니다.</p>
+<h3>PDF 준비 작업 (최근 14일)</h3>
+<div class="metrics" aria-label="PDF 준비 결과">
+<div class="metric"><span class="label">기록된 준비 시도</span><strong id="saveAttempts">—</strong></div>
+<div class="metric"><span class="label">PDF 준비 완료</span><strong id="saveReady">—</strong></div>
+<div class="metric"><span class="label">준비 실패</span><strong id="saveFailed">—</strong></div>
+<div class="metric"><span class="label">취소·결과 미확인</span><strong id="saveOther">—</strong></div>
+</div>
+<p class="muted">다른 이름으로 저장 및 압축 준비 기준입니다. 준비 완료는 다운로드용 PDF가 생성된 상태이며, PC에 실제 저장 완료를 뜻하지 않습니다. 네트워크 차단이나 페이지 종료로 일부 기록이 누락될 수 있습니다.</p>
+<p class="status" id="saveQualityStatus" role="status">저장 품질 통계를 불러오는 중입니다.</p>
 </section>
 <section class="metrics" aria-label="핵심 지표">
 <div class="metric"><span class="label">오늘 방문 세션</span><strong id="visitsToday">—</strong></div>
@@ -211,10 +220,22 @@ async function loadQuality(){
   $('qualityStatus').textContent='품질 통계 조회 오류: '+String(error.message||'조회 실패');
  }finally{button.disabled=false;renderOperationAlerts();}
 }
-$('qualityReload').addEventListener('click',()=>loadQuality());
+async function loadSaveQuality(){
+ try{
+  const d=await read('/api/admin/save-quality');
+  for(const key of ['attempts','ready','failed','cancelled','pending'])if(!Number.isSafeInteger(d[key])||d[key]<0)throw Error('invalid count');
+  $('saveAttempts').textContent=fmt(d.attempts);$('saveReady').textContent=fmt(d.ready);
+  $('saveFailed').textContent=fmt(d.failed);$('saveOther').textContent=fmt(d.cancelled+d.pending);
+  $('saveQualityStatus').textContent='최근 14일의 기록된 준비 시도 기준';
+ }catch{
+  for(const id of ['saveAttempts','saveReady','saveFailed','saveOther'])$(id).textContent='—';
+  $('saveQualityStatus').textContent='저장 품질 통계를 사용할 수 없습니다.';
+ }
+}
+$('qualityReload').addEventListener('click',()=>{loadQuality();loadSaveQuality()});
 $('operationsReload').addEventListener('click',async()=>{
  const button=$('operationsReload');button.disabled=true;
- try{await Promise.allSettled([loadHealth(),loadQuality(),dashboard()]);}
+ try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),dashboard()]);}
  finally{button.disabled=false;}
 });
 
@@ -321,5 +342,5 @@ $('adminLogout').addEventListener('click',async()=>{
  try{await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:'{}'});}
  finally{location.replace('/admin/login/')}
 });
-Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
+Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>

@@ -7,6 +7,7 @@ const http=require('node:http');
 const {chromium}=require('playwright');
 const PDFLib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const baseDir=path.resolve(__dirname,'../dist');
+const telemetryEvents=[];
 const mime={
  '.html':'text/html;charset=utf-8','.js':'text/javascript;charset=utf-8',
  '.mjs':'text/javascript;charset=utf-8','.css':'text/css;charset=utf-8',
@@ -16,6 +17,9 @@ const mime={
 function serve(req,res){
  const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
  if(pathname.startsWith('/api/')){
+   if(pathname==='/api/telemetry'&&req.method==='POST'){
+    let body='';req.on('data',part=>body+=part);req.on('end',()=>{try{telemetryEvents.push(JSON.parse(body))}catch{}res.writeHead(200,{'content-type':'application/json'});res.end('{"ok":true}')});return;
+   }
    res.writeHead(200,{'content-type':'application/json'});res.end('{"ok":true}');return;
  }
  const filename=pathname.endsWith('/')?pathname+'index.html':pathname;
@@ -69,6 +73,11 @@ async function main(){
    await page.locator('#saveAsConfirmBtn').click();
    const link=page.locator('#saveAsDownloadLink');
    await link.waitFor({state:'visible',timeout:60000});
+   await page.waitForTimeout(1000);
+   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation');
+   assert.deepEqual(saveEvents.map(x=>x.stage),['started','ready']);
+   assert.equal(saveEvents[0].operationId,saveEvents[1].operationId);
+   assert(!JSON.stringify(saveEvents).includes(filename),'telemetry must not include document names');
    assert.equal(await link.getAttribute('download'),savedName);
    const saving=page.waitForEvent('download',{timeout:30000});
    await link.click();

@@ -6064,6 +6064,8 @@
             const controls = compress ? ['compressionPreset','compressionStrength','compressionQuality','compressionMaxEdge'].map(id => document.getElementById(id)) : [];
             controls.forEach(control => control.disabled = true);
             status.textContent = "PDF를 준비하고 있습니다. 잠시만 기다려 주세요.";
+            let reportSave=()=>{},saveOutcome='cancelled';
+            try { reportSave=window.sunriseTelemetrySaveStart?.() || reportSave; } catch (_) { /* Metrics must not block saving. */ }
             try {
               const captured = captureSaveState(doc);
               let bytes = await compileDocumentWithOverlays(captured.snapshot);
@@ -6084,6 +6086,7 @@
               const confirm = document.getElementById("saveAsDownloadedBtn");
               pendingSaveUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
               link.href = pendingSaveUrl; link.download = name; link.style.display = "inline-flex";
+              saveOutcome='ready';
               button.style.display = "none"; document.getElementById("saveAsFilenameInput").disabled = true;
               document.getElementById("saveAsCancelBtn").textContent = "닫기";
               status.textContent = result
@@ -6108,10 +6111,12 @@
               };
             } catch (error) {
               if (!document.getElementById('modalBackdrop').classList.contains('open') || document.getElementById('saveAsConfirmBtn') !== button) return;
+              saveOutcome='failed';
               showToast(`저장 실패: ${error.message || error}`, "fa-circle-exclamation");
               status.textContent = `PDF 준비 실패: ${error.message || error}`;
               button.disabled = false;
             } finally {
+              try { reportSave(saveOutcome); } catch (_) { /* Metrics must not block saving. */ }
               controls.forEach(control => control.disabled = false);
               button.disabled = false;
             }

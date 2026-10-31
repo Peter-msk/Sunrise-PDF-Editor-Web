@@ -67,6 +67,17 @@
  }
 
  window.sunriseTelemetryFeatureError=feature=>report(classify(feature)); // future explicit integration
+ // Save preparation only. No file details or error messages are transmitted.
+ // A missing network event is never presented as a confirmed outcome.
+ window.sunriseTelemetrySaveStart=()=>{
+   let id;try{id=crypto.randomUUID()}catch{return ()=>{}};
+   const started=ensureVisit().then(ok=>ok?send('save_operation',{operationId:id,stage:'started'}):false).catch(()=>false);
+   let ended=false;
+   return stage=>{
+     if(ended||!['ready','failed','cancelled'].includes(stage))return;
+     ended=true;started.then(ok=>{if(ok)send('save_operation',{operationId:id,stage})}).catch(()=>{});
+   };
+ };
  let pulsePending=false;
  setInterval(async()=>{
    const now=performance.now(),diff=(now-last)/1000;last=now;
