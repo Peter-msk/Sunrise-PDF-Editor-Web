@@ -12,6 +12,7 @@
   <script src="/assets/korean-font.js"></script>
   <script src="/assets/sunrise-edit-state.js"></script>
   <script src="/assets/sunrise-auto-bookmarks.js"></script>
+  <script src="/assets/sunrise-batch-pages.js"></script>
   <script type="module">
     try {
       window.pdfjsLib = await import("/assets/pdfjs/pdf.min.mjs");
@@ -2010,6 +2011,7 @@
               { id: "extractEmbeddedImages", label: "내장 이미지 추출", icon: "fa-photo-film", docReq: true },
               { id: "batchCompress", label: "PDF 여러 파일 압축", icon: "fa-file-zipper" },
               { id: "batchMark", label: "PDF 일괄 워터마크·페이지 번호", icon: "fa-layer-group" },
+              { id: "batchPages", label: "PDF 일괄 분할·병합", icon: "fa-object-group" },
             ],
           },
           {
@@ -5266,6 +5268,9 @@
         case "batchMark":
           openBatchMarkModal();
           break;
+        case "batchPages":
+          openBatchPagesModal();
+          break;
 
         case "imageToPdf":
           document.getElementById("imageToPdfInput").click();
@@ -5836,6 +5841,85 @@
             }catch(error){if(open())status.textContent=error.message||'작업을 처리하지 못했습니다.';}
             finally{running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
               input.disabled=false;kind.disabled=false;sync()}
+          });
+        }});
+    }
+
+    function openBatchPagesModal() {
+      openModal({title:'PDF 일괄 분할·병합',icon:'fa-object-group',width:'640px',
+        bodyHtml:`<p>최대 5개 파일 · 파일당 50 MiB · 합계 100 MiB. 파일은 외부 서버에 업로드하지 않습니다.</p>
+          <label for="batchPagesFiles">PDF 파일 선택 (다중 선택)</label>
+          <input id="batchPagesFiles" type="file" accept="application/pdf,.pdf" multiple>
+          <div class="dialog-form-grid" style="margin-top:10px">
+            <label for="batchPagesMode">작업 종류</label>
+            <select id="batchPagesMode" class="dialog-select">
+              <option value="split">각 PDF를 여러 파일로 분할</option>
+              <option value="merge">선택한 PDF를 하나로 병합</option>
+            </select>
+            <label for="batchPagesPerFile">분할 결과 1개당 페이지 수</label>
+            <input id="batchPagesPerFile" class="dialog-input" type="number" min="1" max="100" value="10">
+          </div>
+          <p>분할: 파일당 최대 150쪽, 전체 결과 최대 50개. 병합: PDF 2~5개, 전체 최대 250쪽.</p>
+          <p>양식·서명·북마크·주석·이름 있는 대상 등 구조 손실 위험이 있는 PDF는 안전을 위해 제외합니다.
+          병합은 모든 파일이 정상일 때만 하나의 결과로 저장됩니다. 원본은 수정하지 않습니다.</p>
+          <p id="batchPagesStatus" role="status" aria-live="polite">작업 종류를 선택하세요.</p>
+          <div id="batchPagesResults"></div>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button id="batchPagesStart" type="button" class="dialog-btn primary">일괄 실행</button>
+          <button id="batchPagesCancel" type="button" class="dialog-btn">닫기</button>
+        </div>`,
+        onMount:()=>{
+          const get=id=>document.getElementById(id);
+          const files=get('batchPagesFiles'),mode=get('batchPagesMode'),pagesPerFile=get('batchPagesPerFile');
+          const start=get('batchPagesStart'),cancel=get('batchPagesCancel');
+          const status=get('batchPagesStatus'),results=get('batchPagesResults');
+          let running=false,cancelled=false;
+          const open=()=>get('modalBackdrop')?.classList.contains('open')&&get('batchPagesStart')===start;
+          const sync=()=>{pagesPerFile.disabled=running||mode.value!=='split'};
+          mode.addEventListener('change',sync);sync();
+          cancel.addEventListener('click',()=>{
+            if(running){cancelled=true;cancel.disabled=true;status.textContent='현재 작업 완료 후 중단합니다.';}
+            else closeModal();
+          });
+          start.addEventListener('click',async()=>{
+            if(running)return;
+            const selected=Array.from(files.files||[]);
+            const settings={mode:mode.value,pagesPerFile:Number(pagesPerFile.value)};
+            if(!window.SunriseBatchPages?.process){status.textContent='일괄 처리 구성 요소를 불러오지 못했습니다.';return;}
+            try{window.SunriseBatchPages.checkFiles(selected,settings.mode)}
+            catch(error){status.textContent=error.message;return;}
+            running=true;cancelled=false;start.disabled=true;
+            files.disabled=mode.disabled=true;sync();cancel.textContent='작업 취소';results.replaceChildren();
+            let successes=0,failures=0;
+            try{
+              await window.SunriseBatchPages.process(selected,settings,{
+                cancelled:()=>cancelled||!open(),
+                progress:(index,total,name)=>{if(open())status.textContent=`${index+1}/${total} 처리 중: ${name}`},
+                result:({name,bytes,part,startPage,endPage})=>{
+                  if(!open())return;
+                  const row=document.createElement('p'),button=document.createElement('button');
+                  button.type='button';
+                  const filename=settings.mode==='merge'?'Sunrise_batch_merged.pdf':
+                    name.replace(/\\.pdf$/i,'')+`_part_${part}_p${startPage}-${endPage}.pdf`;
+                  button.textContent=filename+' 다운로드';
+                  button.addEventListener('click',()=>downloadBytes(bytes,filename));
+                  row.append(button);results.append(row);successes++;
+                },
+                error:({name,message})=>{
+                  if(!open())return;
+                  const row=document.createElement('p');row.textContent=name+': '+message;
+                  results.append(row);failures++;
+                }
+              },{
+                PDFLib:window.PDFLib,
+                readFile:readPdfInputFile
+              });
+              if(open())status.textContent=cancelled?'작업이 취소되었습니다.':'완료 '+successes+'개 / 실패 '+failures+'개. 결과를 개별 확인해 주세요.';
+            }catch(error){if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';}
+            finally{
+              running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
+              files.disabled=false;mode.disabled=false;sync();
+            }
           });
         }});
     }
