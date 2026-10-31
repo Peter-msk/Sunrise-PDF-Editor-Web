@@ -13,6 +13,7 @@
   <script src="/assets/sunrise-edit-state.js"></script>
   <script src="/assets/sunrise-auto-bookmarks.js"></script>
   <script src="/assets/sunrise-batch-pages.js"></script>
+  <script src="/assets/sunrise-pdf-quality.js"></script>
   <script type="module">
     try {
       window.pdfjsLib = await import("/assets/pdfjs/pdf.min.mjs");
@@ -2141,28 +2142,59 @@
     function openSavedPdfCheckModal() {
       openModal({
         title: "저장 PDF 제출 전 확인", icon: "fa-clipboard-check",
-        bodyHtml: `<p>저장한 PDF 파일을 선택하면 파일 크기와 페이지 방향을 확인합니다. 파일은 브라우저에서만 처리됩니다.</p>
+        bodyHtml: `<p>제출용 PDF의 페이지 크기·방향, 글꼴 리소스, 양식, 빈 페이지 후보를 살펴봅니다. 파일은 브라우저에서만 처리됩니다.</p>
           <input type="file" id="savedPdfCheckInput" accept="application/pdf,.pdf">
           <p id="savedPdfCheckStatus" role="status" aria-live="polite">검사할 파일을 선택하세요.</p>
-          <p>빈 페이지, 글꼴 누락, 내용의 정확성, 양식·서명 유효성은 검사하지 않습니다. 실제 문서를 직접 확인하세요.</p>`,
+          <div id="savedPdfQualityResults" role="region" aria-live="polite" style="max-height:38vh;overflow:auto"></div>
+          <p style="font-size:12px">검사 결과는 참고용입니다. OCR, 내용의 정확성, 실제 글꼴 표시, 전자서명 유효성, PDF/A 준수 여부는 확인하지 못합니다.
+          빈 페이지는 확정이 아닌 후보이며 제출 전 원본을 직접 점검하세요.</p>`,
         onMount: () => {
           const input = document.getElementById("savedPdfCheckInput");
           const status = document.getElementById("savedPdfCheckStatus");
+          const results = document.getElementById("savedPdfQualityResults");
           let request = 0;
           input.addEventListener("change", async () => {
             const current = ++request, file = input.files?.[0];
+            results.replaceChildren();
             if (!file) { status.textContent = "검사할 파일을 선택하세요."; return; }
-            status.textContent = "검사 중입니다…";
+            status.textContent = "구조·페이지 내용을 검사 중입니다…";
             try {
+              if (!window.SunrisePdfQuality?.inspect) throw Error("품질 검사 구성 요소를 불러오지 못했습니다.");
               validatePdfByteLength(file.size);
-              const result = await inspectSavedPdf(await file.arrayBuffer());
-              if (current !== request) return;
+              const bytes = await file.arrayBuffer();
+              const result = await window.SunrisePdfQuality.inspect(bytes, {
+                PDFLib: window.PDFLib, pdfjsLib: window.pdfjsLib, maxPages: 120,
+                cancelled: () => current !== request || !input.isConnected,
+                onProgress: (done, total) => {
+                  if (current === request) status.textContent = `페이지 내용 확인 ${done}/${total}쪽…`;
+                }
+              });
+              if (current !== request || !input.isConnected) return;
               const o = result.orientation;
-              status.textContent = `검사 완료: ${(result.bytes / 1048576).toFixed(2)} MiB, ${result.pageCount}쪽. 세로 ${o.portrait}쪽, 가로 ${o.landscape}쪽, 정사각형 ${o.square}쪽.`;
+              status.textContent = `검사 완료(판독 가능한 범위): ${(result.bytes / 1048576).toFixed(2)} MiB, ${result.pageCount}쪽.
+                세로 ${o.portrait}·가로 ${o.landscape}·정사각형 ${o.square}쪽,
+                내용 검사 ${result.scannedPages}쪽, 빈 페이지 후보 ${result.blankCandidates}쪽,
+                검토 필요 ${result.reviews}건, 구조 오류 ${result.errors}건.`;
+              const heading = document.createElement("p");
+              heading.textContent = result.errors ? "구조 오류가 확인되었습니다. 제출 전 수정해야 합니다." :
+                result.reviews ? "자동 검사에서 확인이 필요한 항목이 있습니다." :
+                "검사 범위에서 구조 오류·확인 항목이 발견되지 않았습니다. 제출 적합성 보증은 아닙니다.";
+              results.appendChild(heading);
+              const list = document.createElement("ol");
+              for (const item of result.issues) {
+                const row = document.createElement("li");
+                row.textContent = `[${item.severity === "error" ? "오류" : "확인 필요"}] ${item.page ? item.page + "쪽 · " : ""}${item.message}`;
+                list.appendChild(row);
+              }
+              if (result.issues.length) results.appendChild(list);
+              const details = document.createElement("p");
+              details.textContent = `양식 필드 ${result.formFields}개(비어 있는 필수란 ${result.emptyRequired}개),
+                확인한 글꼴 리소스 ${result.fontResources}개. ${result.limitations}`;
+              results.appendChild(details);
             } catch (error) {
-              if (current !== request) return;
-              console.error("저장 PDF 검사 실패", error);
-              status.textContent = "검사하지 못했습니다. 파일 형식, 암호 설정 및 크기를 확인하세요.";
+              if (current !== request || !input.isConnected) return;
+              console.warn("저장 PDF 품질 검사 실패", error?.name || "error");
+              status.textContent = "검사를 완료하지 못했습니다: " + String(error?.message || "암호·파일 구조·크기를 확인하세요.");
             }
           });
         },
