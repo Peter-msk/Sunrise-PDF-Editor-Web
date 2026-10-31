@@ -2919,13 +2919,25 @@
       finally { if (doc.textExtraction?.promise === promise) doc.textExtraction = null; }
     }
 
+    function validatePdfByteLength(length) {
+      if (!Number.isSafeInteger(length) || length < 0 || length > 50 * 1024 * 1024)
+        throw new Error("50MB 이하 PDF를 선택해 주세요.");
+    }
+
+    async function readPdfInputFile(file) {
+      validatePdfByteLength(file.size);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      validatePdfByteLength(bytes.byteLength);
+      return bytes;
+    }
+
     async function openPdfFromBytes(fileName, uint8Bytes, options = { switchActive: true }) {
       const originalBytes = uint8Bytes instanceof Uint8Array ? uint8Bytes : new Uint8Array(uint8Bytes);
       if (!window.PDFLib || !window.pdfjsLib) throw new Error("PDF 편집 엔진을 불러오지 못했습니다. 페이지를 새로고침해 주세요.");
       if (originalBytes.byteLength < 8 || new TextDecoder("ascii").decode(originalBytes.slice(0, 8)).indexOf("%PDF-") !== 0) {
         throw new Error("유효한 PDF 파일이 아닙니다.");
       }
-      if (originalBytes.byteLength > 50 * 1024 * 1024) throw new Error("50MB 이하 PDF를 선택해 주세요.");
+      validatePdfByteLength(originalBytes.byteLength);
       let restored;
       try { restored = await window.SunriseEditState.restore(originalBytes, window.PDFLib); }
       catch (error) { throw new Error("PDF를 편집할 수 없습니다. 손상되었거나 암호로 보호된 파일인지 확인해 주세요."); }
@@ -4811,8 +4823,7 @@
       for (const file of Array.from(fileList)) {
         if (!file.name.toLowerCase().endsWith(".pdf")) continue;
         try {
-          if (file.size > 50 * 1024 * 1024) throw new Error("50MB 이하 PDF를 선택해 주세요.");
-          const bytes = new Uint8Array(await file.arrayBuffer());
+          const bytes = await readPdfInputFile(file);
           const info = await parsePageCountAndMeta(bytes);
           state.mergeQueue.push({ id: `mq_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
             name: file.name, pages: info.pageCount, bytes });
@@ -4846,6 +4857,7 @@
 
         for (const item of state.mergeQueue) {
           const srcPdf = await PDFDocument.load(item.bytes);
+          if (!allowPageFormStructure(srcPdf)) return;
           const indices = srcPdf.getPageIndices();
           const copiedPages = await mergedPdf.copyPages(srcPdf, indices);
           copiedPages.forEach((p) => mergedPdf.addPage(p));
@@ -5742,6 +5754,7 @@
     // Resolve supported local destinations to stable page references. Refuse
     // unsupported actions, broken trees and deleted targets.
     function allowPageStructureChange(pdfDoc, removedPages = []) {
+      if (!allowPageFormStructure(pdfDoc)) return false;
       const {PDFName, PDFDict, PDFRef, PDFArray, PDFString, PDFHexString, PDFNumber} = window.PDFLib;
       const n = PDFName.of, ctx = pdfDoc.context, rootRef = pdfDoc.catalog.get(n("Outlines"));
       if (!rootRef) return true;
@@ -5899,6 +5912,44 @@
       }
     }
 
+    // pdf-lib copies page widgets but not the document-level form tree. Avoid
+    // producing a PDF that looks filled in while its interactive fields are lost.
+    function allowPageFormStructure(pdfDoc) {
+      const {PDFName, PDFDict, PDFArray} = window.PDFLib;
+      const n = PDFName.of, ctx = pdfDoc.context;
+      try {
+        const formRef = pdfDoc.catalog.get(n("AcroForm"));
+        if (formRef) {
+          const form = ctx.lookup(formRef);
+          if (!(form instanceof PDFDict) || form.get(n("XFA"))) throw new Error("unsupported form");
+          const fieldsRef = form.get(n("Fields"));
+          if (fieldsRef) {
+            const fields = ctx.lookup(fieldsRef);
+            if (!(fields instanceof PDFArray) || fields.size()) throw new Error("interactive form fields");
+          }
+        }
+        let seen = 0;
+        for (const page of pdfDoc.getPages()) {
+          const ref = page.node.get(n("Annots"));
+          if (!ref) continue;
+          const annotations = ctx.lookup(ref);
+          if (!(annotations instanceof PDFArray)) throw new Error("invalid annotations");
+          seen += annotations.size();
+          if (seen > 100000) throw new Error("too many annotations");
+          for (let i = 0; i < annotations.size(); i++) {
+            const annotation = ctx.lookup(annotations.get(i));
+            if (!(annotation instanceof PDFDict) || annotation.get(n("Subtype")) === n("Widget"))
+              throw new Error("widget or invalid annotation");
+          }
+        }
+        return true;
+      } catch (error) {
+        console.warn("Page operation blocked to protect form data", error?.message || "unknown");
+        showToast("양식 입력칸·서명 필드 또는 확인할 수 없는 주석이 있어 페이지 작업을 중단했습니다. 원본은 그대로 유지됩니다.", "fa-circle-exclamation");
+        return false;
+      }
+    }
+
     async function copySelectedPagesToClipboard(doc, isCut = false) {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
@@ -5911,7 +5962,7 @@
       const originalBytes = doc.bytes;
       const srcDoc = await PDFDocument.load(originalBytes);
       if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
-      if (isCut && !allowPageStructureChange(srcDoc, indices)) return;
+      if (isCut ? !allowPageStructureChange(srcDoc, indices) : !allowPageFormStructure(srcDoc)) return;
       const clipDoc = await PDFDocument.create();
       const copied = await clipDoc.copyPages(srcDoc, indices);
       copied.forEach((p) => clipDoc.addPage(p));
@@ -5981,8 +6032,10 @@
             const originalBytes = doc.bytes;
             const targetDoc = await PDFDocument.load(originalBytes);
             if (doc.bytes !== originalBytes || !allowPageStructureChange(targetDoc)) return;
-            saveUndoSnapshot(doc, `페이지 붙여넣기 (${state.pageClipboard.count}쪽)`);
             const clipDoc = await PDFDocument.load(state.pageClipboard.bytes);
+            if (!allowPageFormStructure(clipDoc)) return;
+            if (doc.bytes !== originalBytes || activeDoc() !== doc) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
+            saveUndoSnapshot(doc, `페이지 붙여넣기 (${state.pageClipboard.count}쪽)`);
             const copied = await targetDoc.copyPages(clipDoc, clipDoc.getPageIndices());
             let insertAt = doc.currentPage + 1;
             if (posMode === "before") insertAt = doc.currentPage;
@@ -6045,6 +6098,7 @@
             }
             const { PDFDocument } = window.PDFLib;
             const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
+            if (!allowPageFormStructure(srcDoc)) return;
             const outDoc = await PDFDocument.create();
             const copied = await outDoc.copyPages(srcDoc, indices);
             copied.forEach((p) => outDoc.addPage(p));
@@ -6129,6 +6183,7 @@
     async function splitDocumentPages(doc) {
       const { PDFDocument } = window.PDFLib;
       const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
+      if (!allowPageFormStructure(srcDoc)) return;
       const stem = doc.name.replace(/\.pdf$/i, "");
       for (let i = 0; i < doc.pageCount; i++) {
         const single = await PDFDocument.create();
@@ -7381,8 +7436,8 @@
         const files = Array.from(e.target.files || []);
         for (const f of files) {
           try {
-            const buf = await f.arrayBuffer();
-            await openPdfFromBytes(f.name, new Uint8Array(buf), { switchActive: true });
+            const bytes = await readPdfInputFile(f);
+            await openPdfFromBytes(f.name, bytes, { switchActive: true });
           } catch (error) {
             showToast(`${f.name}: ${error.message || error}`, "fa-circle-exclamation");
           }
@@ -7400,25 +7455,32 @@
       document.getElementById("insertPdfInput").addEventListener("change", async (e) => {
         const doc = activeDoc();
         const file = e.target.files?.[0];
-        if (doc && file && window.PDFLib) {
-          const buf = await file.arrayBuffer();
+        try {
+          if (!doc || !file || !window.PDFLib) return;
+          const buf = await readPdfInputFile(file);
           const { PDFDocument } = window.PDFLib;
           const originalBytes = doc.bytes;
           const targetDoc = await PDFDocument.load(originalBytes);
-          if (doc.bytes !== originalBytes || !allowPageStructureChange(targetDoc)) { e.target.value = ""; return; }
-          saveUndoSnapshot(doc, `다른 PDF 삽입 (${file.name})`);
+          if (doc.bytes !== originalBytes || !allowPageStructureChange(targetDoc)) return;
           const srcDoc = await PDFDocument.load(buf);
-          const copied = await targetDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+          if (!allowPageFormStructure(srcDoc)) return;
+          if (doc.bytes !== originalBytes || activeDoc() !== doc) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
           const insertAt = doc.currentPage + 1;
+          const copied = await targetDoc.copyPages(srcDoc, srcDoc.getPageIndices());
           copied.forEach((p, offset) => targetDoc.insertPage(insertAt + offset, p));
           const updatedBytes = await targetDoc.save();
+          if (doc.bytes !== originalBytes || activeDoc() !== doc || doc.currentPage + 1 !== insertAt) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
+          saveUndoSnapshot(doc, `다른 PDF 삽입 (${file.name})`);
           remapPageItems(doc, insertedPageMap(doc.pageCount, insertAt, copied.length));
           doc.bytes = updatedBytes;
           await reloadDocPdfJs(doc);
           await refreshAllViews();
           showToast(`${file.name}에서 ${copied.length}개 페이지를 삽입했습니다.`, "fa-file-import");
+        } catch (error) {
+          showToast(`PDF 페이지 삽입 실패: ${error.message || error}`, "fa-circle-exclamation");
+        } finally {
+          e.target.value = "";
         }
-        e.target.value = "";
       });
 
       document.getElementById("imageToPdfInput").addEventListener("change", async (e) => {
@@ -7483,8 +7545,12 @@
         const pdfFiles = allFiles.filter((f) => f.name.toLowerCase().endsWith(".pdf"));
         const imgFiles = allFiles.filter((f) => /\.(png|jpe?g)$/i.test(f.name));
         for (const f of pdfFiles) {
-          const buf = await f.arrayBuffer();
-          await openPdfFromBytes(f.name, new Uint8Array(buf), { switchActive: true });
+          try {
+            const bytes = await readPdfInputFile(f);
+            await openPdfFromBytes(f.name, bytes, { switchActive: true });
+          } catch (error) {
+            showToast(`${f.name}: ${error.message || error}`, "fa-circle-exclamation");
+          }
         }
         if (imgFiles.length > 0 && window.PDFLib) {
           const { PDFDocument } = window.PDFLib;
