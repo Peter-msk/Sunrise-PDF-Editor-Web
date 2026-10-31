@@ -1,6 +1,8 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
+export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
+const PUBLICATION_STATUS_SQL=`CASE WHEN is_active=0 AND first_published_at IS NULL THEN 'draft' WHEN is_active=0 THEN 'hidden' WHEN date(first_published_at) IS NULL THEN 'unknown' WHEN date(first_published_at)>date('now','+9 hours') THEN 'scheduled' WHEN ${PUBLICATION_WINDOW_SQL} THEN 'published' ELSE 'expired' END AS visibility`;
 const response=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'}});
 const day=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10);
 const sameOrigin=(req,url)=>req.headers.get('origin')===url.origin;
@@ -51,8 +53,8 @@ export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
   if(path==='/api/admin/site-updates'&&request.method==='GET'){
     const [announcements,releases]=await Promise.all([
-      db.prepare('SELECT id,title,body,level,published_at,first_published_at,is_active FROM site_announcements ORDER BY id DESC LIMIT 100').all(),
-      db.prepare('SELECT id,version,released_at,first_published_at,added,improved,removed,is_active FROM site_releases ORDER BY id DESC LIMIT 100').all()
+      db.prepare(`SELECT id,title,body,level,published_at,first_published_at,is_active,${PUBLICATION_STATUS_SQL} FROM site_announcements ORDER BY id DESC LIMIT 100`).all(),
+      db.prepare(`SELECT id,version,released_at,first_published_at,added,improved,removed,is_active,${PUBLICATION_STATUS_SQL} FROM site_releases ORDER BY id DESC LIMIT 100`).all()
     ]);
     return response({today,announcements:announcements.results||[],releases:releases.results||[]});
   }

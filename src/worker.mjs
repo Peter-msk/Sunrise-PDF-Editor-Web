@@ -1,4 +1,4 @@
-import {telemetry,adminApi} from './admin-api.mjs';
+import {telemetry,adminApi,PUBLICATION_WINDOW_SQL} from './admin-api.mjs';
 import {authRoutes,getAdminSession} from './admin-password-auth.mjs';
 // Sunrise PDF Editor Web: public release feed + private Cloudflare D1 inquiry inbox.
 // No PDF data is read, uploaded or retained by this Worker.
@@ -7,8 +7,8 @@ function respond(data,status=200,extra={}) { return new Response(JSON.stringify(
 function tooLong(value,max) { return typeof value!=='string' || value.length>max; }
 async function publicUpdates(db) {
   const [a,r]=await Promise.all([
-    db.prepare("SELECT id,title,body,level,published_at FROM site_announcements WHERE is_active=1 AND date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours') ORDER BY sort_order DESC,id DESC LIMIT 8").all(),
-    db.prepare("SELECT id,version,released_at,added,improved,removed FROM site_releases WHERE is_active=1 AND date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours') ORDER BY sort_order DESC,id DESC LIMIT 8").all()
+    db.prepare(`SELECT id,title,body,level,published_at FROM site_announcements WHERE is_active=1 AND ${PUBLICATION_WINDOW_SQL} ORDER BY sort_order DESC,id DESC LIMIT 8`).all(),
+    db.prepare(`SELECT id,version,released_at,added,improved,removed FROM site_releases WHERE is_active=1 AND ${PUBLICATION_WINDOW_SQL} ORDER BY sort_order DESC,id DESC LIMIT 8`).all()
   ]);
   return respond({announcements:a.results||[],releases:r.results||[]},200,{'cache-control':'public, max-age=60'});
 }

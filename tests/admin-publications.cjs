@@ -35,7 +35,7 @@ const {DatabaseSync}=require('node:sqlite');
   res=await call('/api/admin/site-updates/release','POST',release);assert.equal(res.status,201);
   res=await call('/api/admin/site-updates/release','POST',release);assert.equal(res.status,409);
   res=await call('/api/admin/site-updates');const data=await res.json();
-  assert(data.announcements.some(x=>x.id===row.id&&x.title==='수정됨'));
+  assert(data.announcements.some(x=>x.id===row.id&&x.title==='수정됨'&&x.visibility==='published'));
   assert(data.releases.some(x=>x.version===release.version));
   const worker=(await import('../src/worker.mjs')).default;
   res=await worker.fetch(new Request(origin+'/api/admin/site-updates'),{DB:db});assert.equal(res.status,401);

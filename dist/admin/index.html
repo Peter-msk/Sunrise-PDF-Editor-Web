@@ -133,10 +133,7 @@ $('reload').addEventListener('click',()=>inquiries().catch(e=>$('state').textCon
 $('statusFilter').addEventListener('change',()=>inquiries().catch(()=>{}));
 $('query').addEventListener('keydown',e=>{if(e.key==='Enter')inquiries().catch(()=>{})});
 function publicationStatus(item){
- if(!item.is_active)return item.first_published_at?'숨김':'미게시';
- if(!item.first_published_at)return '게시일 확인 필요';
- const age=(Date.parse(publications.today+'T00:00:00Z')-Date.parse(item.first_published_at+'T00:00:00Z'))/86400000;
- return age<0?'게시 예정':age<7?'게시 중':'표시기간 만료';
+ return {draft:'미게시',hidden:'숨김',unknown:'게시일 확인 필요',scheduled:'게시 예정',published:'게시 중',expired:'표시기간 만료'}[item.visibility]||'상태 확인 필요';
 }
 function publicationEditor(kind,item=null){
  selectedPublication=item?{kind,id:item.id}:null;
