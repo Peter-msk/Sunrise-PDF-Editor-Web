@@ -18,7 +18,7 @@ ORDER BY created_at DESC LIMIT 100;
 
 기존 게시물은 과거 최초 게시 시각이 별도로 기록되지 않아 기존 `published_at`/`released_at`을 최초 게시일로 사용한다. 새 항목은 처음 활성화되는 날을 기록하고, 수정하거나 비활성화 후 다시 활성화해도 최초 게시일을 바꾸지 않는다. 게시일이 미래로 지정된 항목은 그 날짜부터 게시된다.
 
-배포 전 D1에 `migrations/0004_publication_lifetime.sql`을 한 번 적용해야 한다. 마이그레이션 적용을 확인한 뒤 새 Worker를 배포한다. 데이터 삭제 쿼리는 포함하지 않는다.
+운영 D1에는 2026-10-31에 `migrations/0004_publication_lifetime.sql`을 SQL 직접 실행으로 적용했다. 기존 공지 2건·업데이트 4건과 트리거 6개를 확인했다. Wrangler 마이그레이션 이력에 자동 기록된 것은 아니므로 재실행 전 스키마와 이력을 확인한다. 빈 신규 환경에만 0004를 한 번 적용한다. 데이터 삭제 쿼리는 포함하지 않는다.
 
 ```sql
 INSERT INTO site_announcements(title, body, level, published_at, sort_order)
@@ -50,4 +50,4 @@ VALUES ('2026-11-01 · 문서 편집 개선', '2026-11-01',
 - 회신 메일 자동 발송 및 관리자 공개 대시보드는 현재 미구현이다.
 
 ## 5. 배포
-GitHub `main`의 업데이트는 Cloudflare Workers Git 연동 빌드에서 `npm test && npm run build` 및 `npx wrangler deploy`를 수행한다. `wrangler.toml`의 D1 바인딩 `DB`, 정적 에셋 `ASSETS`, API 경로 우선 처리 설정을 유지한다. DB 초기 스키마는 `migrations/0001_inquiries_and_site_updates.sql`에 보관한다.
+배포 전 연결과 실제 배포 이력을 확인하고 `npm test && npm run build` 및 `npx wrangler deploy`를 수행한다. 2026-10-31 조회에서 Workers Git 빌드 트리거는 확인되지 않아 main 병합만으로 운영 반영된다고 가정하지 않는다. `wrangler.toml`의 D1 바인딩 `DB`, 정적 에셋 `ASSETS`, API 경로 우선 처리 설정을 유지한다. DB 초기 스키마는 `migrations/0001_inquiries_and_site_updates.sql`에 보관한다.
