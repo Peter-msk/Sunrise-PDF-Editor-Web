@@ -1,4 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const os=require('node:os'),path=require('node:path');
 const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const korean=require('../dist/assets/korean-font.js');
 const fontData={bytes:new Uint8Array(fs.readFileSync('dist/assets/fonts/DroidSansFallback.ttf')),metrics:JSON.parse(fs.readFileSync('dist/assets/fonts/DroidSansFallback.metrics.json','utf8'))};
@@ -52,6 +53,20 @@ assert(saveStart>=0&&saveEnd>saveStart);vm.runInContext(source.slice(saveStart,s
   const compiledForm=(await lib.PDFDocument.load(compiled)).getForm();
   assert.equal(compiledForm.getTextField('신청자').getText(),'홍길동');
   assert.equal(compiledForm.getCheckBox('동의').isChecked(),true);
+  // Disk roundtrip validates the actual bytes produced for a Korean-text
+  // form after creation and subsequent editing. Browser download still needs
+  // a separate end-to-end test on real Chrome/Edge.
+  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'sunrise-form-roundtrip-'));
+  try{
+    const file=path.join(temp,'form-korean.pdf');
+    fs.writeFileSync(file,edited);
+    const fromDisk=await lib.PDFDocument.load(fs.readFileSync(file));
+    assert.equal(fromDisk.getForm().getTextField('신청자').getText(),'김하늘');
+    assert.equal(fromDisk.getForm().getTextField('작성일').getText(),'2026-10-31');
+    assert.equal(fromDisk.getForm().getCheckBox('동의').isChecked(),true);
+    assert.equal(fromDisk.getForm().getCheckBox('동의').isReadOnly(),true);
+    assert.equal(fromDisk.getPageCount(),1);
+  }finally{fs.rmSync(temp,{recursive:true,force:true})}
   if(process.env.SUNRISE_FORM_TEST_OUTPUT)fs.writeFileSync(process.env.SUNRISE_FORM_TEST_OUTPUT,result);
   console.log('PASS: create and reopen Korean text/date/checkbox fields, readonly, invalid inputs and XFA/signature guards');
 })().catch(e=>{console.error(e);process.exitCode=1});
