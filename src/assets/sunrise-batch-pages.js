@@ -128,10 +128,8 @@
             const copied=await pdf.copyPages(source.pdf,range);
             copied.forEach(page=>pdf.addPage(page));
             const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts);
-            stagedBytes=reserveOutputBytes(emittedBytes+stagedBytes,bytes.byteLength);
-            // reserveOutputBytes returns cumulative bytes; keep per-file bytes
-            // independent of any already emitted files.
-            stagedBytes-=emittedBytes;
+            reserveOutputBytes(emittedBytes+stagedBytes,bytes.byteLength);
+            stagedBytes+=bytes.byteLength;
             staged.push({index:i,part:chunk+1,startPage:start+1,endPage:end,totalParts:chunkCount,name:file.name,bytes});
             await yieldToBrowser();
           }
