@@ -28,7 +28,15 @@
       throw new Error('페이지 수 제한을 초과했습니다. 최대 '+maxPages+'쪽까지 지원합니다.');
     for(const page of pages){
       for(const name of protectedPage){
-        if(page.node.get(n(name)))throw new Error('페이지의 '+name+' 구조가 있어 분할·병합을 제한합니다.');
+        const reference=page.node.get(n(name));
+        if(!reference)continue;
+        if(name==='Annots'){
+          const annots=pdf.context.lookup(reference);
+          // pdf-lib initializes empty /Annots arrays even on untouched pages.
+          // Block actual annotations, not the empty placeholder.
+          if(annots instanceof lib.PDFArray && annots.size()===0)continue;
+        }
+        throw new Error('페이지의 '+name+' 구조가 있어 분할·병합을 제한합니다.');
       }
     }
     return pages;
