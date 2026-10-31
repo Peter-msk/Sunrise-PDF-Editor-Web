@@ -62,14 +62,22 @@ export async function adminApi(request,env,url,identity){
     }catch{/* Do not expose raw D1 error messages. */}
     const rawId=env.CF_VERSION_METADATA?.id;
     const deploymentId=typeof rawId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)?rawId:null;
-    const rawTag=env.RELEASE_VERSION;
-    const releaseTag=typeof rawTag==='string'&&/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(rawTag)?rawTag:null;
+    // Cloudflare version metadata is bound at deploy time. A dashboard release
+    // label is a fallback, not a substitute for the actual Worker version ID.
+    const rawTag=env.CF_VERSION_METADATA?.tag;
+    const explicitTag=env.RELEASE_VERSION;
+    const validTag=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value);
+    const releaseTag=validTag(rawTag)?rawTag:validTag(explicitTag)?explicitTag:null;
+    const source=validTag(rawTag)?'cloudflare':validTag(explicitTag)?'configured':null;
+    const rawCreated=env.CF_VERSION_METADATA?.timestamp;
+    const parsedCreated=typeof rawCreated==='string'&&rawCreated.length<=50?Date.parse(rawCreated):NaN;
+    const versionCreatedAt=Number.isFinite(parsedCreated)?new Date(parsedCreated).toISOString():null;
     const healthy=database==='ready';
     return response({
       status:healthy?'ready':'degraded',
       services:{worker:'responsive',database},
       checkedAt:new Date().toISOString(),probeMs:Math.max(0,Date.now()-started),
-      version:{application:APP_VERSION,releaseTag,deploymentId}
+      version:{application:APP_VERSION,releaseTag,deploymentId,source,versionCreatedAt}
     },healthy?200:503);
   }
   // Session quality is measured over 14 KST calendar days because the

@@ -11,9 +11,16 @@ const quality={windowDays:14,since:today,sessions:{total:10,withErrors:3,percent
  definition:'익명 탭 세션 중 최소 한 번의 오류가 기록된 세션 비율.'};
 function respond(req,res){
  const url=new URL(req.url,'http://localhost');
- const json=data=>{res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
+ const json=(data,status=200)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
  if(url.pathname==='/admin/'){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(file));return}
- if(url.pathname==='/api/admin/health'){json(healthy);return}
+ if(url.pathname==='/__test/health-degraded'){healthy.status='degraded';healthy.services.database='unavailable';json({ok:true});return}
+ if(url.pathname==='/__test/health-recovered'){
+  healthy.status='ready';healthy.services.database='ready';
+  healthy.version={application:'1.0.0',releaseTag:'published-v2',deploymentId:'123e4567-e89b-42d3-a456-426614174000',
+   source:'cloudflare',versionCreatedAt:'2026-10-31T15:00:00.000Z'};
+  json({ok:true});return;
+ }
+ if(url.pathname==='/api/admin/health'){json(healthy,healthy.status==='ready'?200:503);return}
  if(url.pathname==='/api/admin/quality'){json(quality);return}
  if(url.pathname==='/api/admin/overview'){
   const days=Number(url.searchParams.get('days')||14);requestedDays.push(days);
@@ -45,8 +52,24 @@ async function main(){
   await page.locator('#dashboardDays').selectOption('7');
   await page.waitForFunction(()=>document.querySelectorAll('#visitChart .barwrap').length===7,null,{timeout:15000});
   assert(requestedDays.includes(14)&&requestedDays.includes(30)&&requestedDays.includes(7));
+  assert.equal(await page.locator('#healthVersionCreated').innerText(),'미설정');
+  // An HTTP 503 with well-formed health JSON must display a D1-specific
+  // warning; the dashboard must not interpret the Worker as unreachable.
+  await page.request.get('/__test/health-degraded');
+  await page.locator('#operationsReload').click();
+  await page.waitForFunction(()=>document.querySelector('#healthDatabase')?.textContent==='연결 오류',null,{timeout:15000});
+  assert.equal(await page.locator('#healthWorker').innerText(),'응답 정상');
+  assert((await page.locator('#operationAlerts').innerText()).includes('D1 연결'));
+  assert(Number(await page.locator('#operationAlertCount').innerText())>=2);
+  await page.request.get('/__test/health-recovered');
+  await page.locator('#operationsReload').click();
+  await page.waitForFunction(()=>document.querySelector('#healthDatabase')?.textContent==='연결 정상',null,{timeout:15000});
+  assert.equal(await page.locator('#healthRelease').innerText(),'published-v2');
+  assert.equal(await page.locator('#healthDeployment').innerText(),'123e4567-e89b-42d3-a456-426614174000');
+  assert((await page.locator('#healthVersionCreated').innerText()).includes('2026.'));
+  assert(!(await page.locator('#operationAlerts').innerText()).includes('D1 연결'));
   assert.equal(errors.length,0,'Browser errors: '+errors.join(' | '));
-  console.log('PASS: actual Chromium admin dashboard 7/14/30 periods, session quality, overdue inquiry alerts, version fallback');
+  console.log('PASS: Chromium dashboard periods, D1 degraded/recovered, operation refresh, version metadata and alerts');
  }finally{
   await browser?.close();
   await new Promise(resolve=>server.close(resolve));

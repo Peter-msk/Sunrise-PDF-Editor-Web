@@ -55,9 +55,10 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="operation-line"><strong>앱 버전</strong><span id="healthAppVersion">확인 중</span></div>
 <div class="operation-line"><strong>릴리스 식별</strong><span id="healthRelease">확인 중</span></div>
 <div class="operation-line"><strong>배포 ID</strong><span id="healthDeployment">확인 중</span></div>
+<div class="operation-line"><strong>버전 생성 시각</strong><span id="healthVersionCreated">확인 중</span></div>
 <p class="muted" id="healthChecked" role="status" aria-live="polite">조회 요청 중입니다.</p>
 <p class="muted">현재 요청 시 Worker·D1 연결만 확인합니다. 전체 가동률이나 과거 장애 이력이 아닙니다. 배포 ID는 바인딩이 없으면 미설정으로 표시됩니다.</p></div>
-<div class="panel"><h2>운영 확인 사항</h2><p class="muted">미확인 문의 및 연결 장애를 확인합니다. 외부 알림 전송 기능은 아직 포함하지 않습니다.</p>
+<div class="panel"><div class="toolbar"><h2 style="margin:0">운영 확인 사항 <span id="operationAlertCount" aria-label="현재 확인 항목 수">0</span></h2><button type="button" id="operationsReload">모두 새로고침</button></div><p class="muted">미확인 문의 및 연결 장애를 확인합니다. 외부 알림 전송 기능은 아직 포함하지 않습니다.</p>
 <ul class="operation-alerts" id="operationAlerts" aria-live="polite"><li>운영 정보를 확인하고 있습니다.</li></ul></div>
 </section>
 <p><a href="/api/admin/statistics.csv">최근 30일 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
@@ -127,7 +128,8 @@ let records=[],selected=null,publications={announcements:[],releases:[],today:''
 let operationAlerts=[],healthAlerts=[],qualityAlerts=[];
 function renderOperationAlerts(){
  const root=$('operationAlerts');root.replaceChildren();
- const messages=[...healthAlerts,...qualityAlerts,...operationAlerts];
+ const messages=[...new Set([...healthAlerts,...qualityAlerts,...operationAlerts])];
+ $('operationAlertCount').textContent=String(messages.length);
  for(const message of messages.length?messages:['현재 확인이 필요한 문의·연결 오류가 없습니다.']){
   const li=document.createElement('li');li.textContent=message;root.append(li);
  }
@@ -143,14 +145,17 @@ async function loadHealth(){
   set('healthWorker',data.services.worker==='responsive'?'응답 정상':'확인 필요');
   set('healthDatabase',data.services.database==='ready'?'연결 정상':'연결 오류');
   set('healthAppVersion',data.version.application||'확인 불가');
-  set('healthRelease',data.version.releaseTag||'미설정');
+  set('healthRelease',data.version.releaseTag?(data.version.releaseTag+(data.version.source==='configured'?' (설정값)':'')):'미설정');
   set('healthDeployment',data.version.deploymentId||'미설정');
+  const created=data.version.versionCreatedAt?new Date(data.version.versionCreatedAt):null;
+  set('healthVersionCreated',created&&!Number.isNaN(created.getTime())?
+    created.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' (KST)':'미설정');
   const checked=new Date(data.checkedAt);
   set('healthChecked',Number.isNaN(checked.getTime())?'검사 시각 확인 불가':
     '최근 확인: '+checked.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' (KST) · D1 조회 '+data.probeMs+'ms');
   healthAlerts=data.status==='degraded'?['D1 연결을 확인해 주세요. 문의·공지 기능에 영향을 줄 수 있습니다.']:[];
  }catch{
-  for(const id of ['healthWorker','healthDatabase','healthAppVersion','healthRelease','healthDeployment'])set(id,'확인 불가');
+  for(const id of ['healthWorker','healthDatabase','healthAppVersion','healthRelease','healthDeployment','healthVersionCreated'])set(id,'확인 불가');
   set('healthChecked','상태 조회에 실패했습니다. 다시 새로고침해 주세요.');
   healthAlerts=['서비스 상태 조회에 실패했습니다. 네트워크·관리자 인증 상태를 확인하세요.'];
  }finally{button.disabled=false;renderOperationAlerts()}
@@ -201,6 +206,11 @@ async function loadQuality(){
  }finally{button.disabled=false;renderOperationAlerts();}
 }
 $('qualityReload').addEventListener('click',()=>loadQuality());
+$('operationsReload').addEventListener('click',async()=>{
+ const button=$('operationsReload');button.disabled=true;
+ try{await Promise.allSettled([loadHealth(),loadQuality(),dashboard()]);}
+ finally{button.disabled=false;}
+});
 
 async function dashboard(){
  const days=Number($('dashboardDays').value);
