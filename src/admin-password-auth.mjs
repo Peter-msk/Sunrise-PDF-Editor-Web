@@ -107,8 +107,8 @@ export async function authRoutes(request,env,url){
    return json({error:'기존 비밀번호가 올바르지 않습니다.'},401);
   }
   const newVerifier=await passwordVerifier(data.newProof,data.newSalt,env);
-  // A new random salt alone must not disguise identical password material.
-  if(data.currentProof===data.newProof)return json({error:'기존 비밀번호와 다른 비밀번호를 사용하세요.'},400);
+  // The browser rejects unchanged plaintext. Different salts intentionally
+  // produce different proofs, so the server does not claim to compare them.
   const updated=await db.prepare("UPDATE admin_accounts SET password_salt=?,password_hash=?,iterations=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=1 AND password_hash=?")
    .bind(SCHEME+data.newSalt,newVerifier,ITERATIONS,account.password_hash).run();
   if(updated.meta?.changes!==1)return json({error:'다른 비밀번호 변경 요청이 처리되었습니다. 다시 로그인하세요.'},409);
