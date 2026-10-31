@@ -243,9 +243,16 @@ function selectInquiry(id){selected=records.find(x=>x.id===id);if(!selected)retu
    line.textContent=when+' · '+(labels[item.old_status]||'알 수 없음')+' → '+(labels[item.new_status]||'알 수 없음');root.append(line)}
  }).catch(()=>{if(selected?.id===id&&!$('detail').hidden)$('inquiryHistory').textContent='이력을 불러오지 못했습니다.'});
 }
-$('saveStatus').addEventListener('click',async()=>{if(!selected)return;const btn=$('saveStatus');btn.disabled=true;try{
- const out=await read('/api/admin/inquiries/'+selected.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:$('editStatus').value,note:$('adminNote').value})});
- $('saveResult').textContent=out.ok?'저장 완료':'저장 실패';await inquiries();await dashboard();
+$('saveStatus').addEventListener('click',async()=>{if(!selected)return;const btn=$('saveStatus'),id=selected.id;btn.disabled=true;try{
+ const out=await read('/api/admin/inquiries/'+id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:$('editStatus').value,note:$('adminNote').value})});
+ if(!out.ok)throw Error('저장되지 않았습니다.');
+ await inquiries();await dashboard();
+ if(records.some(item=>item.id===id)){
+  selectInquiry(id);
+  $('saveResult').textContent='저장 완료 · 변경된 상태와 이력을 확인하세요.';
+ }else{
+  $('state').textContent='변경 사항을 저장했습니다. 현재 필터에서 제외된 문의입니다.';
+ }
 }catch(e){$('saveResult').textContent=e.message}finally{btn.disabled=false}});
 $('reload').addEventListener('click',()=>inquiries().catch(e=>$('state').textContent=e.message));
 $('statusFilter').addEventListener('change',()=>inquiries().catch(()=>{}));
