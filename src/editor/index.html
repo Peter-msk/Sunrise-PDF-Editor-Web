@@ -2953,6 +2953,7 @@
       if (doc.operationBusy || doc.pdfJsDoc !== reader || activeDoc() !== doc) return;
       const bytes = doc.bytes;
       doc.operationBusy = true;
+      const finish=beginOperationMetric('bookmark_edit');let outcome='cancelled';
       let info;
       try {
         const pdf = await window.PDFLib.PDFDocument.load(bytes);
@@ -2968,11 +2969,13 @@
         await reloadDocPdfJs(doc, {info}); info = null;
         await refreshAllViews();
         showToast(remove ? "북마크를 삭제했습니다. PDF를 저장해 주세요." : newPage === null ? "북마크 이름을 변경했습니다. PDF를 저장해 주세요." : "북마크 페이지를 변경했습니다. PDF를 저장해 주세요.", "fa-bookmark");
+        outcome='succeeded';
       } catch (error) {
+        outcome='failed';
         if (info?.pdfJsDoc && doc.pdfJsDoc !== info.pdfJsDoc) await info.pdfJsDoc.destroy();
         console.warn("Unable to modify PDF bookmark", error);
         showToast(`북마크를 ${remove ? "삭제" : "변경"}하지 못했습니다: ${error.message || error}`, "fa-circle-exclamation");
-      } finally { doc.operationBusy = false; }
+      } finally { doc.operationBusy = false; finish(outcome); }
     }
 
     async function outlinePage(reader, dest) {
@@ -2994,6 +2997,7 @@
         showToast("북마크 제목 분석 기능을 불러오지 못했습니다.", "fa-circle-exclamation"); return;
       }
       const limit = Math.min(doc.pageCount, 150), pages = [];
+      const finish=beginOperationMetric('bookmark_auto');let outcome='cancelled';
       doc.operationBusy = true;
       try {
         for (let i = 0; i < limit; i++) {
@@ -3013,6 +3017,7 @@
         const proposed = window.SunriseAutoBookmarks.suggestBookmarks(pages, 80)
           .filter(item => !existing.has(item.page));
         if (!proposed.length) {
+          outcome='succeeded';
           showToast("확인 가능한 텍스트 제목을 찾지 못했습니다. 스캔 이미지에는 OCR을 적용하지 않습니다.", "fa-circle-info");
           return;
         }
@@ -3031,11 +3036,13 @@
         })));
         ensureLeftPanelOpen("bookmarks");
         showToast("텍스트 제목 북마크 " + proposed.length + "개를 추가했습니다. PDF 저장 후 재열어 확인해 주세요.", "fa-bookmark");
+        outcome='succeeded';
       } catch (error) {
+        outcome='failed';
         console.warn("Text-layer bookmark generation failed", error?.name || "error");
         showToast("자동 북마크를 만들지 못했습니다. 원본 문서는 변경되지 않았습니다.", "fa-circle-exclamation");
       } finally {
-        doc.operationBusy = false;
+        doc.operationBusy = false; finish(outcome);
       }
     }
 
@@ -6210,6 +6217,8 @@
     }
 
     async function duplicateSelectedPages(doc) {
+      const finish=beginOperationMetric('page_duplicate');let outcome='cancelled';
+      try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
       const { PDFDocument } = window.PDFLib;
@@ -6230,6 +6239,8 @@
       doc.selectedPages = new Set([doc.currentPage]);
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 복제했습니다.`, "fa-clone");
+      outcome='succeeded';
+      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
     }
 
     // Resolve supported local destinations to stable page references. Refuse
@@ -6681,6 +6692,8 @@
     }
 
     async function deleteSelectedPagesFromDoc(doc) {
+      const finish=beginOperationMetric('page_delete');let outcome='cancelled';
+      try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
       if (indices.length >= doc.pageCount) {
@@ -6713,6 +6726,8 @@
       await reloadDocPdfJs(doc);
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 삭제했습니다.`, "fa-trash-can");
+      outcome='succeeded';
+      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
     }
 
     function openReorderPagesModal(doc) {
@@ -6787,6 +6802,7 @@
           !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.width) || !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.height))) {
         showToast("삽입 항목의 위치 또는 방향을 확인할 수 없어 회전을 중단했습니다.", "fa-triangle-exclamation"); return;
       }
+      const finish=beginOperationMetric('page_rotate');let outcome='failed';
       doc.operationBusy = true;
       const anchorPage = doc.currentPage, oldBytes = doc.bytes, oldReader = doc.pdfJsDoc;
       const overlayState = JSON.stringify(doc.overlays);
@@ -6807,7 +6823,7 @@
         const nextBytes = await pdfDoc.save();
         const info = await parsePageCountAndMeta(nextBytes);
         if (doc.bytes !== oldBytes || doc.pdfJsDoc !== oldReader || activeDoc() !== doc || JSON.stringify(doc.overlays) !== overlayState) {
-          await info.pdfJsDoc.destroy(); throw new Error("문서가 변경되어 회전을 취소했습니다.");
+          await info.pdfJsDoc.destroy(); outcome='cancelled'; throw new Error("문서가 변경되어 회전을 취소했습니다.");
         }
         saveUndoSnapshot(doc, `페이지 회전 (${deltaDegrees > 0 ? "시계" : "반시계"} 90°)`);
         doc.bytes = nextBytes;
@@ -6823,10 +6839,11 @@
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         }
         showToast(`${indices.length}개 페이지를 회전했습니다.`, deltaDegrees > 0 ? "fa-rotate-right" : "fa-rotate-left");
+        outcome='succeeded';
       } catch (error) {
         console.error("페이지 회전 실패", error);
         showToast(`페이지 회전에 실패했습니다: ${error.message || error}`, "fa-circle-exclamation");
-      } finally { doc.scrollSyncSuspended = false; doc.operationBusy = false; }
+      } finally { doc.scrollSyncSuspended = false; doc.operationBusy = false; finish(outcome); }
     }
 
     // =========================================================================
@@ -7471,6 +7488,8 @@
       state.searchResults = []; state.activeSearchHitIndex = -1; state.searchScrollHit = null;
       document.getElementById("searchIndicator")?.replaceChildren();
       if (!doc || !term) { if (countEl) countEl.textContent = "-"; return; }
+      const finish=beginOperationMetric('search');let outcome='cancelled';
+      try {
       state.lastSearchTerm = term; if (inlineInput && inlineInput.value !== term) inlineInput.value = term;
       if (countEl) countEl.textContent = "검색 중";
       const reader = doc.pdfJsDoc;
@@ -7521,6 +7540,8 @@
       } else if (countEl) countEl.textContent="0건";
       if (options.openSidePanel!==false) ensureLeftPanelOpen("search"); else renderLeftPane();
       showToast(`'${term}' 검색 결과: ${state.searchResults.length}건${truncated ? " (최대 5000건)" : ""}`,"fa-magnifying-glass");
+      outcome='succeeded';
+      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
     }
 
     function stepSearchHit(delta) {

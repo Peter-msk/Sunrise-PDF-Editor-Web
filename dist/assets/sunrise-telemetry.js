@@ -83,7 +83,7 @@
  };
  let operationQueue=Promise.resolve();
  window.sunriseTelemetryOperationStart=feature=>{
-   if(!['open','merge','split','extract_text'].includes(feature))return ()=>{};
+   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate'].includes(feature))return ()=>{};
    let id;try{id=crypto.randomUUID()}catch{return ()=>{}};
    let recorded=false,ended=false;
    operationQueue=operationQueue.then(async()=>{if(await ensureVisit())recorded=await send('operation',{operationId:id,feature,stage:'started'})}).catch(()=>{});

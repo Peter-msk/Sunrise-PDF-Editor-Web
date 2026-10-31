@@ -254,7 +254,7 @@ async function loadOperationQuality(){
  const root=$('operationQualityRows');
  try{
   const d=await read('/api/admin/operations');if(d.windowDays!==14||!Array.isArray(d.items))throw Error('Invalid aggregate');
-  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출'};
+  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전'};
   const rows=[];
   for(const item of d.items){
    if(!names[item.feature])throw Error('Invalid feature');
