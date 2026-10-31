@@ -199,10 +199,13 @@ export async function adminApi(request,env,url,identity){
     const data=await readPayload(request),status=data?.status,note=data?.note;
     if(!['new','read','in_progress','answered'].includes(status)||typeof note!=='string'||note.length>1000)return response({error:'Invalid update'},400);
     const id=Number(match[1]);if(!Number.isSafeInteger(id)||id<1)return response({error:'Invalid id'},400);
-    const old=await db.prepare('SELECT status FROM inquiries WHERE id=?').bind(id).first();
-    if(!old)return response({error:'Not found'},404);
-    await db.prepare("UPDATE inquiries SET status=?,admin_note=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(status,note.trim(),id).run();
-    if(old.status!==status)await db.prepare('INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) VALUES (?,?,?,?)').bind(id,identity,old.status,status).run();
+    // Both statements run in one D1 transaction. Read the prior status inside
+    // that transaction so concurrent updates cannot create a false history.
+    const results=await db.batch([
+      db.prepare('INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) SELECT id,?,status,? FROM inquiries WHERE id=? AND status<>?').bind(identity,status,id,status),
+      db.prepare("UPDATE inquiries SET status=?,admin_note=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(status,note.trim(),id)
+    ]);
+    if(results[1]?.meta?.changes!==1)return response({error:'Not found'},404);
     return response({ok:true});
   }
   return response({error:'Not found'},404);

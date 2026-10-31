@@ -62,7 +62,7 @@
       "automated": 92,
       "practical": 20,
       "deployment": 35,
-      "note": "문의 검색·상태/메모 편집 후 상세 유지 및 이력 즉시 재조회. SQLite 기존 계약과 Chromium 가상 API 업무 흐름 통과; 실제 운영 관리자 로그인/문의 응대 미검증"
+      "note": "문의 상태와 이력을 D1 단일 트랜잭션으로 기록; SQLite 롤백·연속 변경 검사 및 인증 브라우저 실험 추가. 운영 D1·Windows 실기는 미검증"
     },
     {
       "id": "ADM-06",

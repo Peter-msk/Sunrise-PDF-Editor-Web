@@ -18,6 +18,10 @@ async function main(){
    return {args:[],bind(...items){this.args=items;return this},async first(){return stmt.get(...this.args)||null},
     async all(){return {results:stmt.all(...this.args)}},
     async run(){const x=stmt.run(...this.args);return {meta:{changes:x.changes}}}};
+ },async batch(statements){
+  sqlite.exec('BEGIN');
+  try{const results=[];for(const statement of statements)results.push(await statement.run());sqlite.exec('COMMIT');return results}
+  catch(error){sqlite.exec('ROLLBACK');throw error}
  }};
  const env={DB,ADMIN_BOOTSTRAP_TOKEN:bootstrap,INQUIRY_HASH_SALT:'synthetic-secret-server-only-HMAC-2026',
   ASSETS:{async fetch(request){
@@ -88,6 +92,15 @@ async function main(){
    await p.waitForURL(base+'/admin/',{timeout:35000});
   }
   await login(page,initial);
+  sqlite.exec("INSERT INTO inquiries(id,category,email,message) VALUES(1,'기타','sample@local.invalid','synthetic')");
+  const inquiryResult=await page.evaluate(async()=>{
+   const update=await fetch('/api/admin/inquiries/1',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'read',note:'검토'})});
+   const history=await fetch('/api/admin/inquiries/1/history');
+   return {updated:update.status,history:history.status,items:(await history.json()).items};
+  });
+  assert.equal(inquiryResult.updated,200);assert.equal(inquiryResult.history,200);
+  assert.equal(inquiryResult.items.length,1);assert.equal(inquiryResult.items[0].old_status,'new');assert.equal(inquiryResult.items[0].new_status,'read');
+  assert.equal(sqlite.prepare('SELECT admin_note FROM inquiries WHERE id=1').get().admin_note,'검토');
   const cookies=await first.cookies(base);
   const sessionCookie=cookies.find(c=>c.name==='__Host-sunrise_pdf_admin');
   assert(sessionCookie,'secure __Host cookie must be persisted by Chromium');
@@ -113,6 +126,10 @@ async function main(){
   await page.evaluate(async()=>{const r=await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});if(!r.ok)throw Error('logout failed')});
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM admin_sessions').get().n,0);
   assert.equal(await page.evaluate(async()=>{return (await fetch('/api/auth/me')).status}),401);
+  assert.equal(await page.evaluate(async()=>{
+   return (await fetch('/api/admin/inquiries/1',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'answered',note:'unauthorized'})})).status;
+  }),401,'logged-out browser cannot change inquiries');
+  assert.equal(sqlite.prepare('SELECT status FROM inquiries WHERE id=1').get().status,'read');
   assert.equal(errors.length,0,'Browser JS errors: '+errors.join(' | '));
   console.log('PASS: real Chromium + SQLite setup/login in 2 browser contexts, secure cookie, rotate all sessions, new login and logout');
   await first.close();await second.close();
