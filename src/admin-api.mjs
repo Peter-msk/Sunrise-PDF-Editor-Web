@@ -1,5 +1,6 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
+import {readJsonObject} from './bounded-json.mjs';
 import {readDeploymentReports} from './admin-deployments.mjs';
 import {recordOperation,operationSummary,saveSummary,operationScope,workerVersion} from './operation-metrics.mjs';
 import {readRetentionExecution} from './admin-retention.mjs';
@@ -12,16 +13,10 @@ const response=(body,status=200)=>new Response(JSON.stringify(body),{status,head
 const day=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10);
 const sameOrigin=(req,url)=>req.headers.get('origin')===url.origin;
 const validSid=(id)=>typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f-]{27,40}$/i.test(id)&&id.length<=48;
-async function readPayload(req,maxBytes=1024) {
-  if(!req.headers.get('content-type')?.startsWith('application/json'))return null;
-  const body=await req.text();
-  if(body.length>maxBytes)return null;
-  try{return JSON.parse(body)}catch{return null}
-}
 export async function telemetry(request,env,url){
   if(request.method!=='POST')return response({error:'Method not allowed'},405);
   if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
-  const data=await readPayload(request);
+  const data=await readJsonObject(request,1024);
   if(!data||!validSid(data.session)||!['visit','pulse','failure','save_operation','operation'].includes(data.type))return response({error:'Invalid event'},400);
   const now=Date.now(),today=day(),db=env.DB;
   try{
@@ -191,11 +186,28 @@ export async function adminApi(request,env,url,identity){
     return new Response(csv,{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="sunrise-statistics-${today}.csv"`,'cache-control':'no-store','x-content-type-options':'nosniff'}});
   }
   if(path==='/api/admin/site-updates'&&request.method==='GET'){
-    const [announcements,releases]=await Promise.all([
-      db.prepare(`SELECT id,title,body,level,published_at,first_published_at,is_active,${PUBLICATION_STATUS_SQL} FROM site_announcements ORDER BY id DESC LIMIT 100`).all(),
-      db.prepare(`SELECT id,version,released_at,first_published_at,added,improved,removed,is_active,${PUBLICATION_STATUS_SQL} FROM site_releases ORDER BY id DESC LIMIT 100`).all()
-    ]);
-    return response({today,announcements:announcements.results||[],releases:releases.results||[]});
+    const kind=url.searchParams.get('kind')||'all',status=url.searchParams.get('status')||'all',q=(url.searchParams.get('q')||'').trim();
+    if(!['all','announcement','release'].includes(kind)||!['all','draft','hidden','unknown','scheduled','published','expired'].includes(status)||q.length>160)return response({error:'조회 조건을 확인해 주세요.'},400);
+    const cursors={};
+    for(const name of ['announcement','release']){
+      const value=url.searchParams.get('before_'+name);
+      if(value!==null&&(!/^\d+$/.test(value)||!Number.isSafeInteger(Number(value))))return response({error:'조회 위치를 확인해 주세요.'},400);
+      cursors[name]=value===null?null:Number(value);
+    }
+    const escaped=q.replaceAll('\\','\\\\').replaceAll('%','\\%').replaceAll('_','\\_');
+    const load=async(name)=>{
+      if(kind!=='all'&&kind!==name||cursors[name]===0)return {items:[],next:null};
+      const table=name==='announcement'?'site_announcements':'site_releases';
+      const fields=name==='announcement'?'id,title,body,level,published_at,first_published_at,is_active,revision':'id,version,released_at,first_published_at,added,improved,removed,is_active,revision';
+      const title=name==='announcement'?'title':'version';
+      const where=[...(status==='all'?[]:['visibility=?']),...(q?[title+' LIKE ? ESCAPE char(92)']:[]),...(cursors[name]===null?[]:['id<?'])];
+      const args=[...(status==='all'?[]:[status]),...(q?['%'+escaped+'%']:[]),...(cursors[name]===null?[]:[cursors[name]])];
+      const result=await db.prepare('SELECT * FROM (SELECT '+fields+','+PUBLICATION_STATUS_SQL+' FROM '+table+')'+(where.length?' WHERE '+where.join(' AND '):'')+' ORDER BY id DESC LIMIT 51').bind(...args).all();
+      const rows=result.results||[],items=rows.slice(0,50);
+      return {items,next:rows.length>50?items.at(-1).id:null};
+    };
+    const [announcements,releases]=await Promise.all([load('announcement'),load('release')]);
+    return response({today,announcements:announcements.items,releases:releases.items,next:{announcement:announcements.next,release:releases.next}});
   }
   const publicationMatch=path.match(/^\/api\/admin\/site-updates\/(announcement|release)(?:\/(\d+))?$/);
   if(publicationMatch&&['POST','PATCH'].includes(request.method)){
@@ -204,10 +216,11 @@ export async function adminApi(request,env,url,identity){
     if((request.method==='POST'&&idText)||(request.method==='PATCH'&&!idText))return response({error:'Invalid request'},400);
     const id=idText?Number(idText):null;
     if(idText&&(!Number.isSafeInteger(id)||id<1))return response({error:'Invalid id'},400);
-    const data=await readPayload(request,8192);
+    const data=await readJsonObject(request,16384);
     if(!data||typeof data!=='object'||Array.isArray(data))return response({error:'입력 내용을 확인해 주세요.'},400);
     const text=(value,max,required=false)=>typeof value==='string'&&value.length<=max&&(!required||value.trim().length>0)&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
     const active=data.is_active;
+    if(request.method==='PATCH'&&(!Number.isSafeInteger(data.revision)||data.revision<0))return response({error:'최신 목록을 조회한 뒤 다시 저장해 주세요.'},400);
     if(typeof active!=='boolean')return response({error:'게시 상태를 확인해 주세요.'},400);
     if(kind==='announcement'){
       if(!text(data.title,160,true)||!text(data.body,3000,true)||!['info','warning'].includes(data.level))return response({error:'공지 제목과 내용을 확인해 주세요.'},400);
@@ -215,10 +228,14 @@ export async function adminApi(request,env,url,identity){
     try{
       let result;
       if(kind==='announcement'&&request.method==='POST')result=await db.prepare('INSERT INTO site_announcements(title,body,level,published_at,is_active) VALUES (?,?,?,?,?)').bind(data.title.trim(),data.body.trim(),data.level,today,Number(active)).run();
-      if(kind==='announcement'&&request.method==='PATCH')result=await db.prepare('UPDATE site_announcements SET title=?,body=?,level=?,is_active=? WHERE id=?').bind(data.title.trim(),data.body.trim(),data.level,Number(active),id).run();
+      if(kind==='announcement'&&request.method==='PATCH')result=await db.prepare('UPDATE site_announcements SET title=?,body=?,level=?,is_active=?,revision=revision+1 WHERE id=? AND revision=?').bind(data.title.trim(),data.body.trim(),data.level,Number(active),id,data.revision).run();
       if(kind==='release'&&request.method==='POST')result=await db.prepare('INSERT INTO site_releases(version,released_at,added,improved,removed,is_active) VALUES (?,?,?,?,?,?)').bind(data.version.trim(),today,data.added.trim(),data.improved.trim(),data.removed.trim(),Number(active)).run();
-      if(kind==='release'&&request.method==='PATCH')result=await db.prepare('UPDATE site_releases SET version=?,added=?,improved=?,removed=?,is_active=? WHERE id=?').bind(data.version.trim(),data.added.trim(),data.improved.trim(),data.removed.trim(),Number(active),id).run();
-      if(request.method==='PATCH'&&result.meta?.changes===0)return response({error:'항목을 찾을 수 없습니다.'},404);
+      if(kind==='release'&&request.method==='PATCH')result=await db.prepare('UPDATE site_releases SET version=?,added=?,improved=?,removed=?,is_active=?,revision=revision+1 WHERE id=? AND revision=?').bind(data.version.trim(),data.added.trim(),data.improved.trim(),data.removed.trim(),Number(active),id,data.revision).run();
+      if(request.method==='PATCH'&&result.meta?.changes===0){
+        const table=kind==='announcement'?'site_announcements':'site_releases';
+        const exists=await db.prepare('SELECT id FROM '+table+' WHERE id=?').bind(id).first();
+        return exists?response({error:'다른 창에서 변경된 항목입니다. 목록을 새로 조회해 변경 내용을 비교한 뒤 저장해 주세요.'},409):response({error:'항목을 찾을 수 없습니다.'},404);
+      }
       return response({ok:true},request.method==='POST'?201:200);
     }catch(error){
       if(/unique constraint/i.test(String(error?.message||'')))return response({error:'같은 이름의 업데이트가 이미 있습니다.'},409);
@@ -255,7 +272,7 @@ export async function adminApi(request,env,url,identity){
     const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? ESCAPE char(92) OR message LIKE ? ESCAPE char(92) OR email LIKE ? ESCAPE char(92))':'1=1')+(before!==null?' AND (created_at<? OR (created_at=? AND id<?))':'');
     const escaped=q.replaceAll('\\','\\\\').replaceAll('%','\\%').replaceAll('_','\\_');
     const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+escaped+'%')]:[]),...(before!==null?[before,before,cursorId]:[])];
-    const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC,id DESC LIMIT 51').bind(...args).all();
+    const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at,revision FROM inquiries WHERE '+where+' ORDER BY created_at DESC,id DESC LIMIT 51').bind(...args).all();
     const rows=r.results||[],items=rows.slice(0,50),last=items.at(-1);
     return response({items,next:rows.length>50&&last?{before:last.created_at,before_id:last.id}:null,checkedAt:new Date().toISOString()});
   }
@@ -271,16 +288,19 @@ export async function adminApi(request,env,url,identity){
   const match=path.match(/^\/api\/admin\/inquiries\/(\d+)$/);
   if(match&&request.method==='PATCH'){
     if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
-    const data=await readPayload(request),status=data?.status,note=data?.note;
-    if(!['new','read','in_progress','answered'].includes(status)||typeof note!=='string'||note.length>1000)return response({error:'Invalid update'},400);
+    const data=await readJsonObject(request,8192),status=data?.status,note=data?.note;
+    if(!['new','read','in_progress','answered'].includes(status)||typeof note!=='string'||note.length>1000||!Number.isSafeInteger(data.revision)||data.revision<0)return response({error:'Invalid update'},400);
     const id=Number(match[1]);if(!Number.isSafeInteger(id)||id<1)return response({error:'Invalid id'},400);
     // Both statements run in one D1 transaction. Read the prior status inside
     // that transaction so concurrent updates cannot create a false history.
     const results=await db.batch([
-      db.prepare('INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) SELECT id,?,status,? FROM inquiries WHERE id=? AND status<>?').bind(identity,status,id,status),
-      db.prepare("UPDATE inquiries SET status=?,admin_note=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(status,note.trim(),id)
+      db.prepare('INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) SELECT id,?,status,? FROM inquiries WHERE id=? AND status<>? AND revision=?').bind(identity,status,id,status,data.revision),
+      db.prepare("UPDATE inquiries SET status=?,admin_note=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),revision=revision+1 WHERE id=? AND revision=?").bind(status,note.trim(),id,data.revision)
     ]);
-    if(results[1]?.meta?.changes!==1)return response({error:'Not found'},404);
+    if(results[1]?.meta?.changes!==1){
+      const exists=await db.prepare('SELECT id FROM inquiries WHERE id=?').bind(id).first();
+      return exists?response({error:'다른 창에서 변경된 문의입니다. 최신 내용을 조회한 뒤 메모를 비교해 저장해 주세요.'},409):response({error:'Not found'},404);
+    }
     return response({ok:true});
   }
   return response({error:'Not found'},404);

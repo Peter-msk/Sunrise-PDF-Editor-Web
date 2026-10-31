@@ -1,6 +1,7 @@
 // Password-only, single-admin authentication for Sunrise PDF Editor.
 // Cloudflare Access is not required. Fail closed until an operator configures
 // a high-entropy ADMIN_BOOTSTRAP_TOKEN secret and registers the first account.
+import {readJsonObject} from './bounded-json.mjs';
 import {securityEvent} from './admin-security-log.mjs';
 const COOKIE='__Host-sunrise_pdf_admin';
 const ITERATIONS=600000, ABS_MS=8*60*60*1000, IDLE_MS=30*60*1000;
@@ -22,13 +23,6 @@ async function passwordVerifier(proof,salt,env){
  return Array.from(new Uint8Array(signature),x=>x.toString(16).padStart(2,'0')).join('');
 }
 function equalDigest(a,b){if(!a||!b||a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
-async function payload(request){
- if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))return null;
- if(Number(request.headers.get('content-length')||0)>4096)return null;
- let text;try{text=await request.text()}catch{return null}
- if(text.length>4096)return null;
- try{const value=JSON.parse(text);return value&&typeof value==='object'&&!Array.isArray(value)?value:null}catch{return null}
-}
 function cookieValue(request){
  const cookie=request.headers.get('cookie')||'';
  const parts=cookie.split(';').map(x=>x.trim());
@@ -104,7 +98,7 @@ export async function authRoutes(request,env,url){
   if(token)await db.prepare('DELETE FROM admin_sessions WHERE token_hash=?').bind(await digest(token)).run();
   return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
  }
- const data=await payload(request);
+ const data=await readJsonObject(request,4096);
  if(!data)return json({error:'입력 형식을 확인하세요.'},400);
  if(path==='/api/auth/change-password'){
   const user=await getAdminSession(request,env);

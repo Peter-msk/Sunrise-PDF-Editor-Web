@@ -40,6 +40,7 @@ function render(data,report){
  out+='- **주의:** 점수는 소스·테스트·배포 증거에 대한 계획 관리용 보수적 추정치입니다. 외부 품질 인증이나 실제 완료율을 뜻하지 않습니다.\n';
  out+='- 소스: PR #9 / PR #10 및 feat/admin-fast-development-20261101. 과거 검사는 신규 변경의 통과 증거가 아닙니다.\n';
  out+='- 관리자 소스 구현률: **'+report.phases[0].implementation+'%**. 아래 종합 점수는 검증·운영 반영을 포함하며 소스 작성률과 다릅니다.\n\n';
+ if(data.adminSourceStatus?.state==='implementation-complete-candidate')out+='- 관리자 소스 단계: 작성 마감 후보본. 기능·브라우저 검증 및 운영 적용은 별도 미완료입니다. 근거: ADMIN_SOURCE_CLOSEOUT.md.\n\n';
  out+='## 단계별\n\n| 단계 | 소스 구현률 | 종합 진행률 | 추적 항목 |\n|---|---:|---:|---:|\n';
  for(const e of report.phases)out+='| '+e.phase+'. '+e.name+' | '+pct(e.implementation)+' | '+pct(e.percent)+' | '+e.count+' |\n';
  out+='| **총괄** | — | **'+pct(report.overall)+'** | **36개** |\n\n';
