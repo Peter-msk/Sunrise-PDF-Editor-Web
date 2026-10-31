@@ -65,7 +65,16 @@ async function main(){
   await page.locator('[name=password]').fill(initial);
   await page.locator('[name=confirm]').fill(initial);
   await page.locator('#submit').click();
-  await page.waitForURL(base+'/admin/login/',{timeout:30000});
+  try{await page.waitForURL(base+'/admin/login/',{timeout:15000})}
+  catch(error){
+   console.error('Setup browser state:',{
+    url:page.url(),
+    status:await page.locator('#status').textContent().catch(()=>null),
+    formVisible:await page.locator('#authForm').isVisible().catch(()=>null),
+    pageErrors:errors
+   });
+   throw error;
+  }
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM admin_accounts').get().n,1);
   const saved=sqlite.prepare('SELECT password_hash,password_salt FROM admin_accounts').get();
   assert(saved.password_salt.startsWith('browser-pbkdf2-v1:'));
