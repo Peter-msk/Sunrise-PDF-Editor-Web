@@ -3,7 +3,7 @@ const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const korean=require('../dist/assets/korean-font.js');
 const fontData={bytes:new Uint8Array(fs.readFileSync('dist/assets/fonts/DroidSansFallback.ttf')),metrics:JSON.parse(fs.readFileSync('dist/assets/fonts/DroidSansFallback.metrics.json','utf8'))};
 const html=fs.readFileSync('src/editor/index.html','utf8');
-const a=html.indexOf('    function verifyBatchPdfStructure('),b=html.indexOf('    async function batchCompressPdfs(',a);
+const a=html.indexOf('    function guardBatchSource('),b=html.indexOf('    async function batchCompressPdfs(',a);
 const c=html.indexOf('    async function batchMarkPdfs('),d=html.indexOf('    function openBatchMarkModal(',c);
 assert(a>=0&&b>a&&c>b&&d>c,'Batch functions must exist');
 const output=[],errors=[],progress=[];
