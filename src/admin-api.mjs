@@ -121,6 +121,15 @@ export async function adminApi(request,env,url,identity){
     const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC LIMIT 100').bind(...args).all();
     return response({items:r.results||[]});
   }
+  const historyMatch=path.match(/^\/api\/admin\/inquiries\/(\d+)\/history$/);
+  if(historyMatch&&request.method==='GET'){
+    const id=Number(historyMatch[1]);
+    if(!Number.isSafeInteger(id)||id<1)return response({error:'Invalid id'},400);
+    const inquiry=await db.prepare('SELECT id FROM inquiries WHERE id=?').bind(id).first();
+    if(!inquiry)return response({error:'Not found'},404);
+    const history=await db.prepare('SELECT changed_at,old_status,new_status FROM inquiry_audit WHERE inquiry_id=? ORDER BY id DESC LIMIT 50').bind(id).all();
+    return response({items:history.results||[]});
+  }
   const match=path.match(/^\/api\/admin\/inquiries\/(\d+)$/);
   if(match&&request.method==='PATCH'){
     if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
