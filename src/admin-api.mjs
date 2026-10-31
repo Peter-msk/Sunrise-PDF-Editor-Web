@@ -51,6 +51,17 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/statistics.csv'&&request.method==='GET'){
+    const result=await db.prepare("SELECT day,visits,editor_seconds FROM analytics_daily WHERE day BETWEEN date(?,'-29 days') AND ? ORDER BY day").bind(today,today).all();
+    const number=value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0)throw new Error('Invalid aggregate');return String(n)};
+    const rows=[['날짜(KST)','방문 세션','활성 편집 시간(초)']];
+    for(const row of result.results||[]){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day))throw new Error('Invalid aggregate date');
+      rows.push([row.day,number(row.visits),number(row.editor_seconds)]);
+    }
+    const csv='\ufeff'+rows.map(row=>row.map(value=>'"'+value.replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
+    return new Response(csv,{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="sunrise-statistics-${today}.csv"`,'cache-control':'no-store','x-content-type-options':'nosniff'}});
+  }
   if(path==='/api/admin/site-updates'&&request.method==='GET'){
     const [announcements,releases]=await Promise.all([
       db.prepare(`SELECT id,title,body,level,published_at,first_published_at,is_active,${PUBLICATION_STATUS_SQL} FROM site_announcements ORDER BY id DESC LIMIT 100`).all(),
