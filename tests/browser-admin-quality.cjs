@@ -22,7 +22,7 @@ function respond(req,res){
  }
  if(url.pathname==='/api/admin/health'){json(healthy,healthy.status==='ready'?200:503);return}
  if(url.pathname==='/api/admin/quality'){json(quality);return}
- if(url.pathname==='/api/admin/save-quality'){json({windowDays:14,attempts:5,ready:2,failed:1,cancelled:1,pending:1});return}
+ if(url.pathname==='/api/admin/save-quality'){json({windowDays:14,attempts:5,ready:2,failed:1,cancelled:1,pending:1,retries:1,recovered:1});return}
  if(url.pathname==='/api/admin/overview'){
   const days=Number(url.searchParams.get('days')||14);requestedDays.push(days);
   json({since:today,days,visits:{today:2,week:5,total:30},usage:{today:360,total:1200},
@@ -46,6 +46,9 @@ async function main(){
   assert.equal(await page.locator('#saveReady').innerText(),'2');
   assert.equal(await page.locator('#saveFailed').innerText(),'1');
   assert.equal(await page.locator('#saveOther').innerText(),'2');
+  assert.equal(await page.locator('#saveFailureRate').innerText(),'33.3%');
+  assert.equal(await page.locator('#saveRetries').innerText(),'1');
+  assert.equal(await page.locator('#saveRecovered').innerText(),'1');
   await page.waitForFunction(()=>document.querySelector('#visitsToday')?.textContent==='2',null,{timeout:20000});
   assert.equal(await page.locator('#periodVisits').innerText(),'2');
   assert.equal(await page.locator('#periodSeconds').innerText(),'6분');

@@ -80,8 +80,11 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="metric"><span class="label">PDF 준비 완료</span><strong id="saveReady">—</strong></div>
 <div class="metric"><span class="label">준비 실패</span><strong id="saveFailed">—</strong></div>
 <div class="metric"><span class="label">취소·결과 미확인</span><strong id="saveOther">—</strong></div>
+<div class="metric"><span class="label">준비 실패 비율</span><strong id="saveFailureRate">—</strong></div>
+<div class="metric"><span class="label">같은 창 재시도</span><strong id="saveRetries">—</strong></div>
+<div class="metric"><span class="label">재시도 후 준비 완료</span><strong id="saveRecovered">—</strong></div>
 </div>
-<p class="muted">다른 이름으로 저장 및 압축 준비 기준입니다. 준비 완료는 다운로드용 PDF가 생성된 상태이며, PC에 실제 저장 완료를 뜻하지 않습니다. 네트워크 차단이나 페이지 종료로 일부 기록이 누락될 수 있습니다.</p>
+<p class="muted">다른 이름으로 저장 및 압축 준비 기준입니다. 실패 비율은 준비 완료와 실패 중 실패의 비율이며 취소·미확인은 제외합니다. 재시도는 같은 창에서 실패 후 다시 준비한 작업만 집계합니다. 준비 완료는 PC에 실제 저장 완료를 뜻하지 않습니다. 네트워크 차단이나 페이지 종료로 일부 기록이 누락될 수 있습니다.</p>
 <p class="status" id="saveQualityStatus" role="status">저장 품질 통계를 불러오는 중입니다.</p>
 </section>
 <section class="metrics" aria-label="핵심 지표">
@@ -223,12 +226,15 @@ async function loadQuality(){
 async function loadSaveQuality(){
  try{
   const d=await read('/api/admin/save-quality');
-  for(const key of ['attempts','ready','failed','cancelled','pending'])if(!Number.isSafeInteger(d[key])||d[key]<0)throw Error('invalid count');
+  for(const key of ['attempts','ready','failed','cancelled','pending','retries','recovered'])if(!Number.isSafeInteger(d[key])||d[key]<0)throw Error('invalid count');
   $('saveAttempts').textContent=fmt(d.attempts);$('saveReady').textContent=fmt(d.ready);
   $('saveFailed').textContent=fmt(d.failed);$('saveOther').textContent=fmt(d.cancelled+d.pending);
+  const settled=d.ready+d.failed;
+  $('saveFailureRate').textContent=settled?(100*d.failed/settled).toFixed(1)+'%':'—';
+  $('saveRetries').textContent=fmt(d.retries);$('saveRecovered').textContent=fmt(d.recovered);
   $('saveQualityStatus').textContent='최근 14일의 기록된 준비 시도 기준';
  }catch{
-  for(const id of ['saveAttempts','saveReady','saveFailed','saveOther'])$(id).textContent='—';
+  for(const id of ['saveAttempts','saveReady','saveFailed','saveOther','saveFailureRate','saveRetries','saveRecovered'])$(id).textContent='—';
   $('saveQualityStatus').textContent='저장 품질 통계를 사용할 수 없습니다.';
  }
 }

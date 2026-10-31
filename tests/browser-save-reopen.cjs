@@ -70,13 +70,22 @@ async function main(){
      filename,{timeout:40000});
    await page.locator('#quickSaveBtn').click();
    await page.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:20000});
+   // Force one preparation error, then retry in the same dialog.
+   await page.evaluate(()=>{
+    const original=window.compileDocumentWithOverlays;let fail=true;
+    window.compileDocumentWithOverlays=async(...args)=>{if(fail){fail=false;throw new Error('synthetic retry test')}return original(...args)};
+   });
+   await page.locator('#saveAsConfirmBtn').click();
+   await page.waitForFunction(()=>document.querySelector('#saveAsStatus')?.textContent.includes('PDF 준비 실패'),null,{timeout:20000});
    await page.locator('#saveAsConfirmBtn').click();
    const link=page.locator('#saveAsDownloadLink');
    await link.waitFor({state:'visible',timeout:60000});
    await page.waitForTimeout(1000);
    const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation');
-   assert.deepEqual(saveEvents.map(x=>x.stage),['started','ready']);
+   assert.deepEqual(saveEvents.map(x=>x.stage),['started','failed','started','ready']);
    assert.equal(saveEvents[0].operationId,saveEvents[1].operationId);
+   assert.equal(saveEvents[2].retryOf,saveEvents[0].operationId);
+   assert.equal(saveEvents[2].operationId,saveEvents[3].operationId);
    assert(!JSON.stringify(saveEvents).includes(filename),'telemetry must not include document names');
    assert.equal(await link.getAttribute('download'),savedName);
    const saving=page.waitForEvent('download',{timeout:30000});

@@ -31,9 +31,11 @@ export async function telemetry(request,env,url){
       const accepted=await db.prepare('UPDATE analytics_sessions SET last_pulse_ms=? WHERE day=? AND session_id=? AND last_pulse_ms<=? RETURNING session_id').bind(now,today,data.session,now-8000).first();
       if(accepted)await db.prepare('INSERT INTO analytics_daily(day,editor_seconds) VALUES (?,?) ON CONFLICT(day) DO UPDATE SET editor_seconds=editor_seconds+excluded.editor_seconds').bind(today,data.seconds).run();
     } else if(data.type==='save_operation'){
-      if(typeof data.operationId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(data.operationId)||!['started','ready','failed','cancelled'].includes(data.stage))return response({error:'Invalid operation'},400);
+      const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+      if(!uuid(data.operationId)||!['started','ready','failed','cancelled'].includes(data.stage)||(data.retryOf!=null&&(!uuid(data.retryOf)||data.retryOf===data.operationId||data.stage!=='started')))return response({error:'Invalid operation'},400);
       if(data.stage==='started'){
-        await db.prepare("INSERT OR IGNORE INTO analytics_save_operations(day,session_id,operation_id,state) SELECT ?,?,?,? WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_save_operations WHERE day=? AND session_id=?)<40").bind(today,data.session,data.operationId,'started',today,data.session,today,data.session).run();
+        await db.prepare("INSERT OR IGNORE INTO analytics_save_operations(day,session_id,operation_id,state,retry_of) SELECT ?,?,?,?,CASE WHEN EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND operation_id=? AND state='failed' AND day BETWEEN date(?,'-1 day') AND ?) AND NOT EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND retry_of=?) THEN ? ELSE NULL END WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_save_operations WHERE day=? AND session_id=?)<40")
+          .bind(today,data.session,data.operationId,'started',data.session,data.retryOf||null,today,today,data.session,data.retryOf||null,data.retryOf||null,today,data.session,today,data.session).run();
       }else{
         await db.prepare("UPDATE analytics_save_operations SET state=? WHERE session_id=? AND operation_id=? AND state='started' AND day>=date(?,'-1 day') AND day<=?").bind(data.stage,data.session,data.operationId,today,today).run();
       }
@@ -62,10 +64,10 @@ export async function adminApi(request,env,url,identity){
   if(path==='/api/admin/save-quality'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     try{
-      const counts=await db.prepare("SELECT COUNT(*) attempts, SUM(CASE WHEN state='ready' THEN 1 ELSE 0 END) ready, SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END) failed, SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END) cancelled, SUM(CASE WHEN state='started' THEN 1 ELSE 0 END) pending FROM analytics_save_operations WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first();
+      const counts=await db.prepare("SELECT COUNT(*) attempts, SUM(CASE WHEN state='ready' THEN 1 ELSE 0 END) ready, SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END) failed, SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END) cancelled, SUM(CASE WHEN state='started' THEN 1 ELSE 0 END) pending, SUM(CASE WHEN retry_of IS NOT NULL THEN 1 ELSE 0 END) retries, SUM(CASE WHEN retry_of IS NOT NULL AND state='ready' THEN 1 ELSE 0 END) recovered FROM analytics_save_operations WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first();
       const number=value=>{const n=Number(value||0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid count');return n};
-      const result=Object.fromEntries(['attempts','ready','failed','cancelled','pending'].map(key=>[key,number(counts?.[key])]));
-      if(result.ready+result.failed+result.cancelled+result.pending!==result.attempts)throw Error('Inconsistent count');
+      const result=Object.fromEntries(['attempts','ready','failed','cancelled','pending','retries','recovered'].map(key=>[key,number(counts?.[key])]));
+      if(result.ready+result.failed+result.cancelled+result.pending!==result.attempts||result.retries>result.attempts||result.recovered>result.retries||result.recovered>result.ready)throw Error('Inconsistent count');
       return response({windowDays:14,...result});
     }catch{return response({error:'save statistics unavailable'},503)}
   }
