@@ -101,6 +101,13 @@
             if(cancelled())break;
             const start=chunk*perFile,end=Math.min(source.pages.length,start+perFile);
             const pdf=await pdfCtor.create(),range=Array.from({length:end-start},(_,x)=>start+x);
+            // Each split file can retain unambiguous descriptive properties;
+            // creation/modification timestamps intentionally reflect a new file.
+            for(const [getter,setter] of [['getTitle','setTitle'],['getAuthor','setAuthor'],
+              ['getSubject','setSubject'],['getCreator','setCreator']]){
+              const value=source.pdf[getter]();
+              if(typeof value==='string'&&value)pdf[setter](value);
+            }
             const copied=await pdf.copyPages(source.pdf,range);
             copied.forEach(page=>pdf.addPage(page));
             const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts);
@@ -127,6 +134,7 @@
     if(cancelled())return;
     try{
       const merged=await pdfCtor.create();
+      merged.setTitle('Sunrise PDF Editor - Merged PDF');
       for(const input of sources){
         if(cancelled())return;
         const indices=Array.from({length:input.pages.length},(_,i)=>i);
