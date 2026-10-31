@@ -151,16 +151,19 @@ export async function adminApi(request,env,url,identity){
     }
   }
   if(path==='/api/admin/overview'&&request.method==='GET'){
-    const monday=earliestWeek(today);
+    const value=url.searchParams.get('days');
+    const days=value===null?14:Number(value);
+    if(![7,14,30].includes(days))return response({error:'조회 기간은 7·14·30일만 지원합니다.'},400);
+    const range='-'+(days-1)+' days',monday=earliestWeek(today);
     const [all,week,tod,series,errors,inq]=await Promise.all([
       db.prepare('SELECT COALESCE(SUM(visits),0) visits,COALESCE(SUM(editor_seconds),0) seconds FROM analytics_daily').first(),
       db.prepare('SELECT COALESCE(SUM(visits),0) visits FROM analytics_daily WHERE day>=?').bind(monday).first(),
       db.prepare('SELECT COALESCE(visits,0) visits,COALESCE(editor_seconds,0) seconds FROM analytics_daily WHERE day=?').bind(today).first(),
-      db.prepare("SELECT day,visits,editor_seconds seconds FROM analytics_daily WHERE day >= date(?,'-13 days') ORDER BY day").bind(today).all(),
-      db.prepare("SELECT feature,SUM(count) count FROM analytics_errors WHERE day >= date(?,'-29 days') GROUP BY feature ORDER BY count DESC LIMIT 10").bind(today).all(),
+      db.prepare("SELECT day,visits,editor_seconds seconds FROM analytics_daily WHERE day BETWEEN date(?,?) AND ? ORDER BY day").bind(today,range,today).all(),
+      db.prepare("SELECT feature,SUM(count) count FROM analytics_errors WHERE day BETWEEN date(?,?) AND ? GROUP BY feature ORDER BY count DESC LIMIT 10").bind(today,range,today).all(),
       db.prepare("SELECT status,COUNT(*) count FROM inquiries GROUP BY status").all()
     ]);
-    return response({since:today,visits:{today:tod?.visits||0,week:week?.visits||0,total:all?.visits||0},usage:{today:tod?.seconds||0,total:all?.seconds||0},trend:series.results||[],errors:errors.results||[],inquiries:inq.results||[],definitions:'방문=브라우저 탭 세션 기준, 사용시간=화면이 활성화된 편집기 시간; 수집 시작 이후 합계'});
+    return response({since:today,days,visits:{today:tod?.visits||0,week:week?.visits||0,total:all?.visits||0},usage:{today:tod?.seconds||0,total:all?.seconds||0},trend:series.results||[],errors:errors.results||[],inquiries:inq.results||[],definitions:'방문=브라우저 탭 세션 기준, 사용시간=화면이 활성화된 편집기 시간; 수집 시작 이후 합계'});
   }
   if(path==='/api/admin/inquiries'&&request.method==='GET'){
     const statuses=['all','new','read','in_progress','answered'];

@@ -84,10 +84,15 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="metric"><span class="label">최근 30일 기능 오류</span><strong id="errorCount">—</strong></div>
 <div class="metric"><span class="label">처리 중 문의</span><strong id="inProgress">—</strong></div>
 </section>
+<div class="toolbar" style="margin-top:12px">
+<h2 style="margin:0">방문 · 사용시간 · 오류 추이</h2>
+<label class="muted" for="dashboardDays">집계 기간
+<select id="dashboardDays"><option value="7">7일</option><option value="14" selected>14일</option><option value="30">30일</option></select></label>
+</div>
 <section class="grid">
-<div class="panel"><h2>일별 방문 세션 <span class="muted">(14일)</span></h2><div class="figure" id="visitChart" aria-label="14일 방문 그래프"></div></div>
-<div class="panel"><h2>편집기 사용시간 <span class="muted">(14일, 분)</span></h2><div class="figure" id="usageChart" aria-label="14일 사용시간 그래프"></div></div>
-<div class="panel"><h2>기능별 오류 <span class="muted">(최근 30일)</span></h2><div class="error-list" id="errorChart"></div></div>
+<div class="panel"><h2>일별 방문 세션</h2><div class="figure" id="visitChart" aria-label="방문 추이 그래프"></div></div>
+<div class="panel"><h2>활성 편집기 사용시간 <span class="muted">(분)</span></h2><div class="figure" id="usageChart" aria-label="활성 편집기 시간 추이"></div></div>
+<div class="panel"><h2>기능별 기록 오류 <span class="muted">(선택 기간)</span></h2><div class="error-list" id="errorChart"></div></div>
 <div class="panel"><h2>문의 처리 현황</h2><div class="error-list" id="inquiryChart"></div></div>
 </section>
 <section class="panel" style="margin-top:12px">
@@ -198,20 +203,22 @@ async function loadQuality(){
 $('qualityReload').addEventListener('click',()=>loadQuality());
 
 async function dashboard(){
- const d=await read('/api/admin/overview');
+ const days=Number($('dashboardDays').value);
+ const d=await read('/api/admin/overview?days='+days);
  for(const [id,v] of [['visitsToday',d.visits.today],['visitsWeek',d.visits.week],['visitsTotal',d.visits.total]])metric(id,fmt(v));
  metric('secondsToday',duration(d.usage.today));metric('secondsTotal',duration(d.usage.total));
  const statuses=Object.fromEntries(d.inquiries.map(x=>[x.status,x.count]));metric('unread',fmt(statuses.new));metric('inProgress',fmt(statuses.in_progress));
  metric('errorCount',fmt(d.errors.reduce((a,b)=>a+Number(b.count),0)));
  operationAlerts=Number(statuses.new||0)>0?['미확인 문의 '+fmt(statuses.new)+'건이 있습니다. 문의사항에서 확인하세요.']:[];
  renderOperationAlerts();
- const trend=[];for(let i=13;i>=0;i--){const now=new Date(d.since+'T00:00:00Z');now.setUTCDate(now.getUTCDate()-i);const day=now.toISOString().slice(0,10);trend.push({day,...(d.trend.find(x=>x.day===day)||{visits:0,seconds:0})})}
+ const trend=[];for(let i=d.days-1;i>=0;i--){const now=new Date(d.since+'T00:00:00Z');now.setUTCDate(now.getUTCDate()-i);const day=now.toISOString().slice(0,10);trend.push({day,...(d.trend.find(x=>x.day===day)||{visits:0,seconds:0})})}
  bars('visitChart',trend,'visits','세션');bars('usageChart',trend,'seconds','분');
  horizontal('errorChart',d.errors);
  const names={new:'미확인',read:'확인',in_progress:'처리 중',answered:'답변 완료'};
  horizontal('inquiryChart',Object.entries(names).map(([key,label])=>({label,count:statuses[key]||0})));
  $('state').textContent='정상 연결 · 집계 기준: '+d.since;
 }
+$('dashboardDays').addEventListener('change',()=>dashboard().catch(e=>{$('state').textContent='집계 조회 오류: '+e.message}));
 const labels={new:'미확인',read:'확인',in_progress:'처리 중',answered:'답변 완료'};
 async function inquiries(){
  const params=new URLSearchParams({status:$('statusFilter').value,q:$('query').value.trim()});
