@@ -33,6 +33,7 @@ const name=lib.PDFName.of;
     const reopened=await lib.PDFDocument.load(fs.readFileSync(filename));
     assert.equal(reopened.getPageCount(),result.endPage-result.startPage+1);
     assert.equal(reopened.catalog.get(name('AcroForm')),undefined);
+    if(result.name==='첫번째.pdf')assert.equal(reopened.getTitle(),'First sample','split output title should be retained');
   }
   const firstPart=await lib.PDFDocument.load(results[0].bytes);
   assert.equal(firstPart.getPage(1).getRotation().angle,90);
@@ -44,6 +45,7 @@ const name=lib.PDFName.of;
   fs.writeFileSync(mergedFile,results[0].bytes);
   const merged=await lib.PDFDocument.load(fs.readFileSync(mergedFile));
   assert.equal(merged.getPageCount(),4);
+  assert.equal(merged.getTitle(),'Sunrise PDF Editor - Merged PDF');
   assert.equal(merged.getPage(1).getRotation().angle,90);
   assert.equal(merged.getPage(3).getCropBox().width,320);
   assert.equal(merged.catalog.get(name('AcroForm')),undefined);
