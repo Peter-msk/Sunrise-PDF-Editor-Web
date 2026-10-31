@@ -65,7 +65,9 @@ const pdfjsStub=lists=>({
  xfaPdf.getForm().createTextField('invoice').addToPage(xfaPdf.getPage(0));
  const acro=xfaPdf.context.lookup(xfaPdf.catalog.get(PDFLib.PDFName.of('AcroForm')));
  acro.set(PDFLib.PDFName.of('XFA'),xfaPdf.context.obj('XFA'));
- const xfaResult=await quality.inspect(await xfaPdf.save({useObjectStreams:false}),{PDFLib});
+ const xfaFixture=await xfaPdf.save({useObjectStreams:false,updateFieldAppearances:false});
+ assert(Buffer.from(xfaFixture).includes(Buffer.from('/XFA')),'original test PDF must contain a readable XFA dictionary key');
+ const xfaResult=await quality.inspect(xfaFixture,{PDFLib});
  assert(xfaResult.issues.some(x=>x.code==='xfa-form'),'unsupported XFA requires explicit manual review');
  const signed=await PDFLib.PDFDocument.create();signed.addPage([420,595]);
  signed.catalog.set(PDFLib.PDFName.of('Perms'),signed.context.obj({DocMDP:PDFLib.PDFName.of('Approval')}));
