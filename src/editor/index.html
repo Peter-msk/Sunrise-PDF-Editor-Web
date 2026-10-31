@@ -2016,7 +2016,7 @@
             actions: [
               { id: "addBookmark", label: "현재 쪽 북마크", icon: "fa-bookmark", shortcut: "Ctrl+B", docReq: true },
               { id: "autoBookmarks", label: "전체 페이지 북마크", icon: "fa-book-open", docReq: true },
-              { id: "tocPageBookmarks", label: "목차 페이지 기반 북마크", icon: "fa-list-check", docReq: true },
+              { id: "tocPageBookmarks", label: "텍스트 제목 북마크 (OCR 제외)", icon: "fa-list-check", docReq: true },
             ],
           },
         ],
@@ -2946,6 +2946,62 @@
       if (!Array.isArray(resolved) || !resolved.length) return null;
       const page = typeof resolved[0] === "number" ? resolved[0] : await reader.getPageIndex(resolved[0]);
       return Number.isInteger(page) && page >= 0 && page < reader.numPages ? page : null;
+    }
+
+    // Suggest bookmarks only from text that already exists as PDF objects.
+    // Each destination is its own source page, so there is no guessing of
+    // printed page numbers or implicit OCR of scanned images.
+    async function createTextLayerBookmarks(doc) {
+      if (!doc || doc.operationBusy) return;
+      const reader = doc.pdfJsDoc, sourceBytes = doc.bytes;
+      const valid = () => activeDoc() === doc && doc.pdfJsDoc === reader && doc.bytes === sourceBytes;
+      if (!window.SunriseAutoBookmarks?.suggestBookmarks) {
+        showToast("북마크 제목 분석 기능을 불러오지 못했습니다.", "fa-circle-exclamation"); return;
+      }
+      const limit = Math.min(doc.pageCount, 150), pages = [];
+      doc.operationBusy = true;
+      try {
+        for (let i = 0; i < limit; i++) {
+          if (!valid()) return;
+          try {
+            const page = await reader.getPage(i + 1);
+            const content = await page.getTextContent();
+            if (!valid()) return;
+            pages.push({pageIndex: i, items: content.items || []});
+          } catch (error) {
+            if (!valid()) return;
+            console.warn("Bookmark text layer unavailable", i + 1, error?.name || "error");
+            pages.push({pageIndex: i, items: []});
+          }
+        }
+        const existing = new Set(doc.bookmarks.map(item => item.page));
+        const proposed = window.SunriseAutoBookmarks.suggestBookmarks(pages, 80)
+          .filter(item => !existing.has(item.page));
+        if (!proposed.length) {
+          showToast("확인 가능한 텍스트 제목을 찾지 못했습니다. 스캔 이미지에는 OCR을 적용하지 않습니다.", "fa-circle-info");
+          return;
+        }
+        const samples = proposed.slice(0, 6).map(item => (item.page + 1) + "쪽: " + item.title).join("\n");
+        const warning = doc.pageCount > limit ? "\n(처음 " + limit + "쪽만 분석했습니다.)" : "";
+        if (!window.confirm("기존 PDF 텍스트를 바탕으로 북마크 " + proposed.length +
+          "개를 제안합니다. 제목 인식 결과를 확인해 주세요.\n\n" + samples + warning +
+          "\n\n실제 목차의 페이지 번호를 추정하지 않고 해당 텍스트가 있는 쪽을 연결합니다. 추가할까요?")) return;
+        if (!valid()) {
+          showToast("문서가 변경되어 북마크 생성을 취소했습니다.", "fa-circle-exclamation"); return;
+        }
+        saveUndoSnapshot(doc, "기존 텍스트 제목 북마크 생성");
+        const nonce = Date.now();
+        doc.bookmarks.push(...proposed.map((item, index) => ({
+          id: "bm_heading_" + nonce + "_" + index, title: item.title, page: item.page
+        })));
+        ensureLeftPanelOpen("bookmarks");
+        showToast("텍스트 제목 북마크 " + proposed.length + "개를 추가했습니다. PDF 저장 후 재열어 확인해 주세요.", "fa-bookmark");
+      } catch (error) {
+        console.warn("Text-layer bookmark generation failed", error?.name || "error");
+        showToast("자동 북마크를 만들지 못했습니다. 원본 문서는 변경되지 않았습니다.", "fa-circle-exclamation");
+      } finally {
+        doc.operationBusy = false;
+      }
     }
 
     async function ensurePageTexts(doc) {
@@ -4042,6 +4098,7 @@
           <div style="display:flex;gap:6px;margin-bottom:8px">
             <button type="button" class="compact-btn" id="bmAddNowBtn" style="flex:1"><i class="fa-solid fa-plus"></i> 현재 쪽 북마크</button>
             <button type="button" class="compact-btn" id="bmAutoGenBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> 전체 표시</button>
+            <button type="button" class="compact-btn" id="bmTextTitleBtn"><i class="fa-solid fa-list-check"></i> 제목 자동</button>
           </div>`;
         if (cache.status === "loading") html += `<div style="padding:8px">기존 북마크를 읽는 중...</div>`;
         else if (cache.status === "error") html += `<div style="padding:8px">기존 북마크를 읽지 못했습니다. 원본 북마크는 유지됩니다.</div>`;
@@ -4061,6 +4118,7 @@
         container.innerHTML = html;
         document.getElementById("bmAddNowBtn")?.addEventListener("click", () => executeCommand("addBookmark"));
         document.getElementById("bmAutoGenBtn")?.addEventListener("click", () => executeCommand("autoBookmarks"));
+        document.getElementById("bmTextTitleBtn")?.addEventListener("click", () => executeCommand("tocPageBookmarks"));
         const goToBookmark = (page) => {
           doc.currentPage = page; doc.selectedPages = new Set([page]);
           if (isMobileViewport()) toggleLeftPane(true);
@@ -5266,7 +5324,8 @@
           break;
 
         case "tocPageBookmarks":
-          showToast("목차 페이지를 분석해 PDF 북마크를 만드는 기능은 아직 지원하지 않습니다.", "fa-circle-info");
+          if (!doc) return;
+          await createTextLayerBookmarks(doc);
           break;
 
         case "checkSavedPdf":
