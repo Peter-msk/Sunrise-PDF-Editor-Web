@@ -208,11 +208,11 @@
       "id": "USR-11",
       "name": "PDF 일괄 처리",
       "phase": 2,
-      "implementation": 92,
-      "automated": 96,
+      "implementation": 94,
+      "automated": 98,
       "practical": 0,
       "deployment": 0,
-      "note": "일괄 압축·한글 워터마크·페이지번호·분할·병합 Draft 구현, PDF 구조 손실 차단과 48개 CI 검사 통과; Chrome/Edge 다운로드 실기·시각 검증 미완"
+      "note": "일괄 압축·표시·분할·병합 Draft, 결과 총 100MiB/50개 제한·청크별 취소·120쪽 회귀 및 실제 Chromium 저장 검사 PASS; Windows Edge/Chrome·장시간 메모리 실측 미완"
     },
     {
       "id": "USR-18",
@@ -348,21 +348,21 @@
       "id": "TECH-01",
       "name": "코드·언어·성능 고도화",
       "phase": 5,
-      "implementation": 30,
-      "automated": 35,
+      "implementation": 32,
+      "automated": 40,
       "practical": 0,
       "deployment": 0,
-      "note": "모듈 분리와 CI 적용, 타입·메모리·번들 분석 미완"
+      "note": "기존 모듈에 결과 용량·취소 계약 강화, 120쪽 합성 PDF 처리시간 CI 측정(149ms); 런타임별 메모리·번들·타입 검사 심화 미완"
     },
     {
       "id": "QA-01",
       "name": "전체 통합 안정화",
       "phase": 6,
-      "implementation": 30,
-      "automated": 60,
+      "implementation": 32,
+      "automated": 65,
       "practical": 25,
       "deployment": 0,
-      "note": "기존 49개 Node 계약 검사와 별도 Chromium E2E CI 추가·실행 성공; Windows Chrome/Edge·모바일·실무 PDF·성능 실측 검증 미완"
+      "note": "50개 Node 계약 검사(120쪽 분할·100MiB 예산·타이머 취소 포함), Chromium 저장·다운로드·재열기 E2E PASS; Windows·모바일·실무 파일·메모리 실측 미완"
     },
     {
       "id": "REL-01",
