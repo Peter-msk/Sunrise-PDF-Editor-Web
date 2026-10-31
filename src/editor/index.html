@@ -5705,7 +5705,7 @@
           editablePdfForm(original);
           if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
           const result=await compressPdfImages(bytes,settings);
-          if(!(result.bytes instanceof Uint8Array) || result.bytes.byteLength>bytes.byteLength)
+          if(!ArrayBuffer.isView(result.bytes) || result.bytes.BYTES_PER_ELEMENT!==1 || result.bytes.byteLength>bytes.byteLength)
             throw new Error('압축 결과의 파일 크기가 유효하지 않습니다.');
           const check=await window.PDFLib.PDFDocument.load(result.bytes,{updateMetadata:false});
           verifyBatchCompressedPdf(original,check);
