@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js'),source=fs.readFileSync('src/editor/index.html','utf8');
-const s=source.indexOf('    function verifyBatchCompressedPdf('),e=source.indexOf('    function openBatchCompressModal(',s);assert(s>=0&&e>s);
+const s=source.indexOf('    function verifyBatchPdfStructure('),e=source.indexOf('    function openBatchCompressModal(',s);assert(s>=0&&e>s);
 let cancelled=false,results=[],errors=[],progress=[];
 const ctx=vm.createContext({window:{PDFLib:lib},Number,Error,readPdfInputFile:async f=>{if(f.size>50*1024*1024)throw Error('50 MiB 초과');return f.data},editablePdfForm:pdf=>{if(pdf.catalog.get(lib.PDFName.of('Perms')))throw Error('서명 문서')},compressPdfImages:async bytes=>({bytes})});
 vm.runInContext(source.slice(s,e),ctx);
@@ -25,22 +25,22 @@ const handlers={cancelled:()=>cancelled,progress:(...x)=>progress.push(x),result
  const formBytes=await formSource.save();
  const before=await lib.PDFDocument.load(formBytes);
  const after=await lib.PDFDocument.load(formBytes);
- assert.doesNotThrow(()=>ctx.verifyBatchCompressedPdf(before,after),'unchanged form roundtrip must pass');
+ assert.doesNotThrow(()=>ctx.verifyBatchPdfStructure(before,after),'unchanged form roundtrip must pass');
  const damaged=await lib.PDFDocument.load(formBytes);
  damaged.getForm().getTextField('client').setText('damaged');
- assert.throws(()=>ctx.verifyBatchCompressedPdf(before,damaged),/양식/,'text value changes must be rejected');
+ assert.throws(()=>ctx.verifyBatchPdfStructure(before,damaged),/양식/,'text value changes must be rejected');
  const unchecked=await lib.PDFDocument.load(formBytes);
  unchecked.getForm().getCheckBox('accepted').uncheck();
- assert.throws(()=>ctx.verifyBatchCompressedPdf(before,unchecked),/양식/,'checkbox changes must be rejected');
+ assert.throws(()=>ctx.verifyBatchPdfStructure(before,unchecked),/양식/,'checkbox changes must be rejected');
  const changedRotation=await lib.PDFDocument.load(formBytes);
  changedRotation.getPage(0).setRotation(lib.degrees(90));
- assert.throws(()=>ctx.verifyBatchCompressedPdf(before,changedRotation),/회전/);
+ assert.throws(()=>ctx.verifyBatchPdfStructure(before,changedRotation),/회전/);
  const resized=await lib.PDFDocument.load(formBytes);
  resized.getPage(0).setSize(300,600);
- assert.throws(()=>ctx.verifyBatchCompressedPdf(before,resized),/크기/);
+ assert.throws(()=>ctx.verifyBatchPdfStructure(before,resized),/크기/);
  const lostForm=await lib.PDFDocument.load(formBytes);
  lostForm.catalog.delete(lib.PDFName.of('AcroForm'));
- assert.throws(()=>ctx.verifyBatchCompressedPdf(before,lostForm),/AcroForm/);
+ assert.throws(()=>ctx.verifyBatchPdfStructure(before,lostForm),/AcroForm/);
  // Output must be structurally verified before the result button is emitted.
  ctx.compressPdfImages=async()=>({bytes:await lostForm.save()});
  results=[];errors=[];progress=[];
