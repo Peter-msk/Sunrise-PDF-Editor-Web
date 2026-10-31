@@ -68,21 +68,21 @@
       "id": "ADM-06",
       "name": "공지사항 관리",
       "phase": 1,
-      "implementation": 85,
+      "implementation": 92,
       "automated": 92,
       "practical": 20,
       "deployment": 0,
-      "note": "최초 게시일 7일 정책의 실제 SQLite 공개 피드·수정/숨김/재게시 만료 보호, Chromium 관리 UI CRUD/만료 표시 통과; 운영 배포 미검증"
+      "note": "공지 작성·수정·숨김·만료 관리에 제목 검색, 게시상태 필터, 안전한 입력 미리보기 추가. 신규 기능 검증 및 운영 반영은 미완"
     },
     {
       "id": "ADM-07",
       "name": "업데이트 관리",
       "phase": 1,
-      "implementation": 85,
+      "implementation": 92,
       "automated": 90,
       "practical": 20,
       "deployment": 0,
-      "note": "업데이트 등록/수정 및 최초 게시일 만료 보호 SQLite+Chromium 시험, 만료 게시물 관리자 조회 유지; 운영 실기 미검증"
+      "note": "업데이트 관리에 제목 검색, 상태 필터, 신규·보완·삭제 내용 미리보기 추가. 신규 기능 검증 및 운영 반영은 미완"
     },
     {
       "id": "ADM-08",
@@ -148,11 +148,11 @@
       "id": "ADM-14",
       "name": "운영 알림",
       "phase": 1,
-      "implementation": 75,
+      "implementation": 85,
       "automated": 90,
       "practical": 10,
       "deployment": 0,
-      "note": "관리자 화면 운영 알림 중복 제거·항목 수 표시·전체 상태/품질/통계 새로고침, D1 장애→복구 시 경고 해제 Chromium 검증. 서버 푸시·정기 감시·알림 이력 미구현"
+      "note": "관리자 화면 표시 중 선택적 1분 자동 갱신 추가. 외부 알림·배포 실패 연동·신규 기능 검증 및 운영 반영은 미완"
     },
     {
       "id": "USR-01",

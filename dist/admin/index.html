@@ -59,6 +59,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <p class="muted" id="healthChecked" role="status" aria-live="polite">조회 요청 중입니다.</p>
 <p class="muted">현재 요청 시 Worker·D1 연결만 확인합니다. 전체 가동률이나 과거 장애 이력이 아닙니다. 배포 ID는 바인딩이 없으면 미설정으로 표시됩니다.</p></div>
 <div class="panel"><div class="toolbar"><h2 style="margin:0">운영 확인 사항 <span id="operationAlertCount" aria-label="현재 확인 항목 수">0</span></h2><button type="button" id="operationsReload">모두 새로고침</button></div><p class="muted">미확인 문의 및 연결 장애를 확인합니다. 외부 알림 전송 기능은 아직 포함하지 않습니다.</p>
+<label class="check"><input type="checkbox" id="operationsAutoRefresh"> 관리자 화면이 열려 있을 때 1분마다 확인</label><p class="muted" id="operationsAutoStatus" role="status">자동 확인 꺼짐</p>
 <ul class="operation-alerts" id="operationAlerts" aria-live="polite"><li>운영 정보를 확인하고 있습니다.</li></ul></div>
 </section>
 <p><a href="/api/admin/statistics.csv">최근 30일 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
@@ -129,6 +130,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <section class="panel" style="margin-top:12px" aria-labelledby="publicationsTitle">
 <div class="toolbar"><h2 id="publicationsTitle" style="margin:0">공지사항 · 업데이트 관리</h2><button type="button" id="newPublication">새 항목 작성</button></div>
 <p class="muted">최초 게시일을 포함한 7일만 홈페이지에 표시됩니다. 수정·숨김·재게시해도 최초 게시일은 바뀌지 않습니다. 만료된 기록도 이곳에서 확인할 수 있습니다.</p>
+<div class="toolbar"><label>종류 <select id="publicationFilterKind"><option value="all">전체</option><option value="announcement">공지사항</option><option value="release">업데이트</option></select></label><label>상태 <select id="publicationFilterStatus"><option value="all">전체</option><option value="published">게시 중</option><option value="draft">미게시</option><option value="hidden">숨김</option><option value="expired">표시기간 만료</option><option value="scheduled">게시 예정</option><option value="unknown">게시일 확인 필요</option></select></label><label>검색 <input id="publicationSearch" type="search" maxlength="160" placeholder="제목 검색"></label><span id="publicationCount" role="status" aria-live="polite"></span></div>
 <div class="publication-grid"><div class="publication-list" id="publicationList" aria-label="공지와 업데이트 목록"></div>
 <form id="publicationForm" class="publication-form">
 <label>항목 종류<select id="publicationKind"><option value="announcement">공지사항</option><option value="release">업데이트</option></select></label>
@@ -136,6 +138,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div id="announcementFields"><label>공지 유형<select id="publicationLevel"><option value="info">일반</option><option value="warning">주의</option></select></label><label>공지 내용<textarea id="publicationBody" maxlength="3000"></textarea></label></div>
 <div id="releaseFields" hidden><label>신규 기능<textarea id="publicationAdded" maxlength="1000"></textarea></label><label>보완 기능<textarea id="publicationImproved" maxlength="1000"></textarea></label><label>삭제 기능<textarea id="publicationRemoved" maxlength="1000"></textarea></label></div>
 <label class="check"><input id="publicationActive" type="checkbox" checked> 홈페이지에 게시</label>
+<section class="panel" aria-labelledby="publicationPreviewTitle"><h3 id="publicationPreviewTitle">입력 내용 미리보기</h3><p class="muted" id="publicationPreviewStatus"></p><strong id="publicationPreviewHeading"></strong><div id="publicationPreviewBody" style="white-space:pre-wrap;overflow-wrap:anywhere"></div></section>
 <div><button class="primary" id="publicationSave" type="submit">저장</button> <span id="publicationResult" class="status" role="status" aria-live="polite"></span></div>
 </form></div>
 </section>
@@ -245,6 +248,23 @@ $('operationsReload').addEventListener('click',async()=>{
  try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),dashboard()]);}
  finally{button.disabled=false;}
 });
+let autoRefreshPending=false;
+try{$('operationsAutoRefresh').checked=localStorage.getItem('sunrise_admin_auto_refresh')==='1'}catch{}
+function updateAutoStatus(text){$('operationsAutoStatus').textContent=text||($('operationsAutoRefresh').checked?'자동 확인 켜짐 · 화면이 보일 때 1분 간격':'자동 확인 꺼짐')}
+updateAutoStatus();
+$('operationsAutoRefresh').addEventListener('change',()=>{
+ try{localStorage.setItem('sunrise_admin_auto_refresh',$('operationsAutoRefresh').checked?'1':'0')}catch{}
+ updateAutoStatus();
+});
+setInterval(async()=>{
+ if(!$('operationsAutoRefresh').checked||document.visibilityState!=='visible'||autoRefreshPending)return;
+ autoRefreshPending=true;updateAutoStatus('자동 확인 중…');
+ try{
+  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),dashboard()]);
+  const label=results.some(result=>result.status==='rejected')?'일부 자동 조회 실패':'자동 확인 완료';
+  updateAutoStatus($('operationsAutoRefresh').checked?label+' · '+new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'}):'자동 확인 꺼짐');
+ }finally{autoRefreshPending=false}
+},60000);
 
 let dashboardRequest=0;
 async function dashboard(){
@@ -333,12 +353,27 @@ function publicationEditor(kind,item=null){
  $('publicationAdded').value=item?.added||'';$('publicationImproved').value=item?.improved||'';$('publicationRemoved').value=item?.removed||'';
  $('publicationActive').checked=item?!!item.is_active:true;
  $('publicationSave').textContent=item?'변경 저장':'새 항목 저장';$('publicationResult').textContent='';
+ renderPublicationPreview();
+}
+function renderPublicationPreview(){
+ const kind=$('publicationKind').value,active=$('publicationActive').checked;
+ const list=kind==='announcement'?publications.announcements:publications.releases;
+ const existing=selectedPublication?list.find(x=>x.id===selectedPublication.id):null;
+ const firstDay=existing?.first_published_at?.slice(0,10),today=publications.today;
+ const age=firstDay&&today?(Date.parse(today+'T00:00:00Z')-Date.parse(firstDay+'T00:00:00Z'))/86400000:null;
+ const expired=Number.isFinite(age)&&age>=7;
+ $('publicationPreviewStatus').textContent=!active?'저장 시 숨김 상태':expired?'최초 게시일이 지나 공개 목록에 표시되지 않습니다.':'저장 시 게시 설정 · 최초 게시일 기준 7일 표시';
+ $('publicationPreviewHeading').textContent=$('publicationTitle').value.trim()||'(제목 입력)';
+ const parts=kind==='announcement'?[$('publicationBody').value]:[['신규', $('publicationAdded').value],['보완', $('publicationImproved').value],['삭제', $('publicationRemoved').value]].filter(([,v])=>v.trim()).map(([k,v])=>k+' · '+v);
+ $('publicationPreviewBody').textContent=parts.filter(x=>x.trim()).join('\n\n')||'(내용 입력)';
 }
 function renderPublications(){
  const root=$('publicationList');root.replaceChildren();
- const rows=[...publications.announcements.map(item=>({kind:'announcement',item})),...publications.releases.map(item=>({kind:'release',item}))];
+ const kind=$('publicationFilterKind').value,status=$('publicationFilterStatus').value,query=$('publicationSearch').value.trim().toLocaleLowerCase();
+ const rows=[...publications.announcements.map(item=>({kind:'announcement',item})),...publications.releases.map(item=>({kind:'release',item}))].filter(row=>(kind==='all'||row.kind===kind)&&(status==='all'||row.item.visibility===status)&&String(row.item.title||row.item.version||'').toLocaleLowerCase().includes(query));
  rows.sort((a,b)=>(b.item.first_published_at||'').localeCompare(a.item.first_published_at||'')||b.item.id-a.item.id);
- if(!rows.length){root.textContent='등록된 항목이 없습니다.';return}
+ $('publicationCount').textContent=rows.length+'건';
+ if(!rows.length){root.textContent='조건에 맞는 항목이 없습니다.';return}
  for(const row of rows){const button=document.createElement('button');button.type='button';
   button.setAttribute('aria-pressed',String(!!selectedPublication&&selectedPublication.kind===row.kind&&selectedPublication.id===row.item.id));
   const title=document.createElement('strong');title.textContent=(row.kind==='announcement'?'공지 · ':'업데이트 · ')+(row.item.title||row.item.version);
@@ -348,7 +383,9 @@ function renderPublications(){
 }
 async function loadPublications(){publications=await read('/api/admin/site-updates');renderPublications()}
 $('newPublication').addEventListener('click',()=>{publicationEditor('announcement');renderPublications()});
-$('publicationKind').addEventListener('change',()=>publicationEditor($('publicationKind').value));
+$('publicationKind').addEventListener('change',()=>{const kind=$('publicationKind').value;$('announcementFields').hidden=kind!=='announcement';$('releaseFields').hidden=kind!=='release';renderPublicationPreview()});
+for(const id of ['publicationFilterKind','publicationFilterStatus','publicationSearch'])$(id).addEventListener(id==='publicationSearch'?'input':'change',renderPublications);
+for(const id of ['publicationTitle','publicationBody','publicationAdded','publicationImproved','publicationRemoved','publicationActive'])$(id).addEventListener(id==='publicationActive'?'change':'input',renderPublicationPreview);
 $('publicationForm').addEventListener('submit',async event=>{
  event.preventDefault();const kind=$('publicationKind').value,button=$('publicationSave');
  const data=kind==='announcement'?{title:$('publicationTitle').value,body:$('publicationBody').value,level:$('publicationLevel').value}:{version:$('publicationTitle').value,added:$('publicationAdded').value,improved:$('publicationImproved').value,removed:$('publicationRemoved').value};
@@ -362,5 +399,6 @@ $('adminLogout').addEventListener('click',async()=>{
  try{await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:'{}'});}
  finally{location.replace('/admin/login/')}
 });
+renderPublicationPreview();
 Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>
