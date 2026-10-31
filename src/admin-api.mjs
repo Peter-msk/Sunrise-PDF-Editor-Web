@@ -62,6 +62,15 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/retention'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    const now=Date.now(),cutoff=new Date(now-90*86400000).toISOString();
+    const [inquiries,sessions]=await Promise.all([
+      db.prepare('SELECT COUNT(*) count FROM inquiries WHERE created_at<?').bind(cutoff).first(),
+      db.prepare("SELECT COUNT(*) count FROM analytics_sessions WHERE day<date(?,'-14 days')").bind(today).first()
+    ]);
+    return response({checkedAt:new Date(now).toISOString(),policy:{inquiriesDays:90,sessionDays:14,deploymentReportDays:90},pending:{inquiries:Number(inquiries?.count||0),sessions:Number(sessions?.count||0)},backup:'operator-managed',lastCleanup:null});
+  }
   if(path==='/api/admin/deployments')return readDeploymentReports(request,env);
   if(path==='/api/admin/save-quality'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
@@ -186,15 +195,17 @@ export async function adminApi(request,env,url,identity){
     const days=value===null?14:Number(value);
     if(![7,14,30].includes(days))return response({error:'조회 기간은 7·14·30일만 지원합니다.'},400);
     const range='-'+(days-1)+' days',monday=earliestWeek(today);
-    const [all,week,tod,series,errors,inq]=await Promise.all([
+    const [all,week,tod,series,errors,inq,month,previous]=await Promise.all([
       db.prepare('SELECT COALESCE(SUM(visits),0) visits,COALESCE(SUM(editor_seconds),0) seconds FROM analytics_daily').first(),
       db.prepare('SELECT COALESCE(SUM(visits),0) visits FROM analytics_daily WHERE day>=?').bind(monday).first(),
       db.prepare('SELECT COALESCE(visits,0) visits,COALESCE(editor_seconds,0) seconds FROM analytics_daily WHERE day=?').bind(today).first(),
       db.prepare("SELECT day,visits,editor_seconds seconds FROM analytics_daily WHERE day BETWEEN date(?,?) AND ? ORDER BY day").bind(today,range,today).all(),
       db.prepare("SELECT feature,SUM(count) count FROM analytics_errors WHERE day BETWEEN date(?,?) AND ? GROUP BY feature ORDER BY count DESC LIMIT 10").bind(today,range,today).all(),
-      db.prepare("SELECT status,COUNT(*) count FROM inquiries GROUP BY status").all()
+      db.prepare("SELECT status,COUNT(*) count FROM inquiries GROUP BY status").all(),
+      db.prepare("SELECT COALESCE(SUM(visits),0) visits,COALESCE(SUM(editor_seconds),0) seconds FROM analytics_daily WHERE day BETWEEN date(?,'start of month') AND ?").bind(today,today).first(),
+      db.prepare("SELECT COALESCE(SUM(visits),0) visits,COALESCE(SUM(editor_seconds),0) seconds FROM analytics_daily WHERE day BETWEEN date(?,?) AND date(?,?)").bind(today,'-'+(days*2-1)+' days',today,'-'+days+' days').first()
     ]);
-    return response({since:today,days,visits:{today:tod?.visits||0,week:week?.visits||0,total:all?.visits||0},usage:{today:tod?.seconds||0,total:all?.seconds||0},trend:series.results||[],errors:errors.results||[],inquiries:inq.results||[],definitions:'방문=브라우저 탭 세션 기준, 사용시간=화면이 활성화된 편집기 시간; 수집 시작 이후 합계'});
+    return response({since:today,days,visits:{today:tod?.visits||0,week:week?.visits||0,month:month?.visits||0,total:all?.visits||0},usage:{today:tod?.seconds||0,month:month?.seconds||0,total:all?.seconds||0},previous:{visits:previous?.visits||0,seconds:previous?.seconds||0},trend:series.results||[],errors:errors.results||[],inquiries:inq.results||[],definitions:'방문=브라우저 탭 세션 기준, 사용시간=화면이 활성화된 편집기 시간; 수집 시작 이후 합계'});
   }
   if(path==='/api/admin/inquiries'&&request.method==='GET'){
     const statuses=['all','new','read','in_progress','answered'];

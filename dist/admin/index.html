@@ -64,6 +64,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 </section>
 <section class="panel" aria-labelledby="deploymentTitle"><div class="toolbar"><h2 id="deploymentTitle">최근 배포 파이프라인 보고</h2><button id="deploymentsReload" type="button">배포 이력 조회</button></div><p class="muted">서명된 파이프라인 보고를 표시합니다. 현재 Worker 버전 확인과는 별개의 정보이며, 보고 수신 시각이 표시됩니다.</p><p id="deploymentsStatus" role="status">배포 보고를 불러오는 중입니다.</p><div id="deploymentsList" style="max-height:220px;overflow:auto"></div></section>
 <p><a id="statisticsDownload" href="/api/admin/statistics.csv?days=14">선택 기간 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
+<section class="panel" aria-labelledby="retentionTitle"><div class="toolbar"><h2 id="retentionTitle">데이터 보존 현황</h2><button id="retentionReload" type="button">보존 현황 조회</button></div><p class="muted">문의 90일 · 익명 세션 14일 · 배포 보고 90일 정책입니다. 정리는 예약 작업에서 수행합니다.</p><p id="retentionStatus" role="status">보존 현황을 불러오는 중입니다.</p><p class="muted">백업·복원은 별도 운영 절차입니다. 이 화면은 백업 성공이나 최근 정리 실행 여부를 보증하지 않습니다.</p></section>
 <section class="panel" aria-labelledby="sessionTitle"><div class="toolbar"><h2 id="sessionTitle">관리자 로그인 세션</h2><button id="sessionsReload" type="button">세션 조회</button></div><p id="sessionsStatus" role="status">세션 정보를 불러오는 중입니다.</p><p class="muted">전체 세션을 종료하면 현재 브라우저와 다른 브라우저 모두 다시 로그인해야 합니다.</p><button id="sessionsRevoke" type="button">모든 관리자 세션 종료</button></section>
 <section class="panel" aria-labelledby="qualityTitle" style="margin-top:12px">
 <div class="toolbar"><h2 id="qualityTitle" style="margin:0">이용 품질 · 오류 세션 분석 (최근 14일)</h2>
@@ -93,9 +94,11 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <section class="metrics" aria-label="핵심 지표">
 <div class="metric"><span class="label">오늘 방문 세션</span><strong id="visitsToday">—</strong></div>
 <div class="metric"><span class="label">금주 방문 세션</span><strong id="visitsWeek">—</strong></div>
+<div class="metric"><span class="label">금월 방문 세션</span><strong id="visitsMonth">—</strong></div>
 <div class="metric"><span class="label">누적 방문 세션</span><strong id="visitsTotal">—</strong></div>
 <div class="metric"><span class="label">미확인 문의</span><strong id="unread">—</strong></div>
 <div class="metric"><span class="label">오늘 편집기 활성 사용시간</span><strong id="secondsToday">—</strong></div>
+<div class="metric"><span class="label">금월 편집기 활성 사용시간</span><strong id="secondsMonth">—</strong></div>
 <div class="metric"><span class="label">누적 편집기 활성 사용시간</span><strong id="secondsTotal">—</strong></div>
 <div class="metric"><span class="label">선택 기간 기능 오류 기록</span><strong id="errorCount">—</strong></div>
 <div class="metric"><span class="label">처리 중 문의</span><strong id="inProgress">—</strong></div>
@@ -109,6 +112,8 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="metric"><span class="label">선택 기간 방문 세션</span><strong id="periodVisits">—</strong></div>
 <div class="metric"><span class="label">선택 기간 활성 편집시간</span><strong id="periodSeconds">—</strong></div>
 <div class="metric"><span class="label">방문 세션당 활성 편집시간</span><strong id="periodAverage">—</strong></div>
+<div class="metric"><span class="label">직전 같은 기간 방문 대비</span><strong id="previousVisits">—</strong></div>
+<div class="metric"><span class="label">직전 같은 기간 활성시간 대비</span><strong id="previousSeconds">—</strong></div>
 </section>
 <p class="muted">선택 기간의 활성 편집시간 합계를 전체 방문 탭 세션으로 나눈 추정치입니다. 홈만 방문한 세션도 포함하며, 사용자 1명당 시간이나 작업 완료 시간은 아닙니다.</p>
 <section class="grid">
@@ -275,8 +280,9 @@ async function dashboard(){
  $('statisticsDownload').href='/api/admin/statistics.csv?days='+days;
  const d=await read('/api/admin/overview?days='+days);
  if(request!==dashboardRequest)return;
- for(const [id,v] of [['visitsToday',d.visits.today],['visitsWeek',d.visits.week],['visitsTotal',d.visits.total]])metric(id,fmt(v));
+ for(const [id,v] of [['visitsToday',d.visits.today],['visitsWeek',d.visits.week],['visitsMonth',d.visits.month],['visitsTotal',d.visits.total]])metric(id,v==null?'—':fmt(v));
  metric('secondsToday',duration(d.usage.today));metric('secondsTotal',duration(d.usage.total));
+ metric('secondsMonth',d.usage.month==null?'—':duration(d.usage.month));
  const statuses=Object.fromEntries(d.inquiries.map(x=>[x.status,x.count]));metric('unread',fmt(statuses.new));metric('inProgress',fmt(statuses.in_progress));
  metric('errorCount',fmt(d.errors.reduce((a,b)=>a+Number(b.count),0)));
  operationAlerts=Number(statuses.new||0)>0?['미확인 문의 '+fmt(statuses.new)+'건이 있습니다. 문의사항에서 확인하세요.']:[];
@@ -286,6 +292,8 @@ async function dashboard(){
  const seconds=trend.reduce((sum,row)=>sum+Number(row.seconds||0),0);
  metric('periodVisits',fmt(visits));metric('periodSeconds',duration(seconds));
  metric('periodAverage',visits?fmt(Math.round(seconds/visits))+'초':'—');
+ const compare=(current,prior)=>Number.isFinite(prior)&&prior>0?((current-prior)/prior*100>=0?'+':'')+((current-prior)/prior*100).toFixed(1)+'%':'비교 자료 없음';
+ metric('previousVisits',compare(visits,d.previous?.visits));metric('previousSeconds',compare(seconds,d.previous?.seconds));
  bars('visitChart',trend,'visits','세션');bars('usageChart',trend,'seconds','분');
  horizontal('errorChart',d.errors);
  const names={new:'미확인',read:'확인',in_progress:'처리 중',answered:'답변 완료'};
@@ -408,6 +416,14 @@ async function loadSessions(){
   $('sessionsStatus').textContent='활성 로그인 '+fmt(d.activeSessions)+'개 · 유휴 '+d.idleMinutes+'분 / 최대 '+d.absoluteHours+'시간';
  }catch{$('sessionsStatus').textContent='세션 정보를 불러오지 못했습니다.'}
 }
+async function loadRetention(){
+ try{const d=await read('/api/admin/retention');
+  if(!Number.isSafeInteger(d.pending?.inquiries)||d.pending.inquiries<0||!Number.isSafeInteger(d.pending?.sessions)||d.pending.sessions<0)throw Error('Invalid count');
+  $('retentionStatus').textContent='정리 기준을 넘긴 문의 '+fmt(d.pending.inquiries)+'건 · 익명 세션 '+fmt(d.pending.sessions)+'건';
+ }catch{$('retentionStatus').textContent='보존 현황을 불러오지 못했습니다.'}
+}
+$('retentionReload').addEventListener('click',loadRetention);
+loadRetention();
 async function loadDeployments(){
  try{
   const d=await read('/api/admin/deployments');

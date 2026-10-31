@@ -18,31 +18,31 @@
       "id": "ADM-01",
       "name": "운영 홈·KPI",
       "phase": 1,
-      "implementation": 85,
+      "implementation": 90,
       "automated": 80,
       "practical": 10,
       "deployment": 35,
-      "note": "7·14·30일 기간별 방문·활성시간 집계와 방문 세션당 활성 편집시간 추정 표시. 운영 데이터 대조 미완"
+      "note": "금월 집계·직전 동일 기간 방문/활성시간 비교 API와 화면 추가. 신규 기능·운영 검증은 미완"
     },
     {
       "id": "ADM-02",
       "name": "방문 통계",
       "phase": 1,
-      "implementation": 72,
+      "implementation": 85,
       "automated": 80,
       "practical": 10,
       "deployment": 35,
-      "note": "KST 익명 탭 세션 방문 추이·7/14/30일 필터 회귀 통과. 사람 수나 실제 재방문율로 표현하지 않음"
+      "note": "KST 기준 일/주/월/누적 방문과 선택기간 비교 소스 구현. 실제 재방문율은 제공하지 않음. 신규 기능 검증 미완"
     },
     {
       "id": "ADM-03",
       "name": "사용시간 분석",
       "phase": 1,
-      "implementation": 63,
+      "implementation": 78,
       "automated": 72,
       "practical": 0,
       "deployment": 30,
-      "note": "선택 기간 활성 편집시간 및 방문 탭 세션당 추정치 표시. 홈만 방문한 세션 포함; 실제 개인·완료 세션 평균은 아님. 실사용 검증 미완"
+      "note": "월별 활성시간과 직전 동일 기간 비교 추가. 활성시간 추정 정책 유지, 신규 기능 검증 미완"
     },
     {
       "id": "ADM-04",
@@ -108,11 +108,11 @@
       "id": "ADM-10",
       "name": "보존·백업",
       "phase": 1,
-      "implementation": 70,
+      "implementation": 85,
       "automated": 90,
       "practical": 20,
       "deployment": 25,
-      "note": "90일 경과 문의·연관 상태 이력·고아 이력을 함께 정리. 14일 익명 세션·만료 세션 경계 및 멱등성 실 SQLite 검사, 합성 데이터 VACUUM INTO 로컬 백업·복원 무결성 PASS. 운영 D1 복원 리허설 미실시"
+      "note": "보존기간 초과 데이터 건수 조회 API/UI와 읽기 전용 로컬 SQLite 백업·격리 복원 점검 도구 추가. 운영 백업/복원 및 신규 기능 검증 미완"
     },
     {
       "id": "ADM-11",
