@@ -1,9 +1,9 @@
 export async function adminReadiness(env){
- const required=['inquiries','inquiry_audit','inquiry_rate_limits','analytics_errors','analytics_daily','analytics_sessions','analytics_save_operations','analytics_operations','admin_accounts','admin_sessions','admin_login_limits','site_announcements','site_releases','operation_deployments','admin_security_events'];
+ const required=['inquiries','inquiry_audit','inquiry_rate_limits','analytics_errors','analytics_daily','analytics_sessions','analytics_save_operations','analytics_operations','admin_accounts','admin_sessions','admin_login_limits','site_announcements','site_releases','operation_deployments','admin_security_events','admin_maintenance_status'];
  const schema=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
  const present=new Set((schema.results||[]).map(row=>row.name));
  const missingTables=required.filter(name=>!present.has(name));
- const columns={analytics_daily:['returning_visits'],analytics_sessions:['active_seconds'],analytics_save_operations:['retry_of'],site_announcements:['first_published_at'],site_releases:['first_published_at']};
+ const columns={analytics_daily:['returning_visits'],analytics_sessions:['active_seconds'],analytics_save_operations:['retry_of','worker_version'],analytics_operations:['worker_version'],admin_maintenance_status:['state','started_ms','finished_ms','last_success_ms','failed_step'],site_announcements:['first_published_at'],site_releases:['first_published_at']};
  const missingColumns=[];
  for(const [name,expected] of Object.entries(columns)){
   if(!present.has(name))continue;

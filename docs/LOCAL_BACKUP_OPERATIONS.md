@@ -27,3 +27,12 @@ python scripts/admin_sqlite_backup.py rehearse new-backup.sqlite
 `node scripts/d1_restore_rehearsal.cjs /private/new-export.sql sunrise-pdf-restore-test`는 이름이 고정된 전용 시험 DB가 비어 있을 때만 SQL을 가져온다. 운영 DB 이름을 받지 않으며 기존 시험 DB 데이터도 덮어쓰지 않는다. 가져오기 후 핵심 테이블 건수 조회를 수행한다. 실패 시 전용 시험 DB에 일부 데이터가 남을 수 있으므로 운영자에게 보존한다. 실제 실행·전체 무결성/업무 복원 수용은 미검증이다.
 
 Cloudflare 공식 명령 참고: https://developers.cloudflare.com/workers/wrangler/commands/d1/
+
+
+## 예약 정리 실행 기록
+
+0014_retention_execution.sql 이후 예약 작업은 `admin_maintenance_status` 한 행에 최근 시도와 마지막 확인된 성공을 남긴다. 실행 중·성공·실패를 구분하며, 문의/익명 세션/인증 기록 → 배포 보고 → 보안 이력 순서로 진행한다. 중간 실패는 앞 단계의 정리를 되돌리지 않으며 실패 단계를 고정 코드로 남긴다. 실패했다고 마지막 성공 시각을 지우지 않는다. 로그·화면에는 원본 DB 오류나 개인정보를 표시하지 않는다.
+
+동시 실행은 1시간 임대로 제한한다. 1시간을 넘겨 실행 중으로 남은 기록은 조회 시 결과 미확인으로 표시한다. 최근 실패·결과 미확인·48시간 동안 성공 기록 없음·이력 조회 실패는 운영 알림에 포함한다. 정리 성공 기록은 백업 성공 또는 복원 검증을 의미하지 않는다.
+
+신규 회귀 소스 `tests/admin-version-retention-contract.cjs`는 성공·부분 실패·마지막 성공 유지·중복 실행·결과 미확인을 포함한다. 기능 검증 단계에서 실행할 예정이며 현재 통과 증거는 없다.

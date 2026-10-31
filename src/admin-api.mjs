@@ -1,7 +1,8 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
 import {readDeploymentReports} from './admin-deployments.mjs';
-import {recordOperation,operationSummary} from './operation-metrics.mjs';
+import {recordOperation,operationSummary,saveSummary,operationScope,workerVersion} from './operation-metrics.mjs';
+import {readRetentionExecution} from './admin-retention.mjs';
 import {adminReadiness} from './admin-readiness.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
@@ -25,7 +26,7 @@ export async function telemetry(request,env,url){
   const now=Date.now(),today=day(),db=env.DB;
   try{
     if(data.type==='operation'){
-      if(!await recordOperation(db,data,today))return response({error:'Invalid operation'},400);
+      if(!await recordOperation(db,data,today,workerVersion(env)))return response({error:'Invalid operation'},400);
     }else if(data.type==='visit'){
       const previous=await db.prepare("SELECT 1 found FROM analytics_sessions WHERE session_id=? AND day BETWEEN date(?,'-13 days') AND date(?,'-1 day') LIMIT 1").bind(data.session,today,today).first();
       await db.batch([
@@ -42,8 +43,8 @@ export async function telemetry(request,env,url){
       const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
       if(!uuid(data.operationId)||!['started','ready','failed','cancelled'].includes(data.stage)||(data.retryOf!=null&&(!uuid(data.retryOf)||data.retryOf===data.operationId||data.stage!=='started')))return response({error:'Invalid operation'},400);
       if(data.stage==='started'){
-        await db.prepare("INSERT OR IGNORE INTO analytics_save_operations(day,session_id,operation_id,state,retry_of) SELECT ?,?,?,?,CASE WHEN EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND operation_id=? AND state='failed' AND day BETWEEN date(?,'-1 day') AND ?) AND NOT EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND retry_of=?) THEN ? ELSE NULL END WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_save_operations WHERE day=? AND session_id=?)<40")
-          .bind(today,data.session,data.operationId,'started',data.session,data.retryOf||null,today,today,data.session,data.retryOf||null,data.retryOf||null,today,data.session,today,data.session).run();
+        await db.prepare("INSERT OR IGNORE INTO analytics_save_operations(day,session_id,operation_id,state,worker_version,retry_of) SELECT ?,?,?,?,?,CASE WHEN EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND operation_id=? AND state='failed' AND day BETWEEN date(?,'-1 day') AND ?) AND NOT EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND retry_of=?) THEN ? ELSE NULL END WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_save_operations WHERE day=? AND session_id=?)<40")
+          .bind(today,data.session,data.operationId,'started',workerVersion(env),data.session,data.retryOf||null,today,today,data.session,data.retryOf||null,data.retryOf||null,today,data.session,today,data.session).run();
       }else{
         await db.prepare("UPDATE analytics_save_operations SET state=? WHERE session_id=? AND operation_id=? AND state='started' AND day>=date(?,'-1 day') AND day<=?").bind(data.stage,data.session,data.operationId,today,today).run();
       }
@@ -80,11 +81,12 @@ export async function adminApi(request,env,url,identity){
   if(path==='/api/admin/retention'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     const now=Date.now(),cutoff=new Date(now-90*86400000).toISOString();
-    const [inquiries,sessions]=await Promise.all([
+    const [inquiries,sessions,execution]=await Promise.all([
       db.prepare('SELECT COUNT(*) count FROM inquiries WHERE created_at<?').bind(cutoff).first(),
-      db.prepare("SELECT COUNT(*) count FROM analytics_sessions WHERE day<date(?,'-14 days')").bind(today).first()
+      db.prepare("SELECT COUNT(*) count FROM analytics_sessions WHERE day<date(?,'-14 days')").bind(today).first(),
+      readRetentionExecution(db,now)
     ]);
-    return response({checkedAt:new Date(now).toISOString(),policy:{inquiriesDays:90,sessionDays:14,deploymentReportDays:90},pending:{inquiries:Number(inquiries?.count||0),sessions:Number(sessions?.count||0)},backup:'operator-managed',lastCleanup:null});
+    return response({checkedAt:new Date(now).toISOString(),policy:{inquiriesDays:90,sessionDays:14,deploymentReportDays:90,securityEventDays:30},pending:{inquiries:Number(inquiries?.count||0),sessions:Number(sessions?.count||0)},backup:'operator-managed',execution,lastCleanup:execution?.lastSuccessAt||null});
   }
   if(path==='/api/admin/deployments')return readDeploymentReports(request,env);
   if(path==='/api/admin/session-usage'){
@@ -100,19 +102,21 @@ export async function adminApi(request,env,url,identity){
       return response({windowDays:14,editorSessions:sessions,seconds,averageSeconds:sessions?Math.round(seconds/sessions):null,visits:total,returningTabDays:returning,idleSeconds:120});
     }catch{return response({error:'Session usage unavailable'},503)}
   }
-  if(path==='/api/admin/operations'){
+  if(['/api/admin/operations','/api/admin/save-quality','/api/admin/operations.csv'].includes(path)){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
-    try{return response(await operationSummary(db,today))}catch{return response({error:'Operation statistics unavailable'},503)}
-  }
-  if(path==='/api/admin/save-quality'){
-    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    let scope;try{scope=operationScope(url)}catch{return response({error:'기간은 7·14일, 버전은 목록에서 선택해 주세요.'},400)}
     try{
-      const counts=await db.prepare("SELECT COUNT(*) attempts, SUM(CASE WHEN state='ready' THEN 1 ELSE 0 END) ready, SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END) failed, SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END) cancelled, SUM(CASE WHEN state='started' THEN 1 ELSE 0 END) pending, SUM(CASE WHEN retry_of IS NOT NULL THEN 1 ELSE 0 END) retries, SUM(CASE WHEN retry_of IS NOT NULL AND state='ready' THEN 1 ELSE 0 END) recovered FROM analytics_save_operations WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first();
-      const number=value=>{const n=Number(value||0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid count');return n};
-      const result=Object.fromEntries(['attempts','ready','failed','cancelled','pending','retries','recovered'].map(key=>[key,number(counts?.[key])]));
-      if(result.ready+result.failed+result.cancelled+result.pending!==result.attempts||result.retries>result.attempts||result.recovered>result.retries||result.recovered>result.ready)throw Error('Inconsistent count');
-      return response({windowDays:14,...result});
-    }catch{return response({error:'save statistics unavailable'},503)}
+      if(path==='/api/admin/operations')return response(await operationSummary(db,today,scope));
+      if(path==='/api/admin/save-quality')return response(await saveSummary(db,today,scope));
+      const [operations,save]=await Promise.all([operationSummary(db,today,scope),saveSummary(db,today,scope)]);
+      const rows=[['기간(일)','수집 Worker 버전','기능 코드','시도','완료','실패','취소','미확인','완료·실패 중 실패(%)']];
+      for(const item of [...operations.items,{feature:'save_preparation',...save,succeeded:save.ready}]){
+        const settled=item.succeeded+item.failed;
+        rows.push([scope.days,scope.version||'all',item.feature,item.attempts,item.succeeded,item.failed,item.cancelled,item.pending,settled?(item.failed/settled*100).toFixed(1):'']);
+      }
+      const csv='\ufeff'+rows.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
+      return new Response(csv,{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="sunrise-operations-${today}.csv"`,'cache-control':'no-store','x-content-type-options':'nosniff'}});
+    }catch{return response({error:'Operation statistics unavailable'},503)}
   }
   // Private, read-only point-in-time check; not an uptime claim.
   if(path==='/api/admin/health'){
