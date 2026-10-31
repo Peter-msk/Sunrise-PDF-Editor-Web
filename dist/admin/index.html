@@ -82,7 +82,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="metric"><span class="label">미확인 문의</span><strong id="unread">—</strong></div>
 <div class="metric"><span class="label">오늘 편집기 활성 사용시간</span><strong id="secondsToday">—</strong></div>
 <div class="metric"><span class="label">누적 편집기 활성 사용시간</span><strong id="secondsTotal">—</strong></div>
-<div class="metric"><span class="label">최근 30일 기능 오류</span><strong id="errorCount">—</strong></div>
+<div class="metric"><span class="label">선택 기간 기능 오류 기록</span><strong id="errorCount">—</strong></div>
 <div class="metric"><span class="label">처리 중 문의</span><strong id="inProgress">—</strong></div>
 </section>
 <div class="toolbar" style="margin-top:12px">
@@ -90,6 +90,12 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <label class="muted" for="dashboardDays">집계 기간
 <select id="dashboardDays"><option value="7">7일</option><option value="14" selected>14일</option><option value="30">30일</option></select></label>
 </div>
+<section class="metrics" aria-label="선택 기간 집계">
+<div class="metric"><span class="label">선택 기간 방문 세션</span><strong id="periodVisits">—</strong></div>
+<div class="metric"><span class="label">선택 기간 활성 편집시간</span><strong id="periodSeconds">—</strong></div>
+<div class="metric"><span class="label">방문 세션당 활성 편집시간</span><strong id="periodAverage">—</strong></div>
+</section>
+<p class="muted">선택 기간의 활성 편집시간 합계를 전체 방문 탭 세션으로 나눈 추정치입니다. 홈만 방문한 세션도 포함하며, 사용자 1명당 시간이나 작업 완료 시간은 아닙니다.</p>
 <section class="grid">
 <div class="panel"><h2>일별 방문 세션</h2><div class="figure" id="visitChart" aria-label="방문 추이 그래프"></div></div>
 <div class="panel"><h2>활성 편집기 사용시간 <span class="muted">(분)</span></h2><div class="figure" id="usageChart" aria-label="활성 편집기 시간 추이"></div></div>
@@ -212,9 +218,12 @@ $('operationsReload').addEventListener('click',async()=>{
  finally{button.disabled=false;}
 });
 
+let dashboardRequest=0;
 async function dashboard(){
+ const request=++dashboardRequest;
  const days=Number($('dashboardDays').value);
  const d=await read('/api/admin/overview?days='+days);
+ if(request!==dashboardRequest)return;
  for(const [id,v] of [['visitsToday',d.visits.today],['visitsWeek',d.visits.week],['visitsTotal',d.visits.total]])metric(id,fmt(v));
  metric('secondsToday',duration(d.usage.today));metric('secondsTotal',duration(d.usage.total));
  const statuses=Object.fromEntries(d.inquiries.map(x=>[x.status,x.count]));metric('unread',fmt(statuses.new));metric('inProgress',fmt(statuses.in_progress));
@@ -222,6 +231,10 @@ async function dashboard(){
  operationAlerts=Number(statuses.new||0)>0?['미확인 문의 '+fmt(statuses.new)+'건이 있습니다. 문의사항에서 확인하세요.']:[];
  renderOperationAlerts();
  const trend=[];for(let i=d.days-1;i>=0;i--){const now=new Date(d.since+'T00:00:00Z');now.setUTCDate(now.getUTCDate()-i);const day=now.toISOString().slice(0,10);trend.push({day,...(d.trend.find(x=>x.day===day)||{visits:0,seconds:0})})}
+ const visits=trend.reduce((sum,row)=>sum+Number(row.visits||0),0);
+ const seconds=trend.reduce((sum,row)=>sum+Number(row.seconds||0),0);
+ metric('periodVisits',fmt(visits));metric('periodSeconds',duration(seconds));
+ metric('periodAverage',visits?fmt(Math.round(seconds/visits))+'초':'—');
  bars('visitChart',trend,'visits','세션');bars('usageChart',trend,'seconds','분');
  horizontal('errorChart',d.errors);
  const names={new:'미확인',read:'확인',in_progress:'처리 중',answered:'답변 완료'};

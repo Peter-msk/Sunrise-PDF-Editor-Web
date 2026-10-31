@@ -25,7 +25,7 @@ function respond(req,res){
  if(url.pathname==='/api/admin/overview'){
   const days=Number(url.searchParams.get('days')||14);requestedDays.push(days);
   json({since:today,days,visits:{today:2,week:5,total:30},usage:{today:360,total:1200},
-   trend:[],errors:[{feature:'저장',count:2}],inquiries:[{status:'new',count:2}],
+   trend:days===7?[]:[{day:today,visits:days===30?6:2,seconds:days===30?120:360}],errors:[{feature:'저장',count:2}],inquiries:[{status:'new',count:2}],
    definitions:'익명 탭 세션 집계'});return;
  }
  if(url.pathname==='/api/admin/inquiries'){json({items:[]});return}
@@ -42,6 +42,10 @@ async function main(){
   await page.goto('http://127.0.0.1:'+server.address().port+'/admin/',{waitUntil:'load',timeout:30000});
   await page.waitForFunction(()=>document.querySelector('#qualityPercent')?.textContent==='30.0%',null,{timeout:20000});
   await page.waitForFunction(()=>document.querySelector('#visitsToday')?.textContent==='2',null,{timeout:20000});
+  assert.equal(await page.locator('#periodVisits').innerText(),'2');
+  assert.equal(await page.locator('#periodSeconds').innerText(),'6분');
+  assert.equal(await page.locator('#periodAverage').innerText(),'180초');
+  assert((await page.locator('body').innerText()).includes('선택 기간 기능 오류 기록'));
   assert((await page.locator('#operationAlerts').innerText()).includes('48시간 이상 미확인 문의'));
   assert((await page.locator('#operationAlerts').innerText()).includes('미확인 문의 2건'));
   assert.equal(await page.locator('#qualityOverdue').innerText(),'1');
@@ -49,8 +53,12 @@ async function main(){
   assert.equal(await page.locator('#visitChart .barwrap').count(),14);
   await page.locator('#dashboardDays').selectOption('30');
   await page.waitForFunction(()=>document.querySelectorAll('#visitChart .barwrap').length===30,null,{timeout:15000});
+  assert.equal(await page.locator('#periodVisits').innerText(),'6');
+  assert.equal(await page.locator('#periodAverage').innerText(),'20초');
   await page.locator('#dashboardDays').selectOption('7');
   await page.waitForFunction(()=>document.querySelectorAll('#visitChart .barwrap').length===7,null,{timeout:15000});
+  assert.equal(await page.locator('#periodVisits').innerText(),'0');
+  assert.equal(await page.locator('#periodAverage').innerText(),'—');
   assert(requestedDays.includes(14)&&requestedDays.includes(30)&&requestedDays.includes(7));
   assert.equal(await page.locator('#healthVersionCreated').innerText(),'미설정');
   // An HTTP 503 with well-formed health JSON must display a D1-specific
