@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),{DatabaseSync}=require('node:sqlite');
+const {webcrypto}=require('node:crypto');globalThis.crypto ||=webcrypto;
+(async()=>{
+ const sqlite=new DatabaseSync(':memory:');
+ sqlite.exec(fs.readFileSync('migrations/0001_inquiries_and_site_updates.sql','utf8'));
+ sqlite.exec(fs.readFileSync('migrations/0002_admin_analytics.sql','utf8'));
+ sqlite.exec("INSERT INTO inquiries(id,category,email,message) VALUES(1,'일반','test@example.com','private'); INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) VALUES(1,'admin','new','read'),(1,'admin','read','answered')");
+ const db={prepare(sql){const s=sqlite.prepare(sql);return {args:[],bind(...args){this.args=args;return this},async first(){return s.get(...this.args)||null},async all(){return {results:s.all(...this.args)}}}}};
+ const {adminApi}=await import('../src/admin-api.mjs');const origin='https://example.test';
+ const call=path=>{const url=new URL(origin+path);return adminApi(new Request(url),{DB:db},url,'admin')};
+ let r=await call('/api/admin/inquiries/1/history');assert.equal(r.status,200);
+ let items=(await r.json()).items;assert.equal(items.length,2);assert.equal(items[0].new_status,'answered');assert.equal(items[1].new_status,'read');
+ assert.deepEqual(Object.keys(items[0]).sort(),['changed_at','new_status','old_status']);
+ r=await call('/api/admin/inquiries/999/history');assert.equal(r.status,404);
+ r=await call('/api/admin/inquiries/0/history');assert.equal(r.status,400);
+ const worker=(await import('../src/worker.mjs')).default;
+ r=await worker.fetch(new Request(origin+'/api/admin/inquiries/1/history'),{DB:db},{});assert.equal(r.status,401);
+ const html=fs.readFileSync('dist/admin/index.html','utf8');assert.match(html,/inquiryHistory/);assert.match(html,/90일/);
+ console.log('PASS: inquiry status history ordered, restricted to existing inquiry, private fields omitted and unauthenticated requests denied');
+})().catch(e=>{console.error(e);process.exitCode=1});
