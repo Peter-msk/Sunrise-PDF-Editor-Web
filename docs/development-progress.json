@@ -208,11 +208,11 @@
       "id": "USR-11",
       "name": "PDF 일괄 처리",
       "phase": 2,
-      "implementation": 82,
-      "automated": 90,
+      "implementation": 92,
+      "automated": 96,
       "practical": 0,
       "deployment": 0,
-      "note": "다중 압축·한글 워터마크·페이지 번호, 양식/일반 PDF 구조검사 및 회귀 PASS; 일괄 분할·병합과 Chrome/Edge 실사용 미완"
+      "note": "일괄 압축·한글 워터마크·페이지번호·분할·병합 Draft 구현, PDF 구조 손실 차단과 48개 CI 검사 통과; Chrome/Edge 다운로드 실기·시각 검증 미완"
     },
     {
       "id": "USR-18",
