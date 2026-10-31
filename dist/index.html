@@ -42,18 +42,17 @@
 @media(max-width:650px){.notice-rail{width:calc(100% - 24px);display:grid;grid-template-columns:1fr 1fr;align-items:end}.rail-panel:nth-child(n){max-height:38dvh}.rail-items{max-height:29dvh}.contact-nav-button{padding:8px;font-size:11px}.actions{gap:8px}}
 
 </style>
+<link rel="stylesheet" href="/assets/sunrise-home-admin.css">
 </head>
 <body>
 <div class="nav"><div class="container topbar"><a class="brand" href="/" aria-label="Sunrise PDF Editor 홈"><span class="brandmark">S</span><span>SUNRISE <span style="color:#1f6f9f">PDF EDITOR</span><span class="brandsub" style="display:block">WEB EDITION</span></span></a><nav class="actions"><a href="#features">주요 기능</a><a href="#privacy">문서 처리 안내</a><button type="button" class="contact-nav-button" id="contactNavButton">문의하기</button><a id="adminNavButton" class="btn small" href="/admin/" aria-label="Sunrise PDF Editor 관리자 페이지">관리자</a><a href="/editor/" class="btn small">PDF 편집기 열기 <span aria-hidden="true">↗</span></a></nav></div></div>
 
 <aside class="notice-rail" aria-label="항상 표시되는 공지사항과 업데이트">
-  <section class="rail-panel"><details id="noticeDetails" open><summary>📢 공지사항</summary><div class="rail-items" id="noticeItems" aria-live="polite">
-    <article class="rail-entry rail-warn"><strong>이미지 압축 시 유의</strong><time datetime="2026-10-30">2026.10.30</time><p>고효율 압축은 스캔 글자와 도면의 선명도를 낮출 수 있습니다. 저장 후 확인해 주세요.</p></article>
-    <article class="rail-entry"><strong>문서 처리 방식</strong><time datetime="2026-10-30">2026.10.30</time><p>PDF 편집은 브라우저에서 처리합니다. 문의에는 PDF 원본을 첨부하지 마세요.</p></article>
+  <section class="rail-panel"><details id="noticeDetails" tabindex="0" open><summary>📢 공지사항</summary><div class="rail-items" id="noticeItems" aria-live="polite">
+    <p>공지사항을 불러오는 중입니다.</p>
   </div></details></section>
-  <section class="rail-panel"><details id="releaseDetails" open><summary>🛠 업데이트 내역</summary><div class="rail-items" id="releaseItems" aria-live="polite">
-    <article class="rail-entry rail-release"><strong>2026.10.30 · 웹 화면 개선</strong><p><small>신규</small> 공지사항·업데이트·문의하기</p><p><small>보완</small> 대표 기능 설명 추가</p><p><small>삭제</small> 없음</p></article>
-    <article class="rail-entry rail-release"><strong>2026.10.30 · PDF 압축</strong><p><small>신규</small> 이미지 재인코딩, 3종 압축 모드</p><p><small>보완</small> 실제 용량 비교 및 저장 안전성</p><p><small>삭제</small> 없음</p></article>
+  <section class="rail-panel"><details id="releaseDetails" tabindex="0" open><summary>🛠 업데이트 내역</summary><div class="rail-items" id="releaseItems" aria-live="polite">
+    <p>업데이트 내역을 불러오는 중입니다.</p>
   </div></details></section>
 </aside>
 
@@ -74,7 +73,7 @@
 </div></div></section>
 <section class="section privacy" id="privacy"><div class="container privacy-inner"><div><span class="eyebrow" style="background:#25516e;color:#d7ecfa">DOCUMENT PRIVACY</span><h2>중요한 문서를 다루는 만큼,<br>처리 방식도 명확하게.</h2><p>이 사이트는 서버에 PDF를 전송하는 방식이 아니라 사용자의 브라우저에서 문서를 열고 결과물을 생성하도록 구성되어 있습니다. PDF의 원본 파일은 사용자가 직접 선택하고, 편집 결과도 직접 내려받습니다.</p></div><div class="privacy-details"><div class="privacy-item"><b>✓ PDF 서버 자동 업로드 없음</b><span>사용자가 선택한 파일을 PDF.js와 pdf-lib로 브라우저에서 처리합니다.</span></div><div class="privacy-item"><b>✓ 원본 파일 보존</b><span>편집한 PDF는 별도 파일로 저장하며 기존 원본 파일을 직접 덮어쓰지 않습니다.</span></div><div class="privacy-item"><b>ℹ︎ 기능 범위 안내</b><span>PDF 암호화 및 민감정보 완전 삭제(보안 Redaction)는 현재 지원하지 않습니다. 암호화된 PDF는 정상 처리되지 않을 수 있습니다.</span></div></div></div></section>
 <section class="final-cta"><h2>PDF 편집을 시작하세요</h2><p>별도 프로그램 설치 없이 새 편집 화면을 열 수 있습니다.</p><a class="btn" href="/editor/">Sunrise PDF Editor 열기 <span aria-hidden="true">→</span></a></section>
-</main><footer class="footer"><div class="container"><span>© 2026 Sunrise Group. All rights reserved.</span><span>Sunrise PDF Editor — Web Edition · Chrome / Edge / Mobile</span></div></footer>
+<p id="anonymousStatsNotice" style="max-width:1136px;margin:0 auto 18px;padding:0 16px;font-size:11px;color:#637b8e">사이트는 방문 세션, 편집기 활성 사용시간, 기능 오류의 유형별 횟수만 익명 집계합니다. PDF 내용·파일명·검색어·오류 전문은 수집하지 않습니다.</p></main><footer class="footer"><div class="container"><span>© 2026 Sunrise Group. All rights reserved.</span><span>Sunrise PDF Editor — Web Edition · Chrome / Edge / Mobile</span></div></footer>
 
 <dialog class="inquiry-dialog" id="contactDialog" aria-labelledby="inquiryTitle">
   <h2 id="inquiryTitle">문의하기</h2>
@@ -93,7 +92,7 @@
 
 <script>
 (() => {
-  const compact=window.matchMedia('(max-width:1649px)');
+  const compact=window.matchMedia('(max-width:1519px)');
   const noticeDetails=document.getElementById('noticeDetails');
   const releaseDetails=document.getElementById('releaseDetails');
   function adaptRail(){[noticeDetails,releaseDetails].forEach(x => {if(compact.matches&&!x.dataset.touched)x.open=false;else if(!compact.matches&&!x.dataset.touched)x.open=true;});}
@@ -101,20 +100,25 @@
   adaptRail();compact.addEventListener?.('change',adaptRail);
   function node(tag, cls, text){const el=document.createElement(tag);if(cls)el.className=cls;if(text!=null)el.textContent=text;return el;}
   function drawAnnouncements(items) {
-    const root=document.getElementById('noticeItems');if(!Array.isArray(items)||!items.length)return;
+    const root=document.getElementById('noticeItems');if(!Array.isArray(items))throw Error('invalid feed');
     root.replaceChildren();
+    if(!items.length){root.append(node('p','','현재 게시된 공지사항이 없습니다.'));return;}
     for(const item of items){const entry=node('article','rail-entry'+(item.level==='warning'?' rail-warn':''));entry.append(node('strong','',item.title));
       const date=node('time','',String(item.published_at||'').replaceAll('-','.'));date.dateTime=item.published_at||'';entry.append(date,node('p','',item.body));root.append(entry);}
   }
   function drawReleases(items){
-    const root=document.getElementById('releaseItems');if(!Array.isArray(items)||!items.length)return;
+    const root=document.getElementById('releaseItems');if(!Array.isArray(items))throw Error('invalid feed');
     root.replaceChildren();
+    if(!items.length){root.append(node('p','','최근 업데이트 내역이 없습니다.'));return;}
     for(const item of items){const entry=node('article','rail-entry rail-release');entry.append(node('strong','',item.version));
       for(const [label,key] of [['신규','added'],['보완','improved'],['삭제','removed']]){const p=node('p');p.append(node('small','',label),document.createTextNode(' '+(item[key]||'없음')));entry.append(p);}
       root.append(entry);}
   }
   fetch('/api/site-updates',{cache:'no-store',credentials:'same-origin'}).then(async res=>{if(!res.ok)throw Error('feed unavailable');return res.json();})
-    .then(data=>{drawAnnouncements(data.announcements);drawReleases(data.releases);}).catch(()=>{}); // keep readable static fallback
+    .then(data=>{drawAnnouncements(data.announcements);drawReleases(data.releases);}).catch(()=>{
+      document.getElementById('noticeItems').textContent='공지사항을 불러오지 못했습니다.';
+      document.getElementById('releaseItems').textContent='업데이트 내역을 불러오지 못했습니다.';
+    });
   const dialog=document.getElementById('contactDialog'),form=document.getElementById('inquiryForm');
   const state=document.getElementById('inquiryState'),submit=document.getElementById('inquirySubmit');
   document.getElementById('contactNavButton').addEventListener('click',()=>{state.textContent='';dialog.showModal();});
@@ -136,4 +140,5 @@
 })();
 </script>
 
+<script defer src="/assets/sunrise-telemetry.js"></script>
 </body></html>

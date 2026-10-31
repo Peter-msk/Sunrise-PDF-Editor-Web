@@ -14,7 +14,11 @@ ORDER BY created_at DESC LIMIT 100;
 운영 DB 식별자: `efaab4d4-9d79-46dd-b037-461c4cd4c683`.
 
 ## 2. 공지사항 수정
-공지는 공개 API `GET /api/site-updates`로 전달되며 메인 화면 좌측 고정 영역에 표시된다. SQL에서 활성 공지만 전달한다. `sort_order`가 높을수록 먼저 나온다.
+공지는 공개 API `GET /api/site-updates`로 전달되며 메인 화면에 표시된다. 최초 게시일을 포함해 한국시간 기준 7일 동안만 표시하며, 8일째 00:00부터 숨긴다. 예를 들어 10월 31일 최초 게시 시 11월 6일까지 표시하고 11월 7일부터 숨긴다. 숨겨진 기록은 삭제하지 않는다. `sort_order`가 높을수록 먼저 나온다.
+
+기존 게시물은 과거 최초 게시 시각이 별도로 기록되지 않아 기존 `published_at`/`released_at`을 최초 게시일로 사용한다. 새 항목은 처음 활성화되는 날을 기록하고, 수정하거나 비활성화 후 다시 활성화해도 최초 게시일을 바꾸지 않는다. 게시일이 미래로 지정된 항목은 그 날짜부터 게시된다.
+
+배포 전 D1에 `migrations/0004_publication_lifetime.sql`을 한 번 적용해야 한다. 마이그레이션 적용을 확인한 뒤 새 Worker를 배포한다. 데이터 삭제 쿼리는 포함하지 않는다.
 
 ```sql
 INSERT INTO site_announcements(title, body, level, published_at, sort_order)

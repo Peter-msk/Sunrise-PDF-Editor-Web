@@ -29,6 +29,13 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 .detail[hidden]{display:none}.detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:14px}.detail p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
 .detail textarea{width:100%;min-height:80px;resize:vertical}.detail label{display:grid;gap:5px}
 .status{color:var(--blue);font-size:12px}.notice{background:#fff3dd;border:1px solid #edcf96;color:#7e5512;padding:10px 14px;border-radius:8px}
+.publication-grid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.4fr);gap:14px}
+.publication-list{max-height:430px;overflow:auto;display:grid;align-content:start;gap:6px}
+.publication-list button{text-align:left;overflow-wrap:anywhere}.publication-list button[aria-pressed="true"]{border-color:var(--blue);background:#edf6fc}
+.publication-list small{display:block;color:var(--muted)}.publication-form{display:grid;gap:9px}.publication-form label{display:grid;gap:4px}
+.publication-form textarea{width:100%;min-height:72px;resize:vertical}.publication-form [hidden]{display:none}
+.publication-form label.check{display:flex;align-items:center;gap:7px}.publication-form label.check input{width:auto}
+@media(max-width:700px){.publication-grid{grid-template-columns:1fr}.publication-list{max-height:210px}}
 @media(max-width:950px){.metrics{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
 @media(max-width:550px){.metrics{grid-template-columns:repeat(2,1fr)}.wrap{padding:12px}.metric strong{font-size:24px}h1{font-size:16px}}
 </style></head><body>
@@ -61,11 +68,24 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <label style="margin-top:8px">관리자 메모<textarea id="adminNote" maxlength="1000"></textarea></label>
 <button class="primary" id="saveStatus" style="margin-top:8px">변경 저장</button><p id="saveResult" class="status" role="status"></p></div></div></div>
 </section>
+<section class="panel" style="margin-top:12px" aria-labelledby="publicationsTitle">
+<div class="toolbar"><h2 id="publicationsTitle" style="margin:0">공지사항 · 업데이트 관리</h2><button type="button" id="newPublication">새 항목 작성</button></div>
+<p class="muted">최초 게시일을 포함한 7일만 홈페이지에 표시됩니다. 수정·숨김·재게시해도 최초 게시일은 바뀌지 않습니다. 만료된 기록도 이곳에서 확인할 수 있습니다.</p>
+<div class="publication-grid"><div class="publication-list" id="publicationList" aria-label="공지와 업데이트 목록"></div>
+<form id="publicationForm" class="publication-form">
+<label>항목 종류<select id="publicationKind"><option value="announcement">공지사항</option><option value="release">업데이트</option></select></label>
+<label>제목<input id="publicationTitle" maxlength="160" required></label>
+<div id="announcementFields"><label>공지 유형<select id="publicationLevel"><option value="info">일반</option><option value="warning">주의</option></select></label><label>공지 내용<textarea id="publicationBody" maxlength="3000"></textarea></label></div>
+<div id="releaseFields" hidden><label>신규 기능<textarea id="publicationAdded" maxlength="1000"></textarea></label><label>보완 기능<textarea id="publicationImproved" maxlength="1000"></textarea></label><label>삭제 기능<textarea id="publicationRemoved" maxlength="1000"></textarea></label></div>
+<label class="check"><input id="publicationActive" type="checkbox" checked> 홈페이지에 게시</label>
+<div><button class="primary" id="publicationSave" type="submit">저장</button> <span id="publicationResult" class="status" role="status" aria-live="polite"></span></div>
+</form></div>
+</section>
 <p class="muted" style="margin-top:12px">방문·사용시간은 추정치입니다. PDF 내용, 파일명, 검색어, IP 주소 및 오류 전문은 통계 서버에 저장하지 않습니다.</p>
 </main>
 <script type="module">
 const $=id=>document.getElementById(id),fmt=n=>Number(n||0).toLocaleString('ko-KR');
-let records=[],selected=null;
+let records=[],selected=null,publications={announcements:[],releases:[],today:''},selectedPublication=null;
 async function read(url,opts){const res=await fetch(url,{cache:'no-store',credentials:'same-origin',...opts});const obj=await res.json();if(!res.ok)throw Error(obj.error||'조회 실패');return obj}
 function metric(id,v){$(id).textContent=v}
 function duration(sec){const min=Math.round(Number(sec||0)/60);return min<60?fmt(min)+'분':fmt((min/60).toFixed(1))+'시간'}
@@ -112,10 +132,49 @@ $('saveStatus').addEventListener('click',async()=>{if(!selected)return;const btn
 $('reload').addEventListener('click',()=>inquiries().catch(e=>$('state').textContent=e.message));
 $('statusFilter').addEventListener('change',()=>inquiries().catch(()=>{}));
 $('query').addEventListener('keydown',e=>{if(e.key==='Enter')inquiries().catch(()=>{})});
+function publicationStatus(item){
+ if(!item.is_active)return item.first_published_at?'숨김':'미게시';
+ if(!item.first_published_at)return '게시일 확인 필요';
+ const age=(Date.parse(publications.today+'T00:00:00Z')-Date.parse(item.first_published_at+'T00:00:00Z'))/86400000;
+ return age<0?'게시 예정':age<7?'게시 중':'표시기간 만료';
+}
+function publicationEditor(kind,item=null){
+ selectedPublication=item?{kind,id:item.id}:null;
+ $('publicationKind').value=kind;$('publicationKind').disabled=!!item;
+ $('announcementFields').hidden=kind!=='announcement';$('releaseFields').hidden=kind!=='release';
+ $('publicationTitle').value=item?(item.title||item.version):'';
+ $('publicationLevel').value=item?.level||'info';$('publicationBody').value=item?.body||'';
+ $('publicationAdded').value=item?.added||'';$('publicationImproved').value=item?.improved||'';$('publicationRemoved').value=item?.removed||'';
+ $('publicationActive').checked=item?!!item.is_active:true;
+ $('publicationSave').textContent=item?'변경 저장':'새 항목 저장';$('publicationResult').textContent='';
+}
+function renderPublications(){
+ const root=$('publicationList');root.replaceChildren();
+ const rows=[...publications.announcements.map(item=>({kind:'announcement',item})),...publications.releases.map(item=>({kind:'release',item}))];
+ rows.sort((a,b)=>(b.item.first_published_at||'').localeCompare(a.item.first_published_at||'')||b.item.id-a.item.id);
+ if(!rows.length){root.textContent='등록된 항목이 없습니다.';return}
+ for(const row of rows){const button=document.createElement('button');button.type='button';
+  button.setAttribute('aria-pressed',String(!!selectedPublication&&selectedPublication.kind===row.kind&&selectedPublication.id===row.item.id));
+  const title=document.createElement('strong');title.textContent=(row.kind==='announcement'?'공지 · ':'업데이트 · ')+(row.item.title||row.item.version);
+  const meta=document.createElement('small');meta.textContent=(row.item.first_published_at||'최초 게시 전')+' · '+publicationStatus(row.item);
+  button.append(title,meta);button.addEventListener('click',()=>{publicationEditor(row.kind,row.item);renderPublications()});root.append(button);
+ }
+}
+async function loadPublications(){publications=await read('/api/admin/site-updates');renderPublications()}
+$('newPublication').addEventListener('click',()=>{publicationEditor('announcement');renderPublications()});
+$('publicationKind').addEventListener('change',()=>publicationEditor($('publicationKind').value));
+$('publicationForm').addEventListener('submit',async event=>{
+ event.preventDefault();const kind=$('publicationKind').value,button=$('publicationSave');
+ const data=kind==='announcement'?{title:$('publicationTitle').value,body:$('publicationBody').value,level:$('publicationLevel').value}:{version:$('publicationTitle').value,added:$('publicationAdded').value,improved:$('publicationImproved').value,removed:$('publicationRemoved').value};
+ data.is_active=$('publicationActive').checked;button.disabled=true;$('publicationResult').textContent='저장 중입니다.';
+ try{await read('/api/admin/site-updates/'+kind+(selectedPublication?'/'+selectedPublication.id:''),{method:selectedPublication?'PATCH':'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+  await loadPublications();publicationEditor(kind);$('publicationResult').textContent='저장했습니다.';
+ }catch(e){$('publicationResult').textContent=e.message}finally{button.disabled=false}
+});
 $('adminLogout').addEventListener('click',async()=>{
  const btn=$('adminLogout');btn.disabled=true;
  try{await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:'{}'});}
  finally{location.replace('/admin/login/')}
 });
-Promise.all([dashboard(),inquiries()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
+Promise.all([dashboard(),inquiries(),loadPublications()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>

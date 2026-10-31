@@ -5,10 +5,10 @@ const response=(body,status=200)=>new Response(JSON.stringify(body),{status,head
 const day=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10);
 const sameOrigin=(req,url)=>req.headers.get('origin')===url.origin;
 const validSid=(id)=>typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f-]{27,40}$/i.test(id)&&id.length<=48;
-async function readPayload(req) {
+async function readPayload(req,maxBytes=1024) {
   if(!req.headers.get('content-type')?.startsWith('application/json'))return null;
   const body=await req.text();
-  if(body.length>1024)return null;
+  if(body.length>maxBytes)return null;
   try{return JSON.parse(body)}catch{return null}
 }
 export async function telemetry(request,env,url){
@@ -49,6 +49,42 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/site-updates'&&request.method==='GET'){
+    const [announcements,releases]=await Promise.all([
+      db.prepare('SELECT id,title,body,level,published_at,first_published_at,is_active FROM site_announcements ORDER BY id DESC LIMIT 100').all(),
+      db.prepare('SELECT id,version,released_at,first_published_at,added,improved,removed,is_active FROM site_releases ORDER BY id DESC LIMIT 100').all()
+    ]);
+    return response({today,announcements:announcements.results||[],releases:releases.results||[]});
+  }
+  const publicationMatch=path.match(/^\/api\/admin\/site-updates\/(announcement|release)(?:\/(\d+))?$/);
+  if(publicationMatch&&['POST','PATCH'].includes(request.method)){
+    if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
+    const [,kind,idText]=publicationMatch;
+    if((request.method==='POST'&&idText)||(request.method==='PATCH'&&!idText))return response({error:'Invalid request'},400);
+    const id=idText?Number(idText):null;
+    if(idText&&(!Number.isSafeInteger(id)||id<1))return response({error:'Invalid id'},400);
+    const data=await readPayload(request,8192);
+    if(!data||typeof data!=='object'||Array.isArray(data))return response({error:'입력 내용을 확인해 주세요.'},400);
+    const text=(value,max,required=false)=>typeof value==='string'&&value.length<=max&&(!required||value.trim().length>0)&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
+    const active=data.is_active;
+    if(typeof active!=='boolean')return response({error:'게시 상태를 확인해 주세요.'},400);
+    if(kind==='announcement'){
+      if(!text(data.title,160,true)||!text(data.body,3000,true)||!['info','warning'].includes(data.level))return response({error:'공지 제목과 내용을 확인해 주세요.'},400);
+    } else if(!text(data.version,160,true)||!text(data.added,1000)||!text(data.improved,1000)||!text(data.removed,1000))return response({error:'업데이트 제목과 내용을 확인해 주세요.'},400);
+    try{
+      let result;
+      if(kind==='announcement'&&request.method==='POST')result=await db.prepare('INSERT INTO site_announcements(title,body,level,published_at,is_active) VALUES (?,?,?,?,?)').bind(data.title.trim(),data.body.trim(),data.level,today,Number(active)).run();
+      if(kind==='announcement'&&request.method==='PATCH')result=await db.prepare('UPDATE site_announcements SET title=?,body=?,level=?,is_active=? WHERE id=?').bind(data.title.trim(),data.body.trim(),data.level,Number(active),id).run();
+      if(kind==='release'&&request.method==='POST')result=await db.prepare('INSERT INTO site_releases(version,released_at,added,improved,removed,is_active) VALUES (?,?,?,?,?,?)').bind(data.version.trim(),today,data.added.trim(),data.improved.trim(),data.removed.trim(),Number(active)).run();
+      if(kind==='release'&&request.method==='PATCH')result=await db.prepare('UPDATE site_releases SET version=?,added=?,improved=?,removed=?,is_active=? WHERE id=?').bind(data.version.trim(),data.added.trim(),data.improved.trim(),data.removed.trim(),Number(active),id).run();
+      if(request.method==='PATCH'&&result.meta?.changes===0)return response({error:'항목을 찾을 수 없습니다.'},404);
+      return response({ok:true},request.method==='POST'?201:200);
+    }catch(error){
+      if(/unique constraint/i.test(String(error?.message||'')))return response({error:'같은 이름의 업데이트가 이미 있습니다.'},409);
+      console.error('publication update failed',error?.name||'unknown');
+      return response({error:'저장하지 못했습니다. 다시 시도해 주세요.'},503);
+    }
+  }
   if(path==='/api/admin/overview'&&request.method==='GET'){
     const monday=earliestWeek(today);
     const [all,week,tod,series,errors,inq]=await Promise.all([

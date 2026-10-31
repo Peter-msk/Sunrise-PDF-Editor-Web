@@ -9,9 +9,23 @@
  }catch{sid=crypto.randomUUID()}
  const send=(type,extra={})=>{
    const data=JSON.stringify({type,session:sid,...extra});
-   fetch('/api/telemetry',{method:'POST',credentials:'same-origin',keepalive:true,headers:{'content-type':'application/json'},body:data}).catch(()=>{});
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+   return fetch('/api/telemetry',{method:'POST',credentials:'same-origin',keepalive:true,headers:{'content-type':'application/json'},body:data,signal:controller.signal})
+     .then(response=>response.ok).catch(()=>false).finally(()=>clearTimeout(timer));
  };
- send('visit');
+ const kstDay=()=>new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+ let visitDay=kstDay(),visited=false,visitPromise=null;
+ function ensureVisit(){
+   const day=kstDay();
+   if(day!==visitDay){visitDay=day;visited=false;visitPromise=null;}
+   if(visited)return Promise.resolve(true);
+   if(!visitPromise)visitPromise=send('visit').then(ok=>{
+     if(visitDay===day){visited=ok;visitPromise=null;}
+     return ok;
+   });
+   return visitPromise;
+ }
+ ensureVisit();
  if(area!=='editor')return;
  let last=performance.now(),lastFeature='기타',lastErrorAt=0;
  const classify=s=>{
@@ -33,7 +47,7 @@
    const now=Date.now();
    if(now-lastErrorAt<3100)return;
    lastErrorAt=now;
-   send('failure',{feature:category||lastFeature});
+   ensureVisit().then(ok=>{if(ok)send('failure',{feature:category||lastFeature});});
  };
  window.addEventListener('error',()=>report(lastFeature));
  window.addEventListener('unhandledrejection',()=>report(lastFeature));
@@ -53,10 +67,13 @@
  }
 
  window.sunriseTelemetryFeatureError=feature=>report(classify(feature)); // future explicit integration
- setInterval(()=>{
+ let pulsePending=false;
+ setInterval(async()=>{
    const now=performance.now(),diff=(now-last)/1000;last=now;
-   if(document.visibilityState==='visible'&&document.hasFocus()&&diff>=8&&diff<=30){
-     send('pulse',{area:'editor',seconds:Math.min(15,Math.round(diff))});
+   if(document.visibilityState==='visible'&&document.hasFocus()&&diff>=8&&diff<=30&&!pulsePending){
+     pulsePending=true;
+     try{if(await ensureVisit())await send('pulse',{area:'editor',seconds:Math.min(15,Math.round(diff))});}
+     finally{pulsePending=false;}
    }
  },15000);
  document.addEventListener('visibilitychange',()=>{last=performance.now()});

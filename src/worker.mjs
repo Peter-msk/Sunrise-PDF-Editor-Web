@@ -7,8 +7,8 @@ function respond(data,status=200,extra={}) { return new Response(JSON.stringify(
 function tooLong(value,max) { return typeof value!=='string' || value.length>max; }
 async function publicUpdates(db) {
   const [a,r]=await Promise.all([
-    db.prepare("SELECT id,title,body,level,published_at FROM site_announcements WHERE is_active=1 ORDER BY sort_order DESC,id DESC LIMIT 8").all(),
-    db.prepare("SELECT id,version,released_at,added,improved,removed FROM site_releases WHERE is_active=1 ORDER BY sort_order DESC,id DESC LIMIT 8").all()
+    db.prepare("SELECT id,title,body,level,published_at FROM site_announcements WHERE is_active=1 AND date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours') ORDER BY sort_order DESC,id DESC LIMIT 8").all(),
+    db.prepare("SELECT id,version,released_at,added,improved,removed FROM site_releases WHERE is_active=1 AND date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours') ORDER BY sort_order DESC,id DESC LIMIT 8").all()
   ]);
   return respond({announcements:a.results||[],releases:r.results||[]},200,{'cache-control':'public, max-age=60'});
 }
@@ -64,12 +64,17 @@ export default {
       return env.ASSETS.fetch(request);
     }
     if(url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')){
-      const username=await getAdminSession(request,env);
+      let username;
+      try{username=await getAdminSession(request,env)}
+      catch(error){console.error('Admin session check failed',error?.name||'unknown');return respond({error:'관리자 인증을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.'},503);}
       if(!username){
         if(url.pathname.startsWith('/api/admin/'))return respond({error:'관리자 로그인이 필요합니다.'},401);
         return Response.redirect(url.origin+'/admin/login/',302);
       }
-      if(url.pathname.startsWith('/api/admin/'))return adminApi(request,env,url,username);
+      if(url.pathname.startsWith('/api/admin/')){
+        try{return await adminApi(request,env,url,username)}
+        catch(error){console.error('Admin API failed',error?.name||'unknown');return respond({error:'관리자 데이터를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'},503);}
+      }
       return env.ASSETS.fetch(request);
     }
     if(url.pathname==='/api/telemetry')return telemetry(request,env,url);
