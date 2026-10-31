@@ -79,9 +79,24 @@ export async function authRoutes(request,env,url){
   const user=await getAdminSession(request,env);
   return user?json({authenticated:true,username:user}):json({authenticated:false},401);
  }
- if(!['/api/auth/setup','/api/auth/login','/api/auth/logout','/api/auth/change-password'].includes(path))return json({error:'요청한 인증 경로가 없습니다.'},404);
+ if(path==='/api/auth/sessions'&&method==='GET'){
+  const user=await getAdminSession(request,env);
+  if(!user)return json({error:'관리자 로그인이 필요합니다.'},401);
+  const now=Date.now();
+  const account=await db.prepare('SELECT updated_at FROM admin_accounts WHERE id=1').first();
+  const changed=account?.updated_at?Date.parse(account.updated_at):0;
+  if(!Number.isFinite(changed))return json({error:'계정 상태를 확인하지 못했습니다.'},503);
+  const count=await db.prepare('SELECT COUNT(*) count FROM admin_sessions WHERE admin_id=1 AND expires_ms>? AND last_seen_ms>? AND created_ms>?').bind(now,now-IDLE_MS,changed).first();
+  return json({activeSessions:Number(count?.count||0),idleMinutes:IDLE_MS/60000,absoluteHours:ABS_MS/3600000});
+ }
+ if(!['/api/auth/setup','/api/auth/login','/api/auth/logout','/api/auth/logout-all','/api/auth/change-password'].includes(path))return json({error:'요청한 인증 경로가 없습니다.'},404);
  if(method!=='POST')return json({error:'허용되지 않은 요청입니다.'},405,{Allow:'POST'});
  if(!originOK(request,url))return json({error:'잘못된 요청 출처입니다.'},403);
+ if(path==='/api/auth/logout-all'){
+  if(!await getAdminSession(request,env))return json({error:'관리자 로그인이 필요합니다.'},401);
+  await db.prepare('DELETE FROM admin_sessions WHERE admin_id=1').run();
+  return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
+ }
  if(path==='/api/auth/logout'){
   const token=cookieValue(request);
   if(token)await db.prepare('DELETE FROM admin_sessions WHERE token_hash=?').bind(await digest(token)).run();

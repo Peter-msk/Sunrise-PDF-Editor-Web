@@ -131,7 +131,9 @@ export async function adminApi(request,env,url,identity){
     });
   }
   if(path==='/api/admin/statistics.csv'&&request.method==='GET'){
-    const result=await db.prepare("SELECT day,visits,editor_seconds FROM analytics_daily WHERE day BETWEEN date(?,'-29 days') AND ? ORDER BY day").bind(today,today).all();
+    const days=Number(url.searchParams.get('days')||30);
+    if(![7,14,30].includes(days))return response({error:'조회 기간은 7·14·30일만 지원합니다.'},400);
+    const result=await db.prepare("SELECT day,visits,editor_seconds FROM analytics_daily WHERE day BETWEEN date(?,?) AND ? ORDER BY day").bind(today,'-'+(days-1)+' days',today).all();
     const number=value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0)throw new Error('Invalid aggregate');return String(n)};
     const rows=[['날짜(KST)','방문 세션','활성 편집 시간(초)']];
     for(const row of result.results||[]){

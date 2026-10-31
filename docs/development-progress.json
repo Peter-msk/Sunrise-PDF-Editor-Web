@@ -118,11 +118,11 @@
       "id": "ADM-11",
       "name": "계정 보안",
       "phase": 1,
-      "implementation": 80,
+      "implementation": 90,
       "automated": 95,
       "practical": 35,
       "deployment": 45,
-      "note": "실제 HTTPS Chromium+로컬 SQLite에서 초기 등록·독립 브라우저 2개 로그인·Secure HttpOnly 쿠키·비밀번호 변경 시 전체 세션 폐기·재로그인·로그아웃 PASS. 운영 도메인·실계정/침투 검사 미완"
+      "note": "활성 세션 개수 조회·전체 세션 종료 API/UI 추가. 기존 로그인/비밀번호 정책 유지. 신규 기능 검증과 운영 검증은 미완"
     },
     {
       "id": "ADM-12",
@@ -138,11 +138,11 @@
       "id": "ADM-13",
       "name": "통계 CSV",
       "phase": 1,
-      "implementation": 78,
+      "implementation": 90,
       "automated": 90,
       "practical": 20,
       "deployment": 0,
-      "note": "30일 익명 통계 CSV 실제 Chromium 다운로드 및 SQLite 30일 필터·UTF-8 BOM 원시 바이트·비공개 API 검증; Excel/운영 브라우저 실기 미완"
+      "note": "선택한 7·14·30일 통계 CSV API와 화면 연결 추가. 신규 기능·Excel·운영 검증은 미완"
     },
     {
       "id": "ADM-14",

@@ -62,7 +62,8 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <label class="check"><input type="checkbox" id="operationsAutoRefresh"> 관리자 화면이 열려 있을 때 1분마다 확인</label><p class="muted" id="operationsAutoStatus" role="status">자동 확인 꺼짐</p>
 <ul class="operation-alerts" id="operationAlerts" aria-live="polite"><li>운영 정보를 확인하고 있습니다.</li></ul></div>
 </section>
-<p><a href="/api/admin/statistics.csv">최근 30일 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
+<p><a id="statisticsDownload" href="/api/admin/statistics.csv?days=14">선택 기간 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
+<section class="panel" aria-labelledby="sessionTitle"><div class="toolbar"><h2 id="sessionTitle">관리자 로그인 세션</h2><button id="sessionsReload" type="button">세션 조회</button></div><p id="sessionsStatus" role="status">세션 정보를 불러오는 중입니다.</p><p class="muted">전체 세션을 종료하면 현재 브라우저와 다른 브라우저 모두 다시 로그인해야 합니다.</p><button id="sessionsRevoke" type="button">모든 관리자 세션 종료</button></section>
 <section class="panel" aria-labelledby="qualityTitle" style="margin-top:12px">
 <div class="toolbar"><h2 id="qualityTitle" style="margin:0">이용 품질 · 오류 세션 분석 (최근 14일)</h2>
 <button type="button" id="qualityReload">품질 새로고침</button></div>
@@ -270,6 +271,7 @@ let dashboardRequest=0;
 async function dashboard(){
  const request=++dashboardRequest;
  const days=Number($('dashboardDays').value);
+ $('statisticsDownload').href='/api/admin/statistics.csv?days='+days;
  const d=await read('/api/admin/overview?days='+days);
  if(request!==dashboardRequest)return;
  for(const [id,v] of [['visitsToday',d.visits.today],['visitsWeek',d.visits.week],['visitsTotal',d.visits.total]])metric(id,fmt(v));
@@ -399,6 +401,20 @@ $('adminLogout').addEventListener('click',async()=>{
  try{await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:'{}'});}
  finally{location.replace('/admin/login/')}
 });
+async function loadSessions(){
+ try{const d=await read('/api/auth/sessions');
+  if(!Number.isSafeInteger(d.activeSessions)||d.activeSessions<0)throw Error('Invalid count');
+  $('sessionsStatus').textContent='활성 로그인 '+fmt(d.activeSessions)+'개 · 유휴 '+d.idleMinutes+'분 / 최대 '+d.absoluteHours+'시간';
+ }catch{$('sessionsStatus').textContent='세션 정보를 불러오지 못했습니다.'}
+}
+$('sessionsReload').addEventListener('click',loadSessions);
+$('sessionsRevoke').addEventListener('click',async()=>{
+ if(!confirm('현재 브라우저를 포함한 모든 관리자 로그인을 종료할까요?'))return;
+ const button=$('sessionsRevoke');button.disabled=true;
+ try{await read('/api/auth/logout-all',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});location.replace('/admin/login/')}
+ catch{$('sessionsStatus').textContent='전체 세션을 종료하지 못했습니다. 다시 시도해 주세요.';button.disabled=false}
+});
+loadSessions();
 renderPublicationPreview();
 Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>
