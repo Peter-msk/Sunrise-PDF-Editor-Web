@@ -88,21 +88,21 @@
       "id": "ADM-08",
       "name": "서비스 상태",
       "phase": 1,
-      "implementation": 65,
-      "automated": 70,
-      "practical": 0,
+      "implementation": 80,
+      "automated": 90,
+      "practical": 10,
       "deployment": 0,
-      "note": "인증된 관리자에게 Worker 응답/D1 SELECT 1 읽기 전용 상태를 제공하고 장애 시 503·경고 표시. 이력·실운영 D1 장애 대응 검증 미완"
+      "note": "관리자 인증된 Worker/D1 상태 200·503 구조화 응답·조회시간·복구 후 경고 해제 Chromium 시험. D1 전체 장애 시 로그인 세션 확인도 실패하므로 별도 외부 상태감시 아님"
     },
     {
       "id": "ADM-09",
       "name": "배포·버전",
       "phase": 1,
-      "implementation": 35,
-      "automated": 35,
-      "practical": 0,
+      "implementation": 75,
+      "automated": 85,
+      "practical": 10,
       "deployment": 0,
-      "note": "앱 버전과 선택적 CF_VERSION_METADATA·RELEASE_VERSION을 관리자 화면에 표시, 미설정은 명시. 실제 운영 배포 메타데이터 자동 연결·이력은 미완"
+      "note": "Wrangler version_metadata 바인딩과 실제 Worker 버전 ID·태그·버전 생성시각 표시, 미설정 및 설정값 대체 처리 Node·Chromium 검증. 버전 생성일은 배포 시각이 아님; 운영 배포 이력 미검증"
     },
     {
       "id": "ADM-10",
@@ -148,11 +148,11 @@
       "id": "ADM-14",
       "name": "운영 알림",
       "phase": 1,
-      "implementation": 61,
-      "automated": 80,
-      "practical": 0,
+      "implementation": 75,
+      "automated": 90,
+      "practical": 10,
       "deployment": 0,
-      "note": "D1 오류·미확인 문의·48시간 경과 문의·오류 세션 비율 임계 경고를 관리자 화면에 표시. 외부 푸시 미구현"
+      "note": "관리자 화면 운영 알림 중복 제거·항목 수 표시·전체 상태/품질/통계 새로고침, D1 장애→복구 시 경고 해제 Chromium 검증. 서버 푸시·정기 감시·알림 이력 미구현"
     },
     {
       "id": "USR-01",
