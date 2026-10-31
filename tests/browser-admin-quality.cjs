@@ -1,0 +1,55 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
+const {chromium}=require('playwright');
+const file=path.resolve(__dirname,'../dist/admin/index.html');
+const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+const requestedDays=[];
+const healthy={status:'ready',services:{worker:'responsive',database:'ready'},checkedAt:new Date().toISOString(),probeMs:2,
+ version:{application:'1.0.0',releaseTag:null,deploymentId:null}};
+const quality={windowDays:14,since:today,sessions:{total:10,withErrors:3,percent:30},trend:[],
+ overdueInquiries:1,alerts:[{code:'old-inquiries',severity:'review',message:'48시간 이상 미확인 문의 1건이 있습니다.'}],
+ definition:'익명 탭 세션 중 최소 한 번의 오류가 기록된 세션 비율.'};
+function respond(req,res){
+ const url=new URL(req.url,'http://localhost');
+ const json=data=>{res.writeHead(200,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
+ if(url.pathname==='/admin/'){res.writeHead(200,{'content-type':'text/html; charset=utf-8'});res.end(fs.readFileSync(file));return}
+ if(url.pathname==='/api/admin/health'){json(healthy);return}
+ if(url.pathname==='/api/admin/quality'){json(quality);return}
+ if(url.pathname==='/api/admin/overview'){
+  const days=Number(url.searchParams.get('days')||14);requestedDays.push(days);
+  json({since:today,days,visits:{today:2,week:5,total:30},usage:{today:360,total:1200},
+   trend:[],errors:[{feature:'저장',count:2}],inquiries:[{status:'new',count:2}],
+   definitions:'익명 탭 세션 집계'});return;
+ }
+ if(url.pathname==='/api/admin/inquiries'){json({items:[]});return}
+ if(url.pathname==='/api/admin/site-updates'){json({today,announcements:[],releases:[]});return}
+ res.writeHead(404);res.end('Not found');
+}
+async function main(){
+ const server=http.createServer(respond);let browser;
+ try{
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
+  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  const page=await browser.newPage({viewport:{width:1250,height:850}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto('http://127.0.0.1:'+server.address().port+'/admin/',{waitUntil:'load',timeout:30000});
+  await page.waitForFunction(()=>document.querySelector('#qualityPercent')?.textContent==='30.0%',null,{timeout:20000});
+  await page.waitForFunction(()=>document.querySelector('#visitsToday')?.textContent==='2',null,{timeout:20000});
+  assert((await page.locator('#operationAlerts').innerText()).includes('48시간 이상 미확인 문의'));
+  assert((await page.locator('#operationAlerts').innerText()).includes('미확인 문의 2건'));
+  assert.equal(await page.locator('#qualityOverdue').innerText(),'1');
+  assert.equal(await page.locator('#healthRelease').innerText(),'미설정');
+  assert.equal(await page.locator('#visitChart .barwrap').count(),14);
+  await page.locator('#dashboardDays').selectOption('30');
+  await page.waitForFunction(()=>document.querySelectorAll('#visitChart .barwrap').length===30,null,{timeout:15000});
+  await page.locator('#dashboardDays').selectOption('7');
+  await page.waitForFunction(()=>document.querySelectorAll('#visitChart .barwrap').length===7,null,{timeout:15000});
+  assert(requestedDays.includes(14)&&requestedDays.includes(30)&&requestedDays.includes(7));
+  assert.equal(errors.length,0,'Browser errors: '+errors.join(' | '));
+  console.log('PASS: actual Chromium admin dashboard 7/14/30 periods, session quality, overdue inquiry alerts, version fallback');
+ }finally{
+  await browser?.close();
+  await new Promise(resolve=>server.close(resolve));
+ }
+}
+main().catch(e=>{console.error('Admin browser E2E failure',e);process.exitCode=1});
