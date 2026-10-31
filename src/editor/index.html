@@ -1964,6 +1964,7 @@
             actions: [
               { id: "insertText", label: "텍스트 삽입", icon: "fa-font", shortcut: "Ctrl+T", docReq: true },
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
+              { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
               { id: "insertTable", label: "표 삽입", icon: "fa-table", shortcut: "Ctrl+Alt+B", docReq: true },
               { id: "insertPageNumber", label: "페이지 번호 삽입", icon: "fa-list-ol", docReq: true },
               { id: "insertHeaderFooter", label: "머리말/꼬리말", icon: "fa-heading", docReq: true },
@@ -2006,6 +2007,7 @@
               { id: "exportCurrentImage", label: "현재 페이지 이미지 저장", icon: "fa-image", shortcut: "Ctrl+I", docReq: true },
               { id: "exportAllImages", label: "페이지 이미지 일괄 변환", icon: "fa-images", shortcut: "Ctrl+Shift+I", docReq: true },
               { id: "extractEmbeddedImages", label: "내장 이미지 추출", icon: "fa-photo-film", docReq: true },
+              { id: "batchCompress", label: "PDF 여러 파일 압축", icon: "fa-file-zipper" },
             ],
           },
           {
@@ -5125,6 +5127,11 @@
           openCreateFormFieldModal(doc);
           break;
 
+        case "fillFormField":
+          if (!doc) return;
+          await openFillFormFieldModal(doc);
+          break;
+
         case "insertText":
           if (!doc) return;
           openStyledInsertModal(doc, "Text", "텍스트 삽입", "삽입할 텍스트를 입력하세요");
@@ -5191,6 +5198,10 @@
         case "advancedSearch":
           if (!doc) return;
           openSearchModal(doc, cmdId === "advancedSearch");
+          break;
+
+        case "batchCompress":
+          openBatchCompressModal();
           break;
 
         case "imageToPdf":
@@ -5584,6 +5595,55 @@
       const verified = await PDFDocument.load(output, {updateMetadata:false});
       if (verified.getPageCount() !== pdf.getPageCount()) throw new Error("압축 결과의 페이지 수가 일치하지 않습니다.");
       return {bytes:output, originalSize:bytes.length, changed};
+    }
+
+    async function batchCompressPdfs(files, settings, handlers) {
+      if (!files.length || files.length>5 || files.some(file=>!Number.isSafeInteger(file.size)||file.size<0) || files.reduce((sum,file)=>sum+file.size,0)>100*1024*1024)
+        throw new Error('PDF는 최대 5개, 합계 100 MiB 이하로 선택해 주세요.');
+      for(let index=0;index<files.length;index++){
+        if(handlers.cancelled())break;
+        const file=files[index]; handlers.progress(index,files.length,file.name);
+        try {
+          const bytes=await readPdfInputFile(file);
+          const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
+          editablePdfForm(original);
+          const count=original.getPageCount(); if(!count)throw new Error('페이지가 없는 PDF입니다.');
+          const result=await compressPdfImages(bytes,settings);
+          const check=await window.PDFLib.PDFDocument.load(result.bytes,{updateMetadata:false});
+          if(check.getPageCount()!==count)throw new Error('결과의 페이지 수가 일치하지 않습니다.');
+          if(handlers.cancelled())break;
+          handlers.result({index,name:file.name,bytes:result.bytes,originalSize:bytes.byteLength});
+        }catch(error){if(handlers.cancelled())break;handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});}
+      }
+    }
+
+    function openBatchCompressModal() {
+      openModal({title:'PDF 여러 파일 압축',icon:'fa-file-zipper',width:'620px',
+        bodyHtml:`<p>최대 5개, 파일당 50 MiB 및 합계 100 MiB까지 처리합니다. 원본 파일은 변경하지 않습니다.</p>
+        <input id="batchPdfFiles" type="file" accept="application/pdf,.pdf" multiple>
+        <label for="batchStrength">압축 강도 (0: 무손실, 높을수록 이미지 화질 감소)</label><input id="batchStrength" type="number" min="0" max="100" value="0">
+        <p>XFA·서명 관련 PDF는 처리하지 않습니다. 완료한 파일은 각각 내려받을 수 있습니다. 취소하면 처리 중인 파일이 끝난 후 중단합니다.</p>
+        <p id="batchStatus" role="status" aria-live="polite"></p><div id="batchResults"></div>`,
+        footerHtml:`<div></div><div class="modal-footer-right"><button type="button" class="dialog-btn primary" id="batchStart">압축 시작</button><button type="button" class="dialog-btn" id="batchCancel">닫기</button></div>`,
+        onMount:()=>{
+          const get=id=>document.getElementById(id),start=get('batchStart'),cancel=get('batchCancel'),status=get('batchStatus'),results=get('batchResults');
+          let running=false,cancelled=false;
+          cancel.addEventListener('click',()=>{if(running){cancelled=true;cancel.disabled=true;status.textContent='현재 파일 처리 후 중단합니다.';}else closeModal()});
+          start.addEventListener('click',async()=>{
+            const files=Array.from(get('batchPdfFiles').files||[]),strength=Number(get('batchStrength').value);
+            let settings;try{settings=pdfCompressionSettings(strength)}catch(error){status.textContent=error.message;return}
+            results.replaceChildren();running=true;cancelled=false;start.disabled=true;cancel.textContent='작업 취소';get('batchPdfFiles').disabled=true;get('batchStrength').disabled=true;
+            const open=()=>get('modalBackdrop').classList.contains('open')&&get('batchStart')===start;
+            try{
+              await batchCompressPdfs(files,settings,{cancelled:()=>cancelled||!open(),
+                progress:(index,total,name)=>{status.textContent=`${index+1}/${total} 처리 중: ${name}`},
+                result:({name,bytes,originalSize})=>{const row=document.createElement('p'),button=document.createElement('button');button.type='button';button.textContent=`${name} 내려받기 (${(originalSize/1048576).toFixed(2)} → ${(bytes.byteLength/1048576).toFixed(2)} MiB)`;button.addEventListener('click',()=>downloadBytes(bytes,name.replace(/\.pdf$/i,'')+'_compressed.pdf'));row.append(button);results.append(row)},
+                error:({name,message})=>{const row=document.createElement('p');row.textContent=`${name}: ${message}`;results.append(row)}});
+              if(open())status.textContent=cancelled?'작업을 중단했습니다. 완료된 파일은 내려받을 수 있습니다.':'처리가 끝났습니다. 결과를 확인하고 파일별로 내려받으세요.';
+            }catch(error){if(open())status.textContent=error.message||'일괄 압축을 시작하지 못했습니다.';}
+            finally{running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';get('batchPdfFiles')&&(get('batchPdfFiles').disabled=false);get('batchStrength')&&(get('batchStrength').disabled=false)}
+          });
+        }});
     }
 
     function openSaveAsModal(doc, compress = false) {
@@ -6408,21 +6468,27 @@
     // =========================================================================
     // Content & Annotation Modals
     // =========================================================================
-    async function createPdfFormField(bytes, spec) {
-      const {PDFDocument, PDFName, PDFDict, PDFSignature} = window.PDFLib;
-      if (!/^[^\.\x00-\x1f]{1,80}$/.test(spec.name) || !spec.name.trim() || spec.name !== spec.name.trim()) throw new Error("필드 이름은 1~80자이며 앞뒤 공백과 마침표를 사용할 수 없습니다.");
-      if (!['text','date','checkbox'].includes(spec.kind) || !Number.isSafeInteger(spec.page)) throw new Error("필드 종류 또는 페이지가 올바르지 않습니다.");
-      if (typeof spec.value !== 'string' || spec.value.length > 1000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(spec.value)) throw new Error("초기 입력값이 올바르지 않습니다.");
-      if (spec.kind === 'date' && spec.value && (!/^\d{4}-\d{2}-\d{2}$/.test(spec.value) || Number.isNaN(Date.parse(spec.value+'T00:00:00Z')) || new Date(spec.value+'T00:00:00Z').toISOString().slice(0,10) !== spec.value)) throw new Error("날짜는 YYYY-MM-DD 형식의 실제 날짜로 입력하세요.");
-      const pdf = await PDFDocument.load(bytes);
+    function editablePdfForm(pdf) {
+      const {PDFName, PDFDict, PDFSignature}=window.PDFLib;
       const n=PDFName.of, acroRef=pdf.catalog.get(n('AcroForm'));
       if (pdf.catalog.get(n('Perms'))) throw new Error("서명 또는 문서 권한이 있는 PDF는 양식을 변경할 수 없습니다.");
       if (acroRef) {
         const acro=pdf.context.lookup(acroRef);
         if (!(acro instanceof PDFDict) || acro.get(n('XFA')) || acro.get(n('SigFlags'))) throw new Error("XFA 또는 서명 관련 양식은 지원하지 않습니다.");
       }
-      const form=pdf.getForm(), existing=form.getFields();
-      if (existing.some(field=>field instanceof PDFSignature)) throw new Error("서명 필드가 있는 PDF는 변경할 수 없습니다.");
+      const form=pdf.getForm();
+      if (form.getFields().some(field=>field instanceof PDFSignature)) throw new Error("서명 필드가 있는 PDF는 변경할 수 없습니다.");
+      return form;
+    }
+
+    async function createPdfFormField(bytes, spec) {
+      const {PDFDocument} = window.PDFLib;
+      if (!/^[^\.\x00-\x1f]{1,80}$/.test(spec.name) || !spec.name.trim() || spec.name !== spec.name.trim()) throw new Error("필드 이름은 1~80자이며 앞뒤 공백과 마침표를 사용할 수 없습니다.");
+      if (!['text','date','checkbox'].includes(spec.kind) || !Number.isSafeInteger(spec.page)) throw new Error("필드 종류 또는 페이지가 올바르지 않습니다.");
+      if (typeof spec.value !== 'string' || spec.value.length > 1000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(spec.value)) throw new Error("초기 입력값이 올바르지 않습니다.");
+      if (spec.kind === 'date' && spec.value && (!/^\d{4}-\d{2}-\d{2}$/.test(spec.value) || Number.isNaN(Date.parse(spec.value+'T00:00:00Z')) || new Date(spec.value+'T00:00:00Z').toISOString().slice(0,10) !== spec.value)) throw new Error("날짜는 YYYY-MM-DD 형식의 실제 날짜로 입력하세요.");
+      const pdf = await PDFDocument.load(bytes);
+      const form=editablePdfForm(pdf), existing=form.getFields();
       if (existing.some(field=>field.getName()===spec.name)) throw new Error("같은 이름의 양식 필드가 이미 있습니다.");
       if (spec.page < 0 || spec.page >= pdf.getPageCount()) throw new Error("페이지 번호를 확인해 주세요.");
       const page=pdf.getPage(spec.page), box=page.getCropBox(), rotation=((page.getRotation().angle%360)+360)%360;
@@ -6442,6 +6508,63 @@
         field.updateAppearances(font);
       }
       return pdf.save({updateFieldAppearances:false});
+    }
+
+    async function updatePdfFormField(bytes, name, value) {
+      const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
+      if(typeof name!=='string' || name.length>512)throw new Error('필드 이름이 올바르지 않습니다.');
+      const pdf=await PDFDocument.load(bytes), form=editablePdfForm(pdf);
+      const field=form.getFields().find(item=>item.getName()===name);
+      if(!field)throw new Error('필드를 찾을 수 없습니다.');
+      if(field.isReadOnly())throw new Error('읽기 전용 필드는 수정할 수 없습니다.');
+      if(field instanceof PDFTextField){
+        if(field.isRichFormatted() || field.isPassword() || field.isFileSelector())throw new Error('서식 있는 텍스트, 비밀번호 및 파일 선택 필드는 지원하지 않습니다.');
+        if(typeof value!=='string' || value.length>1000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(value))throw new Error('입력값을 확인해 주세요.');
+        field.setText(value);
+        const font=await window.SunriseKoreanFont.embed(pdf,[value||' ']);
+        field.updateAppearances(font);
+      }else if(field instanceof PDFCheckBox){
+        if(typeof value!=='boolean')throw new Error('체크박스 상태를 확인해 주세요.');
+        if(value)field.check();else field.uncheck();field.updateAppearances();
+      }else throw new Error('이 종류의 양식 필드는 아직 수정할 수 없습니다.');
+      return pdf.save({updateFieldAppearances:false});
+    }
+
+    async function openFillFormFieldModal(doc) {
+      if(doc.operationBusy)return;
+      const captured=captureSaveState(doc),{PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
+      let fields;
+      try{
+        const pdf=await PDFDocument.load(captured.snapshot.bytes),form=editablePdfForm(pdf);
+        fields=form.getFields().filter(field=>(field instanceof PDFTextField && !field.isRichFormatted() && !field.isPassword() && !field.isFileSelector()) || field instanceof PDFCheckBox).map(field=>({name:field.getName(),kind:field instanceof PDFTextField?'text':'checkbox',readOnly:field.isReadOnly(),value:field instanceof PDFTextField?(field.getText()||''):field.isChecked()}));
+        if(activeDoc()!==doc || !saveStateIsCurrent(doc,captured))throw new Error('문서가 변경되어 작업을 취소했습니다.');
+      }catch(error){showToast(error.message||'양식 필드를 읽지 못했습니다.','fa-circle-exclamation');return;}
+      if(!fields.length){showToast('수정 가능한 텍스트 또는 체크박스 필드가 없습니다.','fa-circle-info');return;}
+      openModal({title:'PDF 양식 입력값 수정',icon:'fa-pen-to-square',width:'540px',
+        bodyHtml:`<p>텍스트 입력칸과 체크박스를 수정할 수 있습니다. 읽기 전용 항목은 수정할 수 없습니다.</p><div class="dialog-form-grid">
+        <label for="fillFieldSelect">양식 필드</label><select id="fillFieldSelect" class="dialog-select"></select>
+        <label for="fillFieldText">텍스트 값</label><input id="fillFieldText" class="dialog-input" maxlength="1000">
+        <label for="fillFieldCheck">체크 상태</label><input id="fillFieldCheck" type="checkbox"></div><p id="fillFieldStatus" role="status" aria-live="polite"></p>`,
+        footerHtml:`<div></div><div class="modal-footer-right"><button type="button" class="dialog-btn primary" id="fillFieldApply">적용</button><button type="button" class="dialog-btn" id="fillFieldCancel">취소</button></div>`,
+        onMount:()=>{
+          const get=id=>document.getElementById(id),select=get('fillFieldSelect'),button=get('fillFieldApply'),status=get('fillFieldStatus');
+          fields.forEach((field,index)=>{const option=document.createElement('option');option.value=String(index);option.textContent=field.name+(field.readOnly?' (읽기 전용)':'');select.append(option)});
+          const sync=()=>{const field=fields[Number(select.value)];get('fillFieldText').disabled=field.kind!=='text'||field.readOnly;get('fillFieldCheck').disabled=field.kind!=='checkbox'||field.readOnly;get('fillFieldText').value=field.kind==='text'?field.value:'';get('fillFieldCheck').checked=field.kind==='checkbox'&&field.value;button.disabled=field.readOnly;status.textContent=field.readOnly?'읽기 전용 필드입니다.':''};
+          select.addEventListener('change',sync);sync();get('fillFieldCancel').addEventListener('click',closeModal);
+          button.addEventListener('click',async()=>{
+            if(doc.operationBusy || activeDoc()!==doc || !saveStateIsCurrent(doc,captured)){status.textContent='문서가 변경되어 다시 열어야 합니다.';return;}
+            const field=fields[Number(select.value)],value=field.kind==='text'?get('fillFieldText').value:get('fillFieldCheck').checked;
+            doc.operationBusy=true;button.disabled=true;status.textContent='입력값을 적용하고 있습니다.';let info;
+            try{
+              const nextBytes=await updatePdfFormField(captured.snapshot.bytes,field.name,value);
+              info=await parsePageCountAndMeta(nextBytes);
+              if(!get('modalBackdrop').classList.contains('open') || get('fillFieldApply')!==button || activeDoc()!==doc || !saveStateIsCurrent(doc,captured))throw new Error('창이 닫히거나 문서가 변경되어 작업을 취소했습니다.');
+              saveUndoSnapshot(doc,'PDF 양식 입력값 수정');doc.bytes=nextBytes;await reloadDocPdfJs(doc,{info});info=null;
+              closeModal();await refreshAllViews();showToast('양식 값을 적용했습니다. PDF를 저장해 주세요.','fa-square-check');
+            }catch(error){if(info?.pdfJsDoc && doc.pdfJsDoc!==info.pdfJsDoc)await info.pdfJsDoc.destroy();console.warn('Unable to update PDF form field',error);status.textContent=error.message||'양식 값을 적용하지 못했습니다.';}
+            finally{doc.operationBusy=false;button.disabled=field.readOnly;}
+          });
+        }});
     }
 
     function openCreateFormFieldModal(doc) {
