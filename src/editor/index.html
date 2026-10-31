@@ -1963,6 +1963,7 @@
             title: "콘텐츠 삽입",
             actions: [
               { id: "insertText", label: "텍스트 삽입", icon: "fa-font", shortcut: "Ctrl+T", docReq: true },
+              { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "insertTable", label: "표 삽입", icon: "fa-table", shortcut: "Ctrl+Alt+B", docReq: true },
               { id: "insertPageNumber", label: "페이지 번호 삽입", icon: "fa-list-ol", docReq: true },
               { id: "insertHeaderFooter", label: "머리말/꼬리말", icon: "fa-heading", docReq: true },
@@ -5119,6 +5120,11 @@
           await rotateSelectedPages(doc, -90);
           break;
 
+        case "createFormField":
+          if (!doc) return;
+          openCreateFormFieldModal(doc);
+          break;
+
         case "insertText":
           if (!doc) return;
           openStyledInsertModal(doc, "Text", "텍스트 삽입", "삽입할 텍스트를 입력하세요");
@@ -6402,6 +6408,81 @@
     // =========================================================================
     // Content & Annotation Modals
     // =========================================================================
+    async function createPdfFormField(bytes, spec) {
+      const {PDFDocument, PDFName, PDFDict, PDFSignature} = window.PDFLib;
+      if (!/^[^\.\x00-\x1f]{1,80}$/.test(spec.name) || !spec.name.trim() || spec.name !== spec.name.trim()) throw new Error("필드 이름은 1~80자이며 앞뒤 공백과 마침표를 사용할 수 없습니다.");
+      if (!['text','date','checkbox'].includes(spec.kind) || !Number.isSafeInteger(spec.page)) throw new Error("필드 종류 또는 페이지가 올바르지 않습니다.");
+      if (typeof spec.value !== 'string' || spec.value.length > 1000 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(spec.value)) throw new Error("초기 입력값이 올바르지 않습니다.");
+      if (spec.kind === 'date' && spec.value && (!/^\d{4}-\d{2}-\d{2}$/.test(spec.value) || Number.isNaN(Date.parse(spec.value+'T00:00:00Z')) || new Date(spec.value+'T00:00:00Z').toISOString().slice(0,10) !== spec.value)) throw new Error("날짜는 YYYY-MM-DD 형식의 실제 날짜로 입력하세요.");
+      const pdf = await PDFDocument.load(bytes);
+      const n=PDFName.of, acroRef=pdf.catalog.get(n('AcroForm'));
+      if (pdf.catalog.get(n('Perms'))) throw new Error("서명 또는 문서 권한이 있는 PDF는 양식을 변경할 수 없습니다.");
+      if (acroRef) {
+        const acro=pdf.context.lookup(acroRef);
+        if (!(acro instanceof PDFDict) || acro.get(n('XFA')) || acro.get(n('SigFlags'))) throw new Error("XFA 또는 서명 관련 양식은 지원하지 않습니다.");
+      }
+      const form=pdf.getForm(), existing=form.getFields();
+      if (existing.some(field=>field instanceof PDFSignature)) throw new Error("서명 필드가 있는 PDF는 변경할 수 없습니다.");
+      if (existing.some(field=>field.getName()===spec.name)) throw new Error("같은 이름의 양식 필드가 이미 있습니다.");
+      if (spec.page < 0 || spec.page >= pdf.getPageCount()) throw new Error("페이지 번호를 확인해 주세요.");
+      const page=pdf.getPage(spec.page), box=page.getCropBox(), rotation=((page.getRotation().angle%360)+360)%360;
+      if(rotation!==0) throw new Error("회전된 페이지에는 입력칸을 만들 수 없습니다. 회전을 해제한 후 다시 시도해 주세요.");
+      const {x,y,width,height}=spec;
+      if (![x,y,width,height].every(Number.isFinite) || x<0 || y<0 || width<10 || height<10 || x+width>box.width || y+height>box.height) throw new Error("위치와 크기가 페이지 범위에 맞지 않습니다.");
+      const options={x:box.x+x,y:box.y+y,width,height,borderWidth:1};
+      if(spec.kind==='checkbox') {
+        const field=form.createCheckBox(spec.name); field.addToPage(page,options);
+        if(spec.checked)field.check(); else field.uncheck();
+        if(spec.readOnly)field.enableReadOnly();
+        field.updateAppearances();
+      } else {
+        const field=form.createTextField(spec.name); field.addToPage(page,options);
+        field.setText(spec.value); if(spec.readOnly)field.enableReadOnly();
+        const font=await window.SunriseKoreanFont.embed(pdf,[spec.value || ' ']);
+        field.updateAppearances(font);
+      }
+      return pdf.save({updateFieldAppearances:false});
+    }
+
+    function openCreateFormFieldModal(doc) {
+      const pageIndex=doc.currentPage;
+      openModal({title:'PDF 양식 입력칸 만들기',icon:'fa-square-check',width:'540px',
+        bodyHtml:`<p>현재 ${pageIndex+1}쪽에 PDF 표준 입력칸을 만듭니다. 위치는 페이지 왼쪽 아래를 기준으로 pt 단위로 입력합니다.</p>
+        <div class="dialog-form-grid">
+        <label for="formFieldName">필드 이름</label><input id="formFieldName" class="dialog-input" maxlength="80" placeholder="예: 신청자">
+        <label for="formFieldKind">종류</label><select id="formFieldKind" class="dialog-select"><option value="text">텍스트</option><option value="date">날짜 (텍스트)</option><option value="checkbox">체크박스</option></select>
+        <label for="formFieldValue">초기값</label><input id="formFieldValue" class="dialog-input" maxlength="1000" placeholder="날짜: YYYY-MM-DD">
+        <label for="formFieldX">왼쪽 위치 X (pt)</label><input id="formFieldX" class="dialog-input" type="number" min="0" value="50">
+        <label for="formFieldY">아래쪽 위치 Y (pt)</label><input id="formFieldY" class="dialog-input" type="number" min="0" value="50">
+        <label for="formFieldWidth">너비 (pt)</label><input id="formFieldWidth" class="dialog-input" type="number" min="10" value="180">
+        <label for="formFieldHeight">높이 (pt)</label><input id="formFieldHeight" class="dialog-input" type="number" min="10" value="24">
+        <label for="formFieldChecked">체크박스 초기 선택</label><input id="formFieldChecked" type="checkbox">
+        <label for="formFieldReadOnly">읽기 전용</label><input id="formFieldReadOnly" type="checkbox"></div>
+        <p>날짜는 날짜 선택기가 아닌 텍스트 필드로 저장됩니다. 필드 입력은 저장한 PDF를 호환 뷰어에서 열어 진행하세요.</p><p id="formFieldStatus" role="status" aria-live="polite"></p>`,
+        footerHtml:`<div></div><div class="modal-footer-right"><button type="button" class="dialog-btn primary" id="formFieldCreate">만들기</button><button type="button" class="dialog-btn" id="formFieldCancel">취소</button></div>`,
+        onMount:()=>{
+          document.getElementById('formFieldCancel').addEventListener('click',closeModal);
+          document.getElementById('formFieldCreate').addEventListener('click',async()=>{
+            if(doc.operationBusy || activeDoc()!==doc || doc.currentPage!==pageIndex) return;
+            const get=id=>document.getElementById(id), button=get('formFieldCreate'), status=get('formFieldStatus');
+            const spec={page:pageIndex,name:get('formFieldName').value,kind:get('formFieldKind').value,value:get('formFieldValue').value,
+              x:Number(get('formFieldX').value),y:Number(get('formFieldY').value),width:Number(get('formFieldWidth').value),height:Number(get('formFieldHeight').value),checked:get('formFieldChecked').checked,readOnly:get('formFieldReadOnly').checked};
+            const captured=captureSaveState(doc); doc.operationBusy=true; button.disabled=true; status.textContent='입력칸을 만들고 있습니다.'; let info;
+            try {
+              const nextBytes=await createPdfFormField(captured.snapshot.bytes,spec);
+              info=await parsePageCountAndMeta(nextBytes);
+              if(!document.getElementById('modalBackdrop').classList.contains('open') || document.getElementById('formFieldCreate')!==button || activeDoc()!==doc || doc.currentPage!==pageIndex || !saveStateIsCurrent(doc,captured)) throw new Error('창이 닫히거나 문서가 변경되어 작업을 취소했습니다.');
+              saveUndoSnapshot(doc,'PDF 양식 입력칸 만들기'); doc.bytes=nextBytes;
+              await reloadDocPdfJs(doc,{info,selection:[pageIndex]}); info=null;
+              closeModal(); await refreshAllViews(); showToast('입력칸을 만들었습니다. PDF를 저장해 주세요.','fa-square-check');
+            } catch(error) {
+              if(info?.pdfJsDoc && doc.pdfJsDoc!==info.pdfJsDoc) await info.pdfJsDoc.destroy();
+              console.warn('Unable to create PDF form field',error); status.textContent=error.message || '입력칸을 만들지 못했습니다.';
+            } finally { doc.operationBusy=false; button.disabled=false; }
+          });
+        }});
+    }
+
     function openStyledInsertModal(doc, type, title, defaultText) {
       const defaults = {
         Text: { color: "#1B2631", bg: "transparent", size: 14, x: 72, y: 120 },
