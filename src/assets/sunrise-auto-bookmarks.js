@@ -25,33 +25,39 @@
   return rows.map(r=>({text:tidy(r.parts.sort((a,b)=>a.x-b.x).map(p=>p.text).join(' ')),size:r.size,y:r.y}))
    .filter(r=>r.text).sort((a,b)=>b.y-a.y);
  }
- function chooseHeading(items){
+ function headingCandidates(items){
   const lines=getLines(items);
-  if(!lines.length)return null;
+  if(!lines.length)return [];
   const sizes=lines.map(x=>x.size).sort((a,b)=>a-b);
   const median=sizes[Math.floor(sizes.length/2)];
   const maxY=lines[0].y,minY=lines[lines.length-1].y;
   // Inspect upper 42% of the actual text region, not page footer/body.
   const limit=maxY-Math.max(30,(maxY-minY)*.42);
+  const matches=[];
   for(const row of lines){
    if(row.y<limit)break;
    const title=row.text;
    if(title.length<4||title.length>100||nonTitle.test(title))continue;
    const strong=row.size>=Math.max(11,median*1.2);
    const numberedTitle=numbered.test(title)&&row.size>=median*.85;
-   if(strong||numberedTitle)return title;
+   if(strong||numberedTitle){matches.push(title);if(matches.length>=4)break;}
   }
-  return null;
+  return matches;
  }
+ function chooseHeading(items){return headingCandidates(items)[0]||null;}
  function suggestBookmarks(pageRecords,maxItems=100){
   if(!Array.isArray(pageRecords))throw Error('페이지 배열이 올바르지 않습니다.');
   const limit=Math.max(1,Math.min(100,Number.isInteger(maxItems)?maxItems:100));
-  const candidates=pageRecords.map((p,i)=>({title:chooseHeading(p?.items),page:Number.isInteger(p?.pageIndex)?p.pageIndex:i}))
-   .filter(x=>x.title&&Number.isInteger(x.page)&&x.page>=0);
+  const candidates=pageRecords.map((p,i)=>({titles:headingCandidates(p?.items),page:Number.isInteger(p?.pageIndex)?p.pageIndex:i}))
+   .filter(x=>x.titles.length&&Number.isInteger(x.page)&&x.page>=0);
   const frequency=new Map();
-  for(const x of candidates){const key=x.title.toLocaleLowerCase();frequency.set(key,(frequency.get(key)||0)+1);}
-  // Running headers are often repeated identically on every page; do not bookmark them.
-  return candidates.filter(x=>frequency.get(x.title.toLocaleLowerCase())===1).slice(0,limit);
+  for(const x of candidates)for(const title of new Set(x.titles)){
+   const key=title.toLocaleLowerCase();frequency.set(key,(frequency.get(key)||0)+1);
+  }
+  // If a repeated running header precedes the real section heading, skip
+  // the repeated text and select the first unique heading on that page.
+  return candidates.map(x=>({title:x.titles.find(t=>frequency.get(t.toLocaleLowerCase())===1),page:x.page}))
+   .filter(x=>x.title).slice(0,limit);
  }
  return {chooseHeading,suggestBookmarks,getLines};
 });
