@@ -2023,6 +2023,7 @@
           {
             title: "검토 진단",
             actions: [
+              { id: "checkSavedPdf", label: "저장 PDF 제출 전 확인", icon: "fa-clipboard-check" },
               { id: "comparePdf", label: "PDF 기본 정보 비교", icon: "fa-scale-balanced", shortcut: "Ctrl+Alt+V", docReq: true },
               { id: "visualCompare", label: "페이지별 이미지 비교", icon: "fa-clone", docReq: true },
               { id: "reviewOpinionTable", label: "검토 의견표 자동 생성", icon: "fa-clipboard-list", docReq: true },
@@ -2109,6 +2110,56 @@
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+    }
+
+    async function inspectSavedPdf(bytes) {
+      if (!window.PDFLib) throw new Error("PDF 검사 엔진을 불러오지 못했습니다.");
+      validatePdfByteLength(bytes.byteLength);
+      const pdf = await window.PDFLib.PDFDocument.load(bytes);
+      const pages = pdf.getPages();
+      if (!pages.length) throw new Error("페이지가 없는 PDF입니다.");
+      const orientation = { portrait: 0, landscape: 0, square: 0 };
+      for (const page of pages) {
+        const box = page.getCropBox();
+        let { width, height } = box;
+        const rotation = ((page.getRotation().angle % 360) + 360) % 360;
+        if (![0, 90, 180, 270].includes(rotation) || width <= 0 || height <= 0) throw new Error("확인할 수 없는 페이지 크기 또는 회전값입니다.");
+        if (rotation === 90 || rotation === 270) [width, height] = [height, width];
+        if (Math.abs(width - height) < 0.01) orientation.square++;
+        else orientation[width > height ? "landscape" : "portrait"]++;
+      }
+      return { bytes: bytes.byteLength, pageCount: pages.length, orientation };
+    }
+
+    function openSavedPdfCheckModal() {
+      openModal({
+        title: "저장 PDF 제출 전 확인", icon: "fa-clipboard-check",
+        bodyHtml: `<p>저장한 PDF 파일을 선택하면 파일 크기와 페이지 방향을 확인합니다. 파일은 브라우저에서만 처리됩니다.</p>
+          <input type="file" id="savedPdfCheckInput" accept="application/pdf,.pdf">
+          <p id="savedPdfCheckStatus" role="status" aria-live="polite">검사할 파일을 선택하세요.</p>
+          <p>빈 페이지, 글꼴 누락, 내용의 정확성, 양식·서명 유효성은 검사하지 않습니다. 실제 문서를 직접 확인하세요.</p>`,
+        onMount: () => {
+          const input = document.getElementById("savedPdfCheckInput");
+          const status = document.getElementById("savedPdfCheckStatus");
+          let request = 0;
+          input.addEventListener("change", async () => {
+            const current = ++request, file = input.files?.[0];
+            if (!file) { status.textContent = "검사할 파일을 선택하세요."; return; }
+            status.textContent = "검사 중입니다…";
+            try {
+              validatePdfByteLength(file.size);
+              const result = await inspectSavedPdf(await file.arrayBuffer());
+              if (current !== request) return;
+              const o = result.orientation;
+              status.textContent = `검사 완료: ${(result.bytes / 1048576).toFixed(2)} MiB, ${result.pageCount}쪽. 세로 ${o.portrait}쪽, 가로 ${o.landscape}쪽, 정사각형 ${o.square}쪽.`;
+            } catch (error) {
+              if (current !== request) return;
+              console.error("저장 PDF 검사 실패", error);
+              status.textContent = "검사하지 못했습니다. 파일 형식, 암호 설정 및 크기를 확인하세요.";
+            }
+          });
+        },
+      });
     }
 
     function openModal({ title, icon = "fa-layer-group", width = "640px", bodyHtml, footerHtml, onMount }) {
@@ -5198,6 +5249,10 @@
 
         case "tocPageBookmarks":
           showToast("목차 페이지를 분석해 PDF 북마크를 만드는 기능은 아직 지원하지 않습니다.", "fa-circle-info");
+          break;
+
+        case "checkSavedPdf":
+          openSavedPdfCheckModal();
           break;
 
         case "comparePdf":
