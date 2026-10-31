@@ -2,6 +2,7 @@
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
 import {readDeploymentReports} from './admin-deployments.mjs';
 import {recordOperation,operationSummary} from './operation-metrics.mjs';
+import {adminReadiness} from './admin-readiness.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
@@ -26,14 +27,17 @@ export async function telemetry(request,env,url){
     if(data.type==='operation'){
       if(!await recordOperation(db,data,today))return response({error:'Invalid operation'},400);
     }else if(data.type==='visit'){
-      const result=await db.prepare('INSERT OR IGNORE INTO analytics_sessions(day,session_id,last_pulse_ms) VALUES (?,?,?)').bind(today,data.session,now).run();
-      if(result.meta?.changes){
-        await db.prepare('INSERT INTO analytics_daily(day,visits) VALUES (?,1) ON CONFLICT(day) DO UPDATE SET visits=visits+1').bind(today).run();
-      }
+      const previous=await db.prepare("SELECT 1 found FROM analytics_sessions WHERE session_id=? AND day BETWEEN date(?,'-13 days') AND date(?,'-1 day') LIMIT 1").bind(data.session,today,today).first();
+      await db.batch([
+        db.prepare('INSERT OR IGNORE INTO analytics_sessions(day,session_id,last_pulse_ms) VALUES (?,?,?)').bind(today,data.session,now),
+        db.prepare('INSERT INTO analytics_daily(day,visits,returning_visits) SELECT ?,1,? WHERE changes()>0 ON CONFLICT(day) DO UPDATE SET visits=visits+1,returning_visits=returning_visits+excluded.returning_visits').bind(today,previous?1:0)
+      ]);
     } else if(data.type==='pulse'){
       if(data.area!=='editor'||!Number.isInteger(data.seconds)||data.seconds<1||data.seconds>15)return response({error:'Invalid duration'},400);
-      const accepted=await db.prepare('UPDATE analytics_sessions SET last_pulse_ms=? WHERE day=? AND session_id=? AND last_pulse_ms<=? RETURNING session_id').bind(now,today,data.session,now-8000).first();
-      if(accepted)await db.prepare('INSERT INTO analytics_daily(day,editor_seconds) VALUES (?,?) ON CONFLICT(day) DO UPDATE SET editor_seconds=editor_seconds+excluded.editor_seconds').bind(today,data.seconds).run();
+      await db.batch([
+        db.prepare('UPDATE analytics_sessions SET last_pulse_ms=?,active_seconds=active_seconds+? WHERE day=? AND session_id=? AND last_pulse_ms<=?').bind(now,data.seconds,today,data.session,now-8000),
+        db.prepare('INSERT INTO analytics_daily(day,editor_seconds) SELECT ?,? WHERE changes()>0 ON CONFLICT(day) DO UPDATE SET editor_seconds=editor_seconds+excluded.editor_seconds').bind(today,data.seconds)
+      ]);
     } else if(data.type==='save_operation'){
       const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
       if(!uuid(data.operationId)||!['started','ready','failed','cancelled'].includes(data.stage)||(data.retryOf!=null&&(!uuid(data.retryOf)||data.retryOf===data.operationId||data.stage!=='started')))return response({error:'Invalid operation'},400);
@@ -65,6 +69,14 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/security-events'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{const result=await db.prepare('SELECT kind,happened_ms FROM admin_security_events ORDER BY happened_ms DESC,id DESC LIMIT 30').all();return response({items:result.results||[],retentionDays:30})}catch{return response({error:'Security history unavailable'},503)}
+  }
+  if(path==='/api/admin/readiness'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{return response(await adminReadiness(env))}catch{return response({error:'Readiness unavailable'},503)}
+  }
   if(path==='/api/admin/retention'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     const now=Date.now(),cutoff=new Date(now-90*86400000).toISOString();
@@ -75,6 +87,19 @@ export async function adminApi(request,env,url,identity){
     return response({checkedAt:new Date(now).toISOString(),policy:{inquiriesDays:90,sessionDays:14,deploymentReportDays:90},pending:{inquiries:Number(inquiries?.count||0),sessions:Number(sessions?.count||0)},backup:'operator-managed',lastCleanup:null});
   }
   if(path==='/api/admin/deployments')return readDeploymentReports(request,env);
+  if(path==='/api/admin/session-usage'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{
+      const [usage,visits]=await Promise.all([
+        db.prepare("SELECT COUNT(*) sessions,COALESCE(SUM(active_seconds),0) seconds FROM analytics_sessions WHERE active_seconds>0 AND day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first(),
+        db.prepare("SELECT COALESCE(SUM(visits),0) visits,COALESCE(SUM(returning_visits),0) returning FROM analytics_daily WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first()
+      ]);
+      const count=value=>{const n=Number(value||0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid count');return n};
+      const sessions=count(usage?.sessions),seconds=count(usage?.seconds),total=count(visits?.visits),returning=count(visits?.returning);
+      if(returning>total)throw Error('Inconsistent count');
+      return response({windowDays:14,editorSessions:sessions,seconds,averageSeconds:sessions?Math.round(seconds/sessions):null,visits:total,returningTabDays:returning,idleSeconds:120});
+    }catch{return response({error:'Session usage unavailable'},503)}
+  }
   if(path==='/api/admin/operations'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     try{return response(await operationSummary(db,today))}catch{return response({error:'Operation statistics unavailable'},503)}

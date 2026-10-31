@@ -1,6 +1,7 @@
 // Password-only, single-admin authentication for Sunrise PDF Editor.
 // Cloudflare Access is not required. Fail closed until an operator configures
 // a high-entropy ADMIN_BOOTSTRAP_TOKEN secret and registers the first account.
+import {securityEvent} from './admin-security-log.mjs';
 const COOKIE='__Host-sunrise_pdf_admin';
 const ITERATIONS=600000, ABS_MS=8*60*60*1000, IDLE_MS=30*60*1000;
 const LIMIT_WINDOW_MS=15*60*1000;
@@ -95,6 +96,7 @@ export async function authRoutes(request,env,url){
  if(path==='/api/auth/logout-all'){
   if(!await getAdminSession(request,env))return json({error:'관리자 로그인이 필요합니다.'},401);
   await db.prepare('DELETE FROM admin_sessions WHERE admin_id=1').run();
+  await securityEvent(db,'sessions_revoked');
   return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
  }
  if(path==='/api/auth/logout'){
@@ -128,6 +130,7 @@ export async function authRoutes(request,env,url){
    .bind(SCHEME+data.newSalt,newVerifier,ITERATIONS,account.password_hash).run();
   if(updated.meta?.changes!==1)return json({error:'다른 비밀번호 변경 요청이 처리되었습니다. 다시 로그인하세요.'},409);
   await db.prepare('DELETE FROM admin_sessions WHERE admin_id=1').run();
+  await securityEvent(db,'password_changed');
   return json({ok:true,message:'비밀번호가 변경됐습니다. 모든 관리자 세션이 종료됩니다.'},200,{'set-cookie':sessionCookie('',0)});
  }
  if(path==='/api/auth/setup'){
@@ -154,13 +157,15 @@ export async function authRoutes(request,env,url){
  // A legacy server-side PBKDF2 record must be migrated, never silently weakened.
  if(typeof account.password_salt!=='string'||!account.password_salt.startsWith(SCHEME))return json({error:'기존 인증 기록을 관리자가 점검해야 합니다.'},503);
  const salt=account.password_salt.slice(SCHEME.length);
- if(!isHex(data.passwordProof,64))return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401);
+ if(!isHex(data.passwordProof,64)){await securityEvent(db,'login_failed');return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401)}
  const verifier=await passwordVerifier(data.passwordProof,salt,env);
  if(typeof data.username!=='string'||data.username!==account.username||!equalDigest(verifier,account.password_hash)){
+  await securityEvent(db,'login_failed');
   return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401);
  }
  const token=randomHex(32),now=Date.now();
  await db.prepare('INSERT INTO admin_sessions(token_hash,admin_id,created_ms,last_seen_ms,expires_ms) VALUES (?,?,?,?,?)')
   .bind(await digest(token),account.id,now,now,now+ABS_MS).run();
+ await securityEvent(db,'login_succeeded');
  return json({ok:true},200,{'set-cookie':sessionCookie(token,ABS_MS/1000)});
 }

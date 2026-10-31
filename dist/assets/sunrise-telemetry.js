@@ -27,7 +27,8 @@
  }
  ensureVisit();
  if(area!=='editor')return;
- let last=performance.now(),lastFeature='기타',lastErrorAt=0;
+ let last=performance.now(),lastInteraction=performance.now(),lastFeature='기타',lastErrorAt=0;
+ for(const name of ['pointerdown','keydown','wheel','touchstart'])document.addEventListener(name,()=>{lastInteraction=performance.now()},{capture:true,passive:true});
  const classify=s=>{
    s=String(s||'').toLowerCase().slice(0,100);
    if(/compress|압축/.test(s))return '압축';
@@ -83,7 +84,7 @@
  };
  let operationQueue=Promise.resolve();
  window.sunriseTelemetryOperationStart=feature=>{
-   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge'].includes(feature))return ()=>{};
+   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete'].includes(feature))return ()=>{};
    let id;try{id=crypto.randomUUID()}catch{return ()=>{}};
    let recorded=false,ended=false;
    operationQueue=operationQueue.then(async()=>{if(await ensureVisit())recorded=await send('operation',{operationId:id,feature,stage:'started'})}).catch(()=>{});
@@ -95,7 +96,7 @@
  let pulsePending=false;
  setInterval(async()=>{
    const now=performance.now(),diff=(now-last)/1000;last=now;
-   if(document.visibilityState==='visible'&&document.hasFocus()&&diff>=8&&diff<=30&&!pulsePending){
+   if(document.visibilityState==='visible'&&document.hasFocus()&&now-lastInteraction<=120000&&diff>=8&&diff<=30&&!pulsePending){
      pulsePending=true;
      try{if(await ensureVisit())await send('pulse',{area:'editor',seconds:Math.min(15,Math.round(diff))});}
      finally{pulsePending=false;}

@@ -101,5 +101,7 @@ export default {
     // Deployment reports have no user content; retain 90 days for operations.
     try{await env.DB.prepare("DELETE FROM operation_deployments WHERE reported_ms<?").bind(Date.now()-90*86400000).run()}
     catch{console.error('Deployment history retention unavailable')}
+    try{await env.DB.prepare('DELETE FROM admin_security_events WHERE happened_ms<?').bind(Date.now()-30*86400000).run()}
+    catch{console.error('Security history retention unavailable')}
   }
 };

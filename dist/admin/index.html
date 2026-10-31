@@ -48,6 +48,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <main class="wrap">
 <p class="sub">한국시간(KST) 기준 · 방문자는 실제 사람 수가 아닌 익명 브라우저 탭 세션 수입니다. 집계 시작 이전 기록은 포함되지 않습니다.</p>
 <p id="state" role="status" class="notice">관리자 인증과 통계 데이터를 확인하고 있습니다.</p>
+<section class="panel"><div class="toolbar"><h2>운영 연결 준비 항목</h2><button type="button" id="readinessReload">설정 조회</button></div><p id="readinessStatus" role="status">준비 항목을 불러오는 중입니다.</p><p class="muted">스키마 기본 구조와 설정 유무만 조회합니다. 기능 검증·백업·공개 준비 완료를 뜻하지 않습니다.</p></section>
 <section class="operations" aria-label="서비스 운영 점검">
 <div class="panel"><div class="toolbar"><h2 style="margin:0">서비스 상태 · Worker 버전</h2><button type="button" id="healthReload">상태 새로고침</button></div>
 <div class="operation-line"><strong>Worker 응답</strong><span id="healthWorker">확인 중</span></div>
@@ -65,6 +66,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <section class="panel" aria-labelledby="deploymentTitle"><div class="toolbar"><h2 id="deploymentTitle">최근 배포 파이프라인 보고</h2><button id="deploymentsReload" type="button">배포 이력 조회</button></div><p class="muted">서명된 파이프라인 보고를 표시합니다. 현재 Worker 버전 확인과는 별개의 정보이며, 보고 수신 시각이 표시됩니다.</p><p id="deploymentsStatus" role="status">배포 보고를 불러오는 중입니다.</p><div id="deploymentsList" style="max-height:220px;overflow:auto"></div></section>
 <p><a id="statisticsDownload" href="/api/admin/statistics.csv?days=14">선택 기간 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
 <section class="panel" aria-labelledby="retentionTitle"><div class="toolbar"><h2 id="retentionTitle">데이터 보존 현황</h2><button id="retentionReload" type="button">보존 현황 조회</button></div><p class="muted">문의 90일 · 익명 세션 14일 · 배포 보고 90일 정책입니다. 정리는 예약 작업에서 수행합니다.</p><p id="retentionStatus" role="status">보존 현황을 불러오는 중입니다.</p><p class="muted">백업·복원은 별도 운영 절차입니다. 이 화면은 백업 성공이나 최근 정리 실행 여부를 보증하지 않습니다.</p></section>
+<section class="panel"><div class="toolbar"><h2>관리자 보안 이력</h2><button id="securityEventsReload" type="button">이력 조회</button></div><p id="securityEventsStatus" role="status">보안 이력을 불러오는 중입니다.</p><div id="securityEventsList" style="max-height:160px;overflow:auto"></div></section>
 <section class="panel" aria-labelledby="sessionTitle"><div class="toolbar"><h2 id="sessionTitle">관리자 로그인 세션</h2><button id="sessionsReload" type="button">세션 조회</button></div><p id="sessionsStatus" role="status">세션 정보를 불러오는 중입니다.</p><p class="muted">전체 세션을 종료하면 현재 브라우저와 다른 브라우저 모두 다시 로그인해야 합니다.</p><button id="sessionsRevoke" type="button">모든 관리자 세션 종료</button></section>
 <section class="panel" aria-labelledby="qualityTitle" style="margin-top:12px">
 <div class="toolbar"><h2 id="qualityTitle" style="margin:0">이용 품질 · 오류 세션 분석 (최근 14일)</h2>
@@ -78,6 +80,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="figure" id="qualityTrend" aria-label="최근 14일 익명 세션별 오류 발생 비율" style="height:106px"></div>
 <p class="muted" id="qualityDefinition">오류가 기록된 익명 세션 비율이며 기능별 실행 실패율이나 사용자 실인원 비율을 뜻하지 않습니다.</p>
 <p class="status" id="qualityStatus" role="status" aria-live="polite">통계를 불러오는 중입니다.</p>
+<div class="metrics" aria-label="편집 세션 사용시간"><div class="metric"><span class="label">계측된 편집 세션</span><strong id="measuredSessions">—</strong></div><div class="metric"><span class="label">편집 세션당 활성시간</span><strong id="measuredAverage">—</strong></div><div class="metric"><span class="label">같은 탭 재방문 추정</span><strong id="returningTabs">—</strong></div></div><p id="sessionUsageStatus" class="muted">사용시간을 불러오는 중입니다.</p>
 <h3>PDF 준비 작업 (최근 14일)</h3>
 <div class="metrics" aria-label="PDF 준비 결과">
 <div class="metric"><span class="label">기록된 준비 시도</span><strong id="saveAttempts">—</strong></div>
@@ -250,11 +253,19 @@ async function loadSaveQuality(){
   $('saveQualityStatus').textContent='저장 품질 통계를 사용할 수 없습니다.';
  }
 }
+async function loadSessionUsage(){
+ try{const d=await read('/api/admin/session-usage');
+  for(const key of ['editorSessions','seconds','visits','returningTabDays'])if(!Number.isSafeInteger(d[key])||d[key]<0)throw Error('Invalid count');
+  if(d.averageSeconds!==null&&(!Number.isSafeInteger(d.averageSeconds)||d.averageSeconds<0))throw Error('Invalid average');
+  $('measuredSessions').textContent=fmt(d.editorSessions);$('measuredAverage').textContent=d.averageSeconds===null?'—':fmt(d.averageSeconds)+'초';$('returningTabs').textContent=fmt(d.returningTabDays);
+  $('sessionUsageStatus').textContent='최근 14일 · 같은 익명 탭의 이전 날짜 방문 이력 기준입니다. 실제 사람 수나 작업 완료 세션 수가 아닙니다. 2분 이상 입력이 없으면 활성시간 수집을 멈춥니다. 새 계측 이전 데이터는 소급 계산하지 않습니다.';
+ }catch{for(const id of ['measuredSessions','measuredAverage','returningTabs'])$(id).textContent='—';$('sessionUsageStatus').textContent='세션 사용시간을 조회하지 못했습니다.'}
+}
 async function loadOperationQuality(){
  const root=$('operationQualityRows');
  try{
   const d=await read('/api/admin/operations');if(d.windowDays!==14||!Array.isArray(d.items))throw Error('Invalid aggregate');
-  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전',form_create:'양식 필드 생성',form_fill:'양식 값 수정',highlight:'본문 형광펜',batch_compress:'일괄 압축(파일별)',batch_mark:'일괄 표시(파일별)',batch_split:'일괄 분할(실행별)',batch_merge:'일괄 병합(실행별)'};
+  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전',form_create:'양식 필드 생성',form_fill:'양식 값 수정',highlight:'본문 형광펜',batch_compress:'일괄 압축(파일별)',batch_mark:'일괄 표시(파일별)',batch_split:'일괄 분할(실행별)',batch_merge:'일괄 병합(실행별)',page_insert:'페이지 삽입',page_extract:'페이지 추출',page_reorder:'페이지 순서 변경',page_clipboard:'페이지 복사·잘라내기',bookmark_add:'북마크 추가',overlay_insert:'삽입 항목 생성',overlay_edit:'삽입 항목 수정',overlay_duplicate:'삽입 항목 복제',overlay_delete:'삽입 항목 삭제'};
   const rows=[];
   for(const item of d.items){
    if(!names[item.feature])throw Error('Invalid feature');
@@ -270,7 +281,7 @@ async function loadOperationQuality(){
 $('qualityReload').addEventListener('click',()=>{loadQuality();loadSaveQuality();loadOperationQuality()});
 $('operationsReload').addEventListener('click',async()=>{
  const button=$('operationsReload');button.disabled=true;
- try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadDeployments(),dashboard()]);}
+ try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadSessionUsage(),loadDeployments(),dashboard()]);}
  finally{button.disabled=false;}
 });
 let autoRefreshPending=false;
@@ -285,7 +296,7 @@ setInterval(async()=>{
  if(!$('operationsAutoRefresh').checked||document.visibilityState!=='visible'||autoRefreshPending)return;
  autoRefreshPending=true;updateAutoStatus('자동 확인 중…');
  try{
-  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadDeployments(),dashboard()]);
+  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadSessionUsage(),loadDeployments(),dashboard()]);
   const label=results.some(result=>result.status==='rejected')?'일부 자동 조회 실패':'자동 확인 완료';
   updateAutoStatus($('operationsAutoRefresh').checked?label+' · '+new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'}):'자동 확인 꺼짐');
  }finally{autoRefreshPending=false}
@@ -428,6 +439,16 @@ $('adminLogout').addEventListener('click',async()=>{
  try{await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:'{}'});}
  finally{location.replace('/admin/login/')}
 });
+async function loadSecurityEvents(){
+ try{const d=await read('/api/admin/security-events');if(!Array.isArray(d.items))throw Error('Invalid history');
+  const names={login_failed:'로그인 실패',login_succeeded:'로그인 성공',password_changed:'비밀번호 변경',sessions_revoked:'전체 세션 종료'};
+  const root=$('securityEventsList');root.replaceChildren();
+  for(const item of d.items){if(!names[item.kind]||!Number.isSafeInteger(item.happened_ms))continue;const line=document.createElement('p');line.textContent=new Date(item.happened_ms).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' · '+names[item.kind];root.append(line)}
+  $('securityEventsStatus').textContent=d.items.length?'최근 보안 이력 · 30일 보존':'기록된 보안 이력이 없습니다.';
+ }catch{$('securityEventsStatus').textContent='보안 이력을 조회하지 못했습니다.';$('securityEventsList').replaceChildren()}
+}
+$('securityEventsReload').addEventListener('click',loadSecurityEvents);
+loadSecurityEvents();
 async function loadSessions(){
  try{const d=await read('/api/auth/sessions');
   if(!Number.isSafeInteger(d.activeSessions)||d.activeSessions<0)throw Error('Invalid count');
@@ -440,6 +461,16 @@ async function loadRetention(){
   $('retentionStatus').textContent='정리 기준을 넘긴 문의 '+fmt(d.pending.inquiries)+'건 · 익명 세션 '+fmt(d.pending.sessions)+'건';
  }catch{$('retentionStatus').textContent='보존 현황을 불러오지 못했습니다.'}
 }
+async function loadReadiness(){
+ try{const d=await read('/api/admin/readiness');
+  if(d.scope!=='basic-structure-and-config-only')throw Error('Invalid response');
+  const parts=['스키마 기본항목 '+(d.schema.ready?'준비':'미완'),'관리자 인증 설정 '+(d.configuration.adminVerifier?'있음':'없음'),'배포 보고 설정 '+(d.configuration.deploymentReporting?'있음':'없음'),'Worker 버전 설정 '+(d.configuration.workerVersion?'있음':'없음')];
+  const missing=[...d.schema.missingTables,...d.schema.missingColumns];if(missing.length)parts.push('누락: '+missing.join(', '));
+  $('readinessStatus').textContent=parts.join(' · ');
+ }catch{$('readinessStatus').textContent='운영 준비 항목을 조회하지 못했습니다.'}
+}
+$('readinessReload').addEventListener('click',loadReadiness);
+loadReadiness();
 $('retentionReload').addEventListener('click',loadRetention);
 loadRetention();
 async function loadDeployments(){
@@ -472,5 +503,5 @@ $('sessionsRevoke').addEventListener('click',async()=>{
 });
 loadSessions();
 renderPublicationPreview();
-Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadDeployments()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
+Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadSessionUsage(),loadDeployments()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>

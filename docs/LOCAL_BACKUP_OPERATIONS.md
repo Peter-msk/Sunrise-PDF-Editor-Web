@@ -19,3 +19,11 @@ python scripts/admin_sqlite_backup.py rehearse new-backup.sqlite
 - 이 도구의 성공은 Cloudflare D1 운영 복원 성공과 다르다. Cloudflare 복원은 권한이 분리된 시험 DB에서 추가 확인한다.
 
 후속 기능 검증: 읽기 전용 원본, 동시 쓰기, 실패 시 파일 정리, 기존 경로 보호, 큰 DB, Windows 임시 파일 정리, 원본·사본의 건수 및 핵심 조회 결과를 확인한다.
+
+## Cloudflare D1 운영 도구 소스
+
+`node scripts/d1_backup.cjs DATABASE /private/new-export.sql`은 인증된 Wrangler로 원격 D1을 SQL 파일로 내보낸다. 저장 위치는 소스 저장소 밖이어야 하며 기존 파일을 덮어쓰지 않는다. 결과 파일은 개인정보/인증 레코드를 포함할 수 있다. 실제 내용이나 Wrangler 응답 전문은 출력하지 않는다. 내보내기 실행은 아직 하지 않았다.
+
+`node scripts/d1_restore_rehearsal.cjs /private/new-export.sql sunrise-pdf-restore-test`는 이름이 고정된 전용 시험 DB가 비어 있을 때만 SQL을 가져온다. 운영 DB 이름을 받지 않으며 기존 시험 DB 데이터도 덮어쓰지 않는다. 가져오기 후 핵심 테이블 건수 조회를 수행한다. 실패 시 전용 시험 DB에 일부 데이터가 남을 수 있으므로 운영자에게 보존한다. 실제 실행·전체 무결성/업무 복원 수용은 미검증이다.
+
+Cloudflare 공식 명령 참고: https://developers.cloudflare.com/workers/wrangler/commands/d1/
