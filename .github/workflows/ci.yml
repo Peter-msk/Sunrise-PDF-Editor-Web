@@ -43,6 +43,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run the complete contract suite
         run: npm test
+      - name: Validate feature-by-feature development progress
+        run: npm run progress:check
       - name: Build release assets
         run: npm run build
       - name: Ensure repository files are not modified unexpectedly
