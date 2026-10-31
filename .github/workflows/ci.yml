@@ -10,6 +10,8 @@ on:
       - 'migrations/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'docs/development-progress.json'
+      - 'docs/DEVELOPMENT_PROGRESS.md'
       - '.github/workflows/ci.yml'
   push:
     branches:
@@ -22,7 +24,13 @@ on:
       - 'migrations/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'docs/development-progress.json'
+      - 'docs/DEVELOPMENT_PROGRESS.md'
       - '.github/workflows/ci.yml'
+
+concurrency:
+  group: sunrise-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -67,6 +75,11 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Build the editor as deployed
         run: npm run build
+      - name: Restore Chromium browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-1.58.0
       - name: Install isolated browser test runtime
         run: |
           npm install --no-save --package-lock=false --ignore-scripts playwright@1.58.0

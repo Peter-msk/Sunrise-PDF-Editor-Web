@@ -1,5 +1,6 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
+const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
 const PUBLICATION_STATUS_SQL=`CASE WHEN is_active=0 AND first_published_at IS NULL THEN 'draft' WHEN is_active=0 THEN 'hidden' WHEN date(first_published_at) IS NULL THEN 'unknown' WHEN date(first_published_at)>date('now','+9 hours') THEN 'scheduled' WHEN ${PUBLICATION_WINDOW_SQL} THEN 'published' ELSE 'expired' END AS visibility`;
@@ -51,6 +52,26 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  // Private, read-only point-in-time check; not an uptime claim.
+  if(path==='/api/admin/health'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    const started=Date.now();let database='unavailable';
+    try{
+      const probe=await db.prepare('SELECT 1 AS ok').first();
+      if(Number(probe?.ok)===1)database='ready';
+    }catch{/* Do not expose raw D1 error messages. */}
+    const rawId=env.CF_VERSION_METADATA?.id;
+    const deploymentId=typeof rawId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)?rawId:null;
+    const rawTag=env.RELEASE_VERSION;
+    const releaseTag=typeof rawTag==='string'&&/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(rawTag)?rawTag:null;
+    const healthy=database==='ready';
+    return response({
+      status:healthy?'ready':'degraded',
+      services:{worker:'responsive',database},
+      checkedAt:new Date().toISOString(),probeMs:Math.max(0,Date.now()-started),
+      version:{application:APP_VERSION,releaseTag,deploymentId}
+    },healthy?200:503);
+  }
   if(path==='/api/admin/statistics.csv'&&request.method==='GET'){
     const result=await db.prepare("SELECT day,visits,editor_seconds FROM analytics_daily WHERE day BETWEEN date(?,'-29 days') AND ? ORDER BY day").bind(today,today).all();
     const number=value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0)throw new Error('Invalid aggregate');return String(n)};
