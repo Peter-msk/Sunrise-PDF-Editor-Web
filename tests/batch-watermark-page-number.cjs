@@ -27,6 +27,7 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
  const file=(name,data=source)=>({name,size:data.byteLength,data});
  const invalid=file('bad.pdf',new Uint8Array([1,2,3]));
  await ctx.batchMarkPdfs([file('good-a.pdf'),invalid,file('good-b.pdf')],{kind:'watermark',text:'대외비'},handlers);
+ if(output.length!==2)console.error('Batch mark failure messages:',errors.map(e=>e.message));
  assert.deepEqual(output.map(x=>x.name),['good-a.pdf','good-b.pdf']);
  assert.equal(errors.length,1);assert.equal(progress.length,3);
  for(const r of output){
