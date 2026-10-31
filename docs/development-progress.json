@@ -58,11 +58,11 @@
       "id": "ADM-05",
       "name": "문의 관리",
       "phase": 1,
-      "implementation": 82,
-      "automated": 92,
+      "implementation": 92,
+      "automated": 96,
       "practical": 20,
       "deployment": 35,
-      "note": "문의 상태와 이력을 D1 단일 트랜잭션으로 기록; SQLite 롤백·연속 변경 검사 및 인증 브라우저 실험 추가. 운영 D1·Windows 실기는 미검증"
+      "note": "동일 시각 문의를 포함한 50건씩 조회, 검색·상태 필터와 전후 페이지, 48시간 미확인 강조 및 이력 트랜잭션. 운영 D1·Windows 실기 미검증"
     },
     {
       "id": "ADM-06",

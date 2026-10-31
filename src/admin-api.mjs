@@ -197,11 +197,16 @@ export async function adminApi(request,env,url,identity){
     const status=url.searchParams.get('status')||'all';
     if(!statuses.includes(status))return response({error:'Invalid status'},400);
     const q=(url.searchParams.get('q')||'').trim().slice(0,60);
-    const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? ESCAPE char(92) OR message LIKE ? ESCAPE char(92) OR email LIKE ? ESCAPE char(92))':'1=1');
+    const before=url.searchParams.get('before'),beforeId=url.searchParams.get('before_id');
+    if((before===null)!==(beforeId===null))return response({error:'Invalid cursor'},400);
+    const cursorId=beforeId===null?null:Number(beforeId);
+    if(before!==null&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(before)||!Number.isFinite(Date.parse(before))||!/^\d+$/.test(beforeId)||!Number.isSafeInteger(cursorId)||cursorId<1))return response({error:'Invalid cursor'},400);
+    const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? ESCAPE char(92) OR message LIKE ? ESCAPE char(92) OR email LIKE ? ESCAPE char(92))':'1=1')+(before!==null?' AND (created_at<? OR (created_at=? AND id<?))':'');
     const escaped=q.replaceAll('\\','\\\\').replaceAll('%','\\%').replaceAll('_','\\_');
-    const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+escaped+'%')]:[])];
-    const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC LIMIT 100').bind(...args).all();
-    return response({items:r.results||[]});
+    const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+escaped+'%')]:[]),...(before!==null?[before,before,cursorId]:[])];
+    const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC,id DESC LIMIT 51').bind(...args).all();
+    const rows=r.results||[],items=rows.slice(0,50),last=items.at(-1);
+    return response({items,next:rows.length>50&&last?{before:last.created_at,before_id:last.id}:null,checkedAt:new Date().toISOString()});
   }
   const historyMatch=path.match(/^\/api\/admin\/inquiries\/(\d+)\/history$/);
   if(historyMatch&&request.method==='GET'){

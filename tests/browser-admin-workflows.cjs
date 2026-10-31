@@ -7,6 +7,7 @@ const ago=n=>new Date(Date.parse(today+'T00:00:00Z')-n*86400000).toISOString().s
 let nextId=80;
 let inquiries=[{id:51,created_at:new Date().toISOString(),category:'오류 신고',email:'tester@example.test',message:'저장할 때 화면이 멈추는 문제를 확인해 주세요.',status:'new',admin_note:''},
  {id:52,created_at:new Date().toISOString(),category:'기타',email:'other@example.test',message:'일반 문의입니다.',status:'answered',admin_note:''}];
+for(let i=0;i<60;i++)inquiries.push({id:100+i,created_at:'2026-01-01T00:00:00.000Z',category:'기타',email:'sample@example.test',message:'목록 시험',status:'new',admin_note:''});
 const audit=[];
 let announcements=[
  {id:1,title:'오래된 안내',body:'만료된 공지',level:'info',is_active:1,first_published_at:ago(8),published_at:ago(8),visibility:'expired'},
@@ -32,8 +33,12 @@ async function serve(req,res){
  }
  if(pathname==='/api/admin/inquiries'&&req.method==='GET'){
   const status=url.searchParams.get('status')||'all',q=(url.searchParams.get('q')||'').toLowerCase();
-  send(res,{items:inquiries.filter(item=>(status==='all'||item.status===status)&&
-   [item.category,item.message,item.email].some(v=>v.toLowerCase().includes(q)))});return
+  const before=url.searchParams.get('before'),beforeId=Number(url.searchParams.get('before_id'));
+  const filtered=inquiries.filter(item=>(status==='all'||item.status===status)&&
+   [item.category,item.message,item.email].some(v=>v.toLowerCase().includes(q))&&(!before||item.created_at<before||(item.created_at===before&&item.id<beforeId)))
+   .sort((a,b)=>b.created_at.localeCompare(a.created_at)||b.id-a.id);
+  const items=filtered.slice(0,50),last=items.at(-1);
+  send(res,{items,next:filtered.length>50?{before:last.created_at,before_id:last.id}:null,checkedAt:new Date().toISOString()});return
  }
  const hist=pathname.match(/^\/api\/admin\/inquiries\/(\d+)\/history$/);
  if(hist&&req.method==='GET'){send(res,{items:audit.filter(item=>item.inquiry_id===Number(hist[1]))});return}
@@ -89,6 +94,15 @@ async function main(){
   assert.equal(await page.locator('#editStatus').inputValue(),'in_progress');
   await page.waitForFunction(()=>document.querySelector('#inquiryHistory')?.textContent.includes('처리 중'),null,{timeout:15000});
   assert.equal(inquiries[0].admin_note,'원인 파악 중');
+  await page.locator('#query').fill('');await page.locator('#query').press('Enter');
+  await page.waitForFunction(()=>!document.querySelector('#inquiryNext')?.disabled,null,{timeout:15000});
+  assert((await page.locator('#inquiryRows').innerText()).includes('48시간 이상 미확인'));
+  await page.locator('#inquiryNext').click();
+  await page.waitForFunction(()=>document.querySelector('#inquiryPage')?.textContent==='2쪽',null,{timeout:15000});
+  assert.equal(await page.locator('#inquiryRows tr[data-id]').count(),12);
+  await page.locator('#inquiryPrevious').click();
+  await page.waitForFunction(()=>document.querySelector('#inquiryPage')?.textContent==='1쪽',null,{timeout:15000});
+  assert.equal(await page.locator('#inquiryRows tr[data-id]').count(),50);
 
   // Old publications remain editable in admin but cannot regain a fresh date.
   const oldFirst=announcements[0].first_published_at;
