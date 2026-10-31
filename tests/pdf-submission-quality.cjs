@@ -55,6 +55,18 @@ const pdfjsStub=lists=>({
  const filledBytes=await filled.save();
  const filledResult=await quality.inspect(filledBytes,{PDFLib,pdfjsLib:pdfjsStub([[testOPS.showText]])});
  assert.equal(filledResult.emptyRequired,0);
+ const malformedFont=await PDFLib.PDFDocument.create();
+ const fontPage=malformedFont.addPage([420,595]);
+ fontPage.node.set(PDFLib.PDFName.of('Resources'),malformedFont.context.obj({Font:{Broken:{Type:'NotFont'}}}));
+ const fontResult=await quality.inspect(await malformedFont.save(),{PDFLib});
+ assert(fontResult.issues.some(x=>x.code==='font-unresolved'),'invalid font resource must trigger review, not approval');
+ const xfaPdf=await PDFLib.PDFDocument.create();
+ xfaPdf.addPage([420,595]);
+ xfaPdf.getForm().createTextField('invoice').addToPage(xfaPdf.getPage(0));
+ const acro=xfaPdf.context.lookup(xfaPdf.catalog.get(PDFLib.PDFName.of('AcroForm')));
+ acro.set(PDFLib.PDFName.of('XFA'),xfaPdf.context.obj('XFA'));
+ const xfaResult=await quality.inspect(await xfaPdf.save(),{PDFLib});
+ assert(xfaResult.issues.some(x=>x.code==='xfa-form'),'unsupported XFA requires explicit manual review');
  const signed=await PDFLib.PDFDocument.create();signed.addPage([420,595]);
  signed.catalog.set(PDFLib.PDFName.of('Perms'),signed.context.obj({DocMDP:PDFLib.PDFName.of('Approval')}));
  const signatureResult=await quality.inspect(await signed.save(),{PDFLib,pdfjsLib:pdfjsStub([[testOPS.showText]])});
