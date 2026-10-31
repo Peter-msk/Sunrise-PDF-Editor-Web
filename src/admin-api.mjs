@@ -102,8 +102,9 @@ export async function adminApi(request,env,url,identity){
     const status=url.searchParams.get('status')||'all';
     if(!statuses.includes(status))return response({error:'Invalid status'},400);
     const q=(url.searchParams.get('q')||'').trim().slice(0,60);
-    const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? OR message LIKE ? OR email LIKE ?)':'1=1');
-    const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+q.replaceAll('%','\\%').replaceAll('_','\\_')+'%')]:[])];
+    const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? ESCAPE char(92) OR message LIKE ? ESCAPE char(92) OR email LIKE ? ESCAPE char(92))':'1=1');
+    const escaped=q.replaceAll('\\','\\\\').replaceAll('%','\\%').replaceAll('_','\\_');
+    const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+escaped+'%')]:[])];
     const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC LIMIT 100').bind(...args).all();
     return response({items:r.results||[]});
   }
