@@ -1,4 +1,4 @@
-const features=['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate'];
+const features=['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge'];
 export async function recordOperation(db,data,today){
  if(typeof data.operationId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(data.operationId)||!features.includes(data.feature)||!['started','succeeded','failed','cancelled'].includes(data.stage))return false;
  if(data.stage==='started'){

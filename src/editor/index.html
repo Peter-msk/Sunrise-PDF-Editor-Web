@@ -5769,6 +5769,7 @@
       for(let index=0;index<files.length;index++){
         if(handlers.cancelled())break;
         const file=files[index]; handlers.progress(index,files.length,file.name);
+        const finish=beginOperationMetric('batch_compress');let outcome='cancelled';
         try {
           const bytes=await readPdfInputFile(file);
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
@@ -5781,7 +5782,8 @@
           verifyBatchPdfStructure(original,check);
           if(handlers.cancelled())break;
           handlers.result({index,name:file.name,bytes:result.bytes,originalSize:bytes.byteLength});
-        }catch(error){if(handlers.cancelled())break;handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});}
+          outcome='succeeded';
+        }catch(error){if(handlers.cancelled())break;outcome='failed';handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});}finally{finish(outcome)}
       }
     }
 
@@ -5801,6 +5803,7 @@
         if(handlers.cancelled())break;
         const file=files[index];
         handlers.progress(index,files.length,file.name);
+        const finish=beginOperationMetric('batch_mark');let outcome='cancelled';
         try{
           const bytes=await readPdfInputFile(file);
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
@@ -5841,10 +5844,12 @@
           verifyBatchPdfStructure(original,reopened);
           if(handlers.cancelled())break;
           handlers.result({index,name:file.name,bytes:output,originalSize:bytes.byteLength});
+          outcome='succeeded';
         }catch(error){
           if(handlers.cancelled())break;
+          outcome='failed';
           handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});
-        }
+        }finally{finish(outcome)}
       }
     }
 
@@ -5944,6 +5949,7 @@
             running=true;cancelled=false;start.disabled=true;
             files.disabled=mode.disabled=true;sync();cancel.textContent='작업 취소';results.replaceChildren();
             let successes=0,failures=0;
+            const finish=beginOperationMetric(settings.mode==='merge'?'batch_merge':'batch_split');let outcome='cancelled';
             try{
               await window.SunriseBatchPages.process(selected,settings,{
                 cancelled:()=>cancelled||!open(),
@@ -5967,9 +5973,11 @@
                 PDFLib:window.PDFLib,
                 readFile:readPdfInputFile
               });
+              outcome=cancelled||!open()?'cancelled':failures?'failed':'succeeded';
               if(open())status.textContent=cancelled?'작업이 취소되었습니다.':'완료 '+successes+'개 / 실패 '+failures+'개. 결과를 개별 확인해 주세요.';
-            }catch(error){if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';}
+            }catch(error){outcome=cancelled||!open()?'cancelled':'failed';if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';}
             finally{
+              finish(outcome);
               running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
               files.disabled=false;mode.disabled=false;sync();
             }
@@ -6863,6 +6871,8 @@
     }
 
     async function createPdfFormField(bytes, spec) {
+      const finish=beginOperationMetric('form_create');let outcome='failed';
+      try {
       const {PDFDocument} = window.PDFLib;
       if (!/^[^\.\x00-\x1f]{1,80}$/.test(spec.name) || !spec.name.trim() || spec.name !== spec.name.trim()) throw new Error("필드 이름은 1~80자이며 앞뒤 공백과 마침표를 사용할 수 없습니다.");
       if (!['text','date','checkbox'].includes(spec.kind) || !Number.isSafeInteger(spec.page)) throw new Error("필드 종류 또는 페이지가 올바르지 않습니다.");
@@ -6888,10 +6898,14 @@
         const font=await window.SunriseKoreanFont.embed(pdf,[spec.value || ' ']);
         field.updateAppearances(font);
       }
-      return pdf.save({updateFieldAppearances:false});
+      const output=await pdf.save({updateFieldAppearances:false});
+      outcome='succeeded';return output;
+      } finally { finish(outcome); }
     }
 
     async function updatePdfFormField(bytes, name, value) {
+      const finish=beginOperationMetric('form_fill');let outcome='failed';
+      try {
       const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
       if(typeof name!=='string' || name.length>512)throw new Error('필드 이름이 올바르지 않습니다.');
       const pdf=await PDFDocument.load(bytes), form=editablePdfForm(pdf);
@@ -6908,7 +6922,9 @@
         if(typeof value!=='boolean')throw new Error('체크박스 상태를 확인해 주세요.');
         if(value)field.check();else field.uncheck();field.updateAppearances();
       }else throw new Error('이 종류의 양식 필드는 아직 수정할 수 없습니다.');
-      return pdf.save({updateFieldAppearances:false});
+      const output=await pdf.save({updateFieldAppearances:false});
+      outcome='succeeded';return output;
+      } finally { finish(outcome); }
     }
 
     async function openFillFormFieldModal(doc) {
@@ -7462,6 +7478,7 @@
           hit.kind!=="text" || !hit.highlightRect || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
         showToast("위치를 확인할 수 있는 본문 검색 결과에서만 형광펜을 추가할 수 있습니다.","fa-circle-info"); return;
       }
+      const finish=beginOperationMetric('highlight');let outcome='failed';
       doc.operationBusy=true;
       const oldBytes=doc.bytes, reader=doc.pdfJsDoc;
       try {
@@ -7470,16 +7487,17 @@
         const nextBytes=await pdfDoc.save(), info=await parsePageCountAndMeta(nextBytes);
         if (activeDoc()!==doc || doc.bytes!==oldBytes || doc.pdfJsDoc!==reader || doc.currentPage!==hit.pageIndex ||
             state.searchResults[state.activeSearchHitIndex]!==hit || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
-          await info.pdfJsDoc.destroy(); throw new Error("문서 또는 검색 결과가 변경되어 작업을 취소했습니다.");
+          await info.pdfJsDoc.destroy(); outcome='cancelled'; throw new Error("문서 또는 검색 결과가 변경되어 작업을 취소했습니다.");
         }
         saveUndoSnapshot(doc,"검색 결과 형광펜 추가"); doc.bytes=nextBytes;
         await reloadDocPdfJs(doc,{info,selection:[hit.pageIndex]});
         await refreshAllViews();
         showToast("형광펜을 추가했습니다. PDF를 저장하면 주석이 보존됩니다.","fa-highlighter");
+        outcome='succeeded';
       } catch (error) {
         console.error("형광펜 추가 실패",error);
         showToast(`형광펜 추가 실패: ${error.message || error}`,"fa-circle-exclamation");
-      } finally { doc.operationBusy=false; }
+      } finally { doc.operationBusy=false; finish(outcome); }
     }
 
     async function runDocumentSearch(term, options = {}) {

@@ -90,7 +90,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 </div>
 <p class="muted">다른 이름으로 저장 및 압축 준비 기준입니다. 실패 비율은 준비 완료와 실패 중 실패의 비율이며 취소·미확인은 제외합니다. 재시도는 같은 창에서 실패 후 다시 준비한 작업만 집계합니다. 준비 완료는 PC에 실제 저장 완료를 뜻하지 않습니다. 네트워크 차단이나 페이지 종료로 일부 기록이 누락될 수 있습니다.</p>
 <p class="status" id="saveQualityStatus" role="status">저장 품질 통계를 불러오는 중입니다.</p>
-<h3>주요 처리 결과 (최근 14일)</h3><div class="table-scroll"><table><thead><tr><th>처리 경로</th><th>시도</th><th>완료</th><th>실패</th><th>취소·미확인</th><th>실패 비율</th></tr></thead><tbody id="operationQualityRows"></tbody></table></div><p class="muted">불러오기는 내부 생성 문서의 열기도 포함합니다. 병합·분할은 결과 PDF 생성 및 다운로드 요청 단계, 텍스트 추출은 결과 창 생성 단계까지 측정합니다. 파일의 실제 저장 완료를 뜻하지 않으며 수집 누락이 있을 수 있습니다.</p><p id="operationQualityStatus" role="status">작업 통계를 불러오는 중입니다.</p>
+<h3>주요 처리 결과 (최근 14일)</h3><div class="table-scroll"><table><thead><tr><th>처리 경로</th><th>시도</th><th>완료</th><th>실패</th><th>취소·미확인</th><th>실패 비율</th></tr></thead><tbody id="operationQualityRows"></tbody></table></div><p class="muted">불러오기는 내부 생성 문서의 열기도 포함합니다. 병합·분할은 결과 PDF 생성 및 다운로드 요청 단계, 텍스트 추출은 결과 창 생성, 양식은 PDF 바이트 생성 단계까지 측정합니다. 일괄 압축·표시는 파일별, 분할·병합은 실행별로 집계합니다. 파일의 실제 저장 완료를 뜻하지 않으며 수집 누락이 있을 수 있습니다.</p><p id="operationQualityStatus" role="status">작업 통계를 불러오는 중입니다.</p>
 </section>
 <section class="metrics" aria-label="핵심 지표">
 <div class="metric"><span class="label">오늘 방문 세션</span><strong id="visitsToday">—</strong></div>
@@ -254,7 +254,7 @@ async function loadOperationQuality(){
  const root=$('operationQualityRows');
  try{
   const d=await read('/api/admin/operations');if(d.windowDays!==14||!Array.isArray(d.items))throw Error('Invalid aggregate');
-  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전'};
+  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전',form_create:'양식 필드 생성',form_fill:'양식 값 수정',highlight:'본문 형광펜',batch_compress:'일괄 압축(파일별)',batch_mark:'일괄 표시(파일별)',batch_split:'일괄 분할(실행별)',batch_merge:'일괄 병합(실행별)'};
   const rows=[];
   for(const item of d.items){
    if(!names[item.feature])throw Error('Invalid feature');
