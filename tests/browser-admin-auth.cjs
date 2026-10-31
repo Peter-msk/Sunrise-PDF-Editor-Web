@@ -30,7 +30,7 @@ async function main(){
  const {default:worker}=await import('../src/worker.mjs');
  const serve=async(req,res)=>{
   try{
-   const url='http://'+req.headers.host+req.url;
+   const url='https://'+req.headers.host+req.url;
    let body; if(req.method==='POST'||req.method==='PATCH'){
     const chunks=[];for await(const chunk of req)chunks.push(chunk);body=Buffer.concat(chunks);
    }
