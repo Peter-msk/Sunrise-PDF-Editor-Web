@@ -3077,7 +3077,16 @@
       return bytes;
     }
 
+    function beginOperationMetric(feature) {
+      try {
+        const finish=window.sunriseTelemetryOperationStart?.(feature);
+        return stage=>{try{finish?.(stage)}catch(_){}};
+      } catch (_) { return ()=>{}; }
+    }
+
     async function openPdfFromBytes(fileName, uint8Bytes, options = { switchActive: true }) {
+      const finish=beginOperationMetric('open');let outcome='failed';
+      try {
       const originalBytes = uint8Bytes instanceof Uint8Array ? uint8Bytes : new Uint8Array(uint8Bytes);
       if (!window.PDFLib || !window.pdfjsLib) throw new Error("PDF 편집 엔진을 불러오지 못했습니다. 페이지를 새로고침해 주세요.");
       if (originalBytes.byteLength < 8 || new TextDecoder("ascii").decode(originalBytes.slice(0, 8)).indexOf("%PDF-") !== 0) {
@@ -3143,7 +3152,9 @@
         renderDocTabs();
         updateCommandStates();
       }
+      outcome='succeeded';
       return newDoc;
+      } finally { finish(outcome); }
     }
 
     function addRecentFile(name, pageCount, bytes) {
@@ -4998,6 +5009,7 @@
       const openAfter = Boolean(document.getElementById("mergeOpenAfterCheck")?.checked);
       const downloadNow = Boolean(document.getElementById("mergeDownloadCheck")?.checked);
 
+      const finish=beginOperationMetric('merge');let outcome='cancelled';
       try {
         const { PDFDocument } = window.PDFLib;
         const mergedPdf = await PDFDocument.create();
@@ -5022,9 +5034,11 @@
           downloadBytes(mergedBytes, outName);
         }
         showToast(`PDF 병합 완료: ${outName} (${state.mergeQueue.length}개 문서, 총 ${totalMergedPages}쪽)`, "fa-object-group");
+        outcome='succeeded';
       } catch (err) {
+        outcome='failed';
         showToast(`PDF 병합 중 오류 발생: ${err.message || err}`, "fa-circle-exclamation");
-      }
+      } finally { finish(outcome); }
     }
 
     // =========================================================================
@@ -6648,9 +6662,11 @@
     }
 
     async function splitDocumentPages(doc) {
+      const finish=beginOperationMetric('split');let outcome='failed';
+      try {
       const { PDFDocument } = window.PDFLib;
       const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
-      if (!allowPageFormStructure(srcDoc)) return;
+      if (!allowPageFormStructure(srcDoc)) { outcome='cancelled'; return; }
       const stem = doc.name.replace(/\.pdf$/i, "");
       for (let i = 0; i < doc.pageCount; i++) {
         const single = await PDFDocument.create();
@@ -6660,6 +6676,8 @@
         downloadBytes(bytes, `${stem}_page_${String(i + 1).padStart(2, "0")}.pdf`);
       }
       showToast(`전체 ${doc.pageCount}쪽을 개별 PDF 파일로 분할 다운로드했습니다.`, "fa-table-columns");
+      outcome='succeeded';
+      } finally { finish(outcome); }
     }
 
     async function deleteSelectedPagesFromDoc(doc) {
@@ -7520,8 +7538,10 @@
     }
 
     async function openExtractTextModal(doc) {
+      const finish=beginOperationMetric('extract_text');let outcome='failed';
+      try {
       showToast("문서 텍스트를 준비하고 있습니다.", "fa-file-lines");
-      if (!await ensurePageTexts(doc) || activeDoc() !== doc) return;
+      if (!await ensurePageTexts(doc) || activeDoc() !== doc) { outcome='cancelled'; return; }
       const fullText = Array.from({ length: doc.pageCount }, (_, i) => {
         const t = doc.pageTexts[i] || "";
         const ov = doc.overlays
@@ -7553,6 +7573,8 @@
           });
         },
       });
+      outcome='succeeded';
+      } finally { finish(outcome); }
     }
 
     async function renderImageForExport(pdf, pageNumber) {

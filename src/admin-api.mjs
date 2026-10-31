@@ -1,6 +1,7 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
 import {readDeploymentReports} from './admin-deployments.mjs';
+import {recordOperation,operationSummary} from './operation-metrics.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
@@ -19,10 +20,12 @@ export async function telemetry(request,env,url){
   if(request.method!=='POST')return response({error:'Method not allowed'},405);
   if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
   const data=await readPayload(request);
-  if(!data||!validSid(data.session)||!['visit','pulse','failure','save_operation'].includes(data.type))return response({error:'Invalid event'},400);
+  if(!data||!validSid(data.session)||!['visit','pulse','failure','save_operation','operation'].includes(data.type))return response({error:'Invalid event'},400);
   const now=Date.now(),today=day(),db=env.DB;
   try{
-    if(data.type==='visit'){
+    if(data.type==='operation'){
+      if(!await recordOperation(db,data,today))return response({error:'Invalid operation'},400);
+    }else if(data.type==='visit'){
       const result=await db.prepare('INSERT OR IGNORE INTO analytics_sessions(day,session_id,last_pulse_ms) VALUES (?,?,?)').bind(today,data.session,now).run();
       if(result.meta?.changes){
         await db.prepare('INSERT INTO analytics_daily(day,visits) VALUES (?,1) ON CONFLICT(day) DO UPDATE SET visits=visits+1').bind(today).run();
@@ -72,6 +75,10 @@ export async function adminApi(request,env,url,identity){
     return response({checkedAt:new Date(now).toISOString(),policy:{inquiriesDays:90,sessionDays:14,deploymentReportDays:90},pending:{inquiries:Number(inquiries?.count||0),sessions:Number(sessions?.count||0)},backup:'operator-managed',lastCleanup:null});
   }
   if(path==='/api/admin/deployments')return readDeploymentReports(request,env);
+  if(path==='/api/admin/operations'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{return response(await operationSummary(db,today))}catch{return response({error:'Operation statistics unavailable'},503)}
+  }
   if(path==='/api/admin/save-quality'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     try{

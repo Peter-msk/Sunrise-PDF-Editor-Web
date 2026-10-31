@@ -48,11 +48,11 @@
       "id": "ADM-04",
       "name": "기능 오류율",
       "phase": 1,
-      "implementation": 65,
+      "implementation": 82,
       "automated": 80,
       "practical": 0,
       "deployment": 30,
-      "note": "저장·압축 준비의 시도/실패율 구현. 저장 외 기능별 실행 분모와 운영 실측은 미완"
+      "note": "문서 불러오기·병합·분할·텍스트 추출의 실제 시도/결과 수집과 실패율 API/UI 추가. 저장 별도 계측 유지; 다른 기능 계측·신규 검증 미완"
     },
     {
       "id": "ADM-05",
@@ -128,11 +128,11 @@
       "id": "ADM-12",
       "name": "이용 품질",
       "phase": 1,
-      "implementation": 68,
+      "implementation": 82,
       "automated": 85,
       "practical": 0,
       "deployment": 0,
-      "note": "PDF 준비 실패율 및 같은 창 재시도·준비 완료 집계 추가. 로컬 SQLite/Chromium 검증; 실제 PC 저장 완료와 운영 D1 미검증"
+      "note": "저장 외 4개 주요 처리의 완료·실패·취소·미확인 집계 소스 연결. 실제 다운로드 완료가 아닌 처리 단계 기준. 신규 기능 검증 미완"
     },
     {
       "id": "ADM-13",

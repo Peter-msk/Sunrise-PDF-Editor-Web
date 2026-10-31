@@ -90,6 +90,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 </div>
 <p class="muted">다른 이름으로 저장 및 압축 준비 기준입니다. 실패 비율은 준비 완료와 실패 중 실패의 비율이며 취소·미확인은 제외합니다. 재시도는 같은 창에서 실패 후 다시 준비한 작업만 집계합니다. 준비 완료는 PC에 실제 저장 완료를 뜻하지 않습니다. 네트워크 차단이나 페이지 종료로 일부 기록이 누락될 수 있습니다.</p>
 <p class="status" id="saveQualityStatus" role="status">저장 품질 통계를 불러오는 중입니다.</p>
+<h3>주요 처리 결과 (최근 14일)</h3><div class="table-scroll"><table><thead><tr><th>처리 경로</th><th>시도</th><th>완료</th><th>실패</th><th>취소·미확인</th><th>실패 비율</th></tr></thead><tbody id="operationQualityRows"></tbody></table></div><p class="muted">불러오기는 내부 생성 문서의 열기도 포함합니다. 병합·분할은 결과 PDF 생성 및 다운로드 요청 단계, 텍스트 추출은 결과 창 생성 단계까지 측정합니다. 파일의 실제 저장 완료를 뜻하지 않으며 수집 누락이 있을 수 있습니다.</p><p id="operationQualityStatus" role="status">작업 통계를 불러오는 중입니다.</p>
 </section>
 <section class="metrics" aria-label="핵심 지표">
 <div class="metric"><span class="label">오늘 방문 세션</span><strong id="visitsToday">—</strong></div>
@@ -249,10 +250,27 @@ async function loadSaveQuality(){
   $('saveQualityStatus').textContent='저장 품질 통계를 사용할 수 없습니다.';
  }
 }
-$('qualityReload').addEventListener('click',()=>{loadQuality();loadSaveQuality()});
+async function loadOperationQuality(){
+ const root=$('operationQualityRows');
+ try{
+  const d=await read('/api/admin/operations');if(d.windowDays!==14||!Array.isArray(d.items))throw Error('Invalid aggregate');
+  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출'};
+  const rows=[];
+  for(const item of d.items){
+   if(!names[item.feature])throw Error('Invalid feature');
+   for(const key of ['attempts','succeeded','failed','cancelled','pending'])if(!Number.isSafeInteger(item[key])||item[key]<0)throw Error('Invalid count');
+   if(item.succeeded+item.failed+item.cancelled+item.pending!==item.attempts)throw Error('Inconsistent count');
+   const total=item.succeeded+item.failed,tr=document.createElement('tr');
+   for(const value of [names[item.feature],fmt(item.attempts),fmt(item.succeeded),fmt(item.failed),fmt(item.cancelled+item.pending),total?(item.failed/total*100).toFixed(1)+'%':'—']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+   rows.push(tr);
+  }
+  root.replaceChildren(...rows);$('operationQualityStatus').textContent='완료와 실패 중 실패 비율 · 취소·미확인은 비율에서 제외';
+ }catch{root.replaceChildren();$('operationQualityStatus').textContent='작업 통계를 불러오지 못했습니다.'}
+}
+$('qualityReload').addEventListener('click',()=>{loadQuality();loadSaveQuality();loadOperationQuality()});
 $('operationsReload').addEventListener('click',async()=>{
  const button=$('operationsReload');button.disabled=true;
- try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadDeployments(),dashboard()]);}
+ try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadDeployments(),dashboard()]);}
  finally{button.disabled=false;}
 });
 let autoRefreshPending=false;
@@ -267,7 +285,7 @@ setInterval(async()=>{
  if(!$('operationsAutoRefresh').checked||document.visibilityState!=='visible'||autoRefreshPending)return;
  autoRefreshPending=true;updateAutoStatus('자동 확인 중…');
  try{
-  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadDeployments(),dashboard()]);
+  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadDeployments(),dashboard()]);
   const label=results.some(result=>result.status==='rejected')?'일부 자동 조회 실패':'자동 확인 완료';
   updateAutoStatus($('operationsAutoRefresh').checked?label+' · '+new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'}):'자동 확인 꺼짐');
  }finally{autoRefreshPending=false}
@@ -454,5 +472,5 @@ $('sessionsRevoke').addEventListener('click',async()=>{
 });
 loadSessions();
 renderPublicationPreview();
-Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality(),loadDeployments()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
+Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadDeployments()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>
