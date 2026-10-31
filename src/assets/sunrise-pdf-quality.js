@@ -117,6 +117,7 @@
       try{
         task=opts.pdfjsLib.getDocument({data:new Uint8Array(bytes),useSystemFonts:true});
         reader=await task.promise;
+        if(reader.isPureXfa&&!rawXfa)emit('review','xfa-form','XFA 기반 PDF입니다. 내용 표시와 양식 호환성을 직접 확인해 주세요.');
         const ops=opts.pdfjsLib.OPS;
         const visibleOps=new Set([
           ops.showText,ops.showSpacedText,ops.nextLineShowText,ops.nextLineSetSpacingShowText,
