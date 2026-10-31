@@ -61,6 +61,19 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <ul class="operation-alerts" id="operationAlerts" aria-live="polite"><li>운영 정보를 확인하고 있습니다.</li></ul></div>
 </section>
 <p><a href="/api/admin/statistics.csv">최근 30일 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
+<section class="panel" aria-labelledby="qualityTitle" style="margin-top:12px">
+<div class="toolbar"><h2 id="qualityTitle" style="margin:0">이용 품질 · 오류 세션 분석 (최근 14일)</h2>
+<button type="button" id="qualityReload">품질 새로고침</button></div>
+<div class="metrics" aria-label="세션 품질 지표">
+<div class="metric"><span class="label">분석 가능한 익명 세션</span><strong id="qualitySessions">—</strong></div>
+<div class="metric"><span class="label">오류 기록이 있는 세션</span><strong id="qualityAffected">—</strong></div>
+<div class="metric"><span class="label">오류 발생 세션 비율</span><strong id="qualityPercent">—</strong></div>
+<div class="metric"><span class="label">48시간 넘은 미확인 문의</span><strong id="qualityOverdue">—</strong></div>
+</div>
+<div class="figure" id="qualityTrend" aria-label="최근 14일 익명 세션별 오류 발생 비율" style="height:106px"></div>
+<p class="muted" id="qualityDefinition">오류가 기록된 익명 세션 비율이며 기능별 실행 실패율이나 사용자 실인원 비율을 뜻하지 않습니다.</p>
+<p class="status" id="qualityStatus" role="status" aria-live="polite">통계를 불러오는 중입니다.</p>
+</section>
 <section class="metrics" aria-label="핵심 지표">
 <div class="metric"><span class="label">오늘 방문 세션</span><strong id="visitsToday">—</strong></div>
 <div class="metric"><span class="label">금주 방문 세션</span><strong id="visitsWeek">—</strong></div>
@@ -106,10 +119,10 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <script type="module">
 const $=id=>document.getElementById(id),fmt=n=>Number(n||0).toLocaleString('ko-KR');
 let records=[],selected=null,publications={announcements:[],releases:[],today:''},selectedPublication=null;
-let operationAlerts=[],healthAlerts=[];
+let operationAlerts=[],healthAlerts=[],qualityAlerts=[];
 function renderOperationAlerts(){
  const root=$('operationAlerts');root.replaceChildren();
- const messages=[...healthAlerts,...operationAlerts];
+ const messages=[...healthAlerts,...qualityAlerts,...operationAlerts];
  for(const message of messages.length?messages:['현재 확인이 필요한 문의·연결 오류가 없습니다.']){
   const li=document.createElement('li');li.textContent=message;root.append(li);
  }
@@ -149,6 +162,41 @@ function bars(target,items,field,unit){const root=$(target);root.replaceChildren
 })}
 function horizontal(target,items,maxLabel){const root=$(target);root.replaceChildren();const max=Math.max(1,...items.map(x=>Number(x.count||0)));if(!items.length){root.textContent='기록 없음';return}
  for(const x of items){const row=document.createElement('div');row.className='error-row';const title=document.createElement('span');title.textContent=x.feature||x.label;const track=document.createElement('div');track.className='error-track';const fill=document.createElement('div');fill.className='error-fill';fill.style.width=(Number(x.count||0)/max*100)+'%';track.append(fill);const n=document.createElement('b');n.textContent=fmt(x.count);row.append(title,track,n);root.append(row)}}
+async function loadQuality(){
+ const button=$('qualityReload');button.disabled=true;
+ try{
+  const result=await read('/api/admin/quality');
+  if(result.windowDays!==14||!result.sessions||!Array.isArray(result.trend)||!Array.isArray(result.alerts))throw Error('응답 형식 확인 필요');
+  const sessions=result.sessions;
+  $('qualitySessions').textContent=fmt(sessions.total);
+  $('qualityAffected').textContent=fmt(sessions.withErrors);
+  $('qualityPercent').textContent=sessions.percent===null?'자료 없음':Number(sessions.percent).toFixed(1)+'%';
+  $('qualityOverdue').textContent=fmt(result.overdueInquiries);
+  $('qualityDefinition').textContent=result.definition;
+  const trend=[];
+  for(let i=13;i>=0;i--){
+   const date=new Date(result.since+'T00:00:00Z');date.setUTCDate(date.getUTCDate()-i);
+   const day=date.toISOString().slice(0,10);
+   const row=result.trend.find(x=>x.day===day);
+   trend.push({day,percent:row?.percent??0,sessions:row?.sessions||0,affected:row?.affected||0});
+  }
+  const root=$('qualityTrend');root.replaceChildren();
+  for(const item of trend){
+   const wrapper=document.createElement('div');wrapper.className='barwrap';
+   wrapper.title=item.day+': '+item.affected+' / '+item.sessions+'개 세션';
+   const bar=document.createElement('div');bar.className='bar alt';
+   bar.style.height=Math.max(1,Math.min(100,item.percent))+'%';wrapper.append(bar);
+   const label=document.createElement('span');label.className='tick';label.textContent=item.day.slice(5);wrapper.append(label);root.append(wrapper);
+  }
+  qualityAlerts=result.alerts.filter(item=>item?.severity==='review'&&typeof item.message==='string').map(item=>item.message);
+  $('qualityStatus').textContent='최근 14일 익명 세션 기준 · '+(sessions.total?'통계 확인 완료':'분석할 세션 자료가 없습니다.');
+ }catch(error){
+  qualityAlerts=['이용 품질 통계를 불러오지 못했습니다. 재조회해 주세요.'];
+  $('qualityStatus').textContent='품질 통계 조회 오류: '+String(error.message||'조회 실패');
+ }finally{button.disabled=false;renderOperationAlerts();}
+}
+$('qualityReload').addEventListener('click',()=>loadQuality());
+
 async function dashboard(){
  const d=await read('/api/admin/overview');
  for(const [id,v] of [['visitsToday',d.visits.today],['visitsWeek',d.visits.week],['visitsTotal',d.visits.total]])metric(id,fmt(v));
@@ -236,5 +284,5 @@ $('adminLogout').addEventListener('click',async()=>{
  try{await fetch('/api/auth/logout',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:'{}'});}
  finally{location.replace('/admin/login/')}
 });
-Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
+Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>

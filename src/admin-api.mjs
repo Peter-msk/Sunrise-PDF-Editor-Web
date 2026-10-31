@@ -72,6 +72,37 @@ export async function adminApi(request,env,url,identity){
       version:{application:APP_VERSION,releaseTag,deploymentId}
     },healthy?200:503);
   }
+  // Session quality is measured over 14 KST calendar days because the
+  // scheduled retention policy removes older analytics_sessions rows.
+  // This is NOT a per-feature operation failure rate.
+  if(path==='/api/admin/quality'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    const [totals,byDay,agedInquiries]=await Promise.all([
+      db.prepare("SELECT COUNT(*) sessions,COALESCE(SUM(CASE WHEN error_events>0 THEN 1 ELSE 0 END),0) affected FROM analytics_sessions WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first(),
+      db.prepare("SELECT day,COUNT(*) sessions,COALESCE(SUM(CASE WHEN error_events>0 THEN 1 ELSE 0 END),0) affected FROM analytics_sessions WHERE day BETWEEN date(?,'-13 days') AND ? GROUP BY day ORDER BY day").bind(today,today).all(),
+      db.prepare("SELECT COUNT(*) count FROM inquiries WHERE status='new' AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-48 hours')").first()
+    ]);
+    const safe=value=>{const n=Number(value??0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid aggregate');return n};
+    const total=safe(totals?.sessions),affected=safe(totals?.affected),overdue=safe(agedInquiries?.count);
+    if(affected>total)throw Error('Inconsistent aggregate');
+    const percentage=(n,d)=>d?Math.round(n/d*1000)/10:null;
+    const trend=(byDay.results||[]).map(row=>{
+      const sessions=safe(row.sessions),errors=safe(row.affected);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day)||errors>sessions)throw Error('Invalid daily quality data');
+      return {day:row.day,sessions,affected:errors,percent:percentage(errors,sessions)};
+    });
+    const warning=total>=10&&affected>=3&&affected/total>=.15;
+    return response({
+      windowDays:14,since:today,
+      sessions:{total,withErrors:affected,percent:percentage(affected,total)},
+      trend,overdueInquiries:overdue,
+      alerts:[
+        ...(warning?[{code:'error-sessions',severity:'review',message:'최근 14일 오류 발생 세션 비율이 15% 이상입니다. 오류 발생 원인을 확인해 주세요.'}]:[]),
+        ...(overdue?[{code:'old-inquiries',severity:'review',message:'48시간 이상 미확인 문의 '+overdue+'건이 있습니다.'}]:[])
+      ],
+      definition:'익명 탭 세션 중 최소 한 번의 오류가 기록된 세션 비율. 기능별 클릭/작업 성공률이 아니며, 최대 14일 보존되는 통계에 한정합니다.'
+    });
+  }
   if(path==='/api/admin/statistics.csv'&&request.method==='GET'){
     const result=await db.prepare("SELECT day,visits,editor_seconds FROM analytics_daily WHERE day BETWEEN date(?,'-29 days') AND ? ORDER BY day").bind(today,today).all();
     const number=value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0)throw new Error('Invalid aggregate');return String(n)};
