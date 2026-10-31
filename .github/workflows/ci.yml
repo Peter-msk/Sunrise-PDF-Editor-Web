@@ -90,6 +90,8 @@ jobs:
         run: node tests/browser-admin-quality.cjs
       - name: Chromium administrator workflows (mock API, no credentials)
         run: node tests/browser-admin-workflows.cjs
+      - name: Chromium real administrator login and session rotation (local SQLite)
+        run: node tests/browser-admin-auth.cjs
       - name: Ensure browser test did not alter application sources
         run: |
           test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"

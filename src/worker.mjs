@@ -1,5 +1,6 @@
 import {telemetry,adminApi,PUBLICATION_WINDOW_SQL} from './admin-api.mjs';
 import {authRoutes,getAdminSession} from './admin-password-auth.mjs';
+import {runAdminRetention} from './admin-retention.mjs';
 // Sunrise PDF Editor Web: public release feed + private Cloudflare D1 inquiry inbox.
 // No PDF data is read, uploaded or retained by this Worker.
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
@@ -91,11 +92,7 @@ export default {
     return env.ASSETS.fetch(request);
   },
   async scheduled(_event,env) {
-    if(!env.DB) return;
-    await env.DB.prepare("DELETE FROM inquiries WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-90 days')").run();
-    await env.DB.prepare("DELETE FROM inquiry_rate_limits WHERE day < strftime('%Y-%m-%d','now','-2 days')").run();
-    await env.DB.prepare("DELETE FROM analytics_sessions WHERE day < date('now','+9 hours','-14 days')").run();
-    await env.DB.prepare('DELETE FROM admin_sessions WHERE expires_ms<? OR last_seen_ms<?').bind(Date.now(),Date.now()-30*60*1000).run();
-    await env.DB.prepare('DELETE FROM admin_login_limits WHERE window_start_ms<?').bind(Date.now()-24*60*60*1000).run();
+    if(!env.DB)return;
+    await runAdminRetention(env.DB);
   }
 };
