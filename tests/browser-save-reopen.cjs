@@ -59,8 +59,8 @@ async function main(){
    page.on('pageerror',error=>pageErrors.push(error.message));
    await page.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
    await page.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseEditState),
-     {timeout:40000});
-   const filename='roundtrip-input.pdf';
+     null,{timeout:40000});
+   const filename='roundtrip-input.pdf',savedName='roundtrip-input_edited.pdf';
    await page.locator('#openPdfInput').setInputFiles({name:filename,mimeType:'application/pdf',buffer:await fixture()});
    await page.waitForFunction(name=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes(name),
      filename,{timeout:40000});
@@ -69,12 +69,12 @@ async function main(){
    await page.locator('#saveAsConfirmBtn').click();
    const link=page.locator('#saveAsDownloadLink');
    await link.waitFor({state:'visible',timeout:60000});
-   assert.equal(await link.getAttribute('download'),filename);
+   assert.equal(await link.getAttribute('download'),savedName);
    const saving=page.waitForEvent('download',{timeout:30000});
    await link.click();
    const download=await saving;
-   assert.equal(download.suggestedFilename(),filename);
-   const disk=path.join(downloadDir,filename);
+   assert.equal(download.suggestedFilename(),savedName);
+   const disk=path.join(downloadDir,savedName);
    await download.saveAs(disk);
    const actual=fs.readFileSync(disk);
    assert(actual.byteLength>100);
