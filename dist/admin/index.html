@@ -63,10 +63,12 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <section class="panel" style="margin-top:12px">
 <div class="toolbar"><h2 style="margin:0">문의사항</h2><div><label class="muted" for="statusFilter">상태 </label><select id="statusFilter"><option value="all">전체</option><option value="new">미확인</option><option value="read">확인</option><option value="in_progress">처리 중</option><option value="answered">답변 완료</option></select>
 <input type="search" id="query" maxlength="60" placeholder="문의 검색"><button id="reload">조회</button></div></div>
+<p class="muted">문의는 접수 후 90일이 지나면 정기 정리됩니다. 상태 변경 이력은 해당 문의를 선택해 확인합니다.</p>
 <div class="table-scroll"><table><thead><tr><th>접수일</th><th>유형</th><th>내용</th><th>상태</th><th>번호</th></tr></thead><tbody id="inquiryRows"><tr><td colspan="5">데이터 조회 중</td></tr></tbody></table></div>
 <div id="detail" class="detail" hidden><div class="detail-grid"><div><strong id="selectedTitle"></strong><p id="selectedMessage"></p><p>회신 주소: <a id="replyEmail" href="#"></a></p></div><div>
 <label>처리 상태<select id="editStatus"><option value="new">미확인</option><option value="read">확인</option><option value="in_progress">처리 중</option><option value="answered">답변 완료</option></select></label>
 <label style="margin-top:8px">관리자 메모<textarea id="adminNote" maxlength="1000"></textarea></label>
+<h3>상태 변경 이력</h3><div id="inquiryHistory" class="muted" role="status" aria-live="polite"></div>
 <button class="primary" id="saveStatus" style="margin-top:8px">변경 저장</button><p id="saveResult" class="status" role="status"></p></div></div></div>
 </section>
 <section class="panel" style="margin-top:12px" aria-labelledby="publicationsTitle">
@@ -125,6 +127,15 @@ function selectInquiry(id){selected=records.find(x=>x.id===id);if(!selected)retu
  $('selectedMessage').textContent=selected.message;$('replyEmail').textContent=selected.email;
  $('replyEmail').href='mailto:'+encodeURIComponent(selected.email);
  $('editStatus').value=selected.status;$('adminNote').value=selected.admin_note||'';$('saveResult').textContent='';
+ $('inquiryHistory').textContent='이력을 불러오는 중입니다.';
+ read('/api/admin/inquiries/'+id+'/history').then(data=>{
+  if(!selected||selected.id!==id||$('detail').hidden)return;
+  const root=$('inquiryHistory');root.replaceChildren();
+  if(!data.items.length){root.textContent='상태 변경 이력이 없습니다.';return}
+  for(const item of data.items){const line=document.createElement('div');
+   const date=new Date(item.changed_at);const when=Number.isNaN(date.getTime())?'시간 확인 불가':date.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'});
+   line.textContent=when+' · '+(labels[item.old_status]||'알 수 없음')+' → '+(labels[item.new_status]||'알 수 없음');root.append(line)}
+ }).catch(()=>{if(selected?.id===id&&!$('detail').hidden)$('inquiryHistory').textContent='이력을 불러오지 못했습니다.'});
 }
 $('saveStatus').addEventListener('click',async()=>{if(!selected)return;const btn=$('saveStatus');btn.disabled=true;try{
  const out=await read('/api/admin/inquiries/'+selected.id,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:$('editStatus').value,note:$('adminNote').value})});
