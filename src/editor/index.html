@@ -2009,6 +2009,7 @@
               { id: "exportAllImages", label: "페이지 이미지 일괄 변환", icon: "fa-images", shortcut: "Ctrl+Shift+I", docReq: true },
               { id: "extractEmbeddedImages", label: "내장 이미지 추출", icon: "fa-photo-film", docReq: true },
               { id: "batchCompress", label: "PDF 여러 파일 압축", icon: "fa-file-zipper" },
+              { id: "batchMark", label: "PDF 일괄 워터마크·페이지 번호", icon: "fa-layer-group" },
             ],
           },
           {
@@ -5262,6 +5263,9 @@
         case "batchCompress":
           openBatchCompressModal();
           break;
+        case "batchMark":
+          openBatchMarkModal();
+          break;
 
         case "imageToPdf":
           document.getElementById("imageToPdfInput").click();
@@ -5660,7 +5664,7 @@
     // Batch output must preserve structural and form invariants. This is
     // intentionally not a visual/pixel comparison; image quality is controlled
     // separately by the explicit compression strength.
-    function verifyBatchCompressedPdf(original, output) {
+    function verifyBatchPdfStructure(original, output) {
       const {PDFName,PDFTextField,PDFCheckBox,PDFRadioGroup,PDFDropdown,PDFOptionList,PDFButton} = window.PDFLib;
       const n = PDFName.of;
       const originalPages = original.getPages(), resultPages = output.getPages();
@@ -5708,11 +5712,123 @@
           if(!ArrayBuffer.isView(result.bytes) || result.bytes.BYTES_PER_ELEMENT!==1 || result.bytes.byteLength>bytes.byteLength)
             throw new Error('압축 결과의 파일 크기가 유효하지 않습니다.');
           const check=await window.PDFLib.PDFDocument.load(result.bytes,{updateMetadata:false});
-          verifyBatchCompressedPdf(original,check);
+          verifyBatchPdfStructure(original,check);
           if(handlers.cancelled())break;
           handlers.result({index,name:file.name,bytes:result.bytes,originalSize:bytes.byteLength});
         }catch(error){if(handlers.cancelled())break;handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});}
       }
+    }
+
+    // Apply one safe stamping operation per source PDF without changing the source.
+    // Unsupported rotated/signed/XFA documents fail individually rather than
+    // producing a visually misplaced or structurally damaged document.
+    async function batchMarkPdfs(files, settings, handlers) {
+      if(!files.length || files.length>5 || files.some(f=>!Number.isSafeInteger(f.size)||f.size<0) ||
+          files.reduce((sum,f)=>sum+f.size,0)>100*1024*1024)
+        throw new Error('PDF는 최대 5개, 합계 100 MiB 이하로 선택해 주세요.');
+      if(!['watermark','page-number'].includes(settings.kind))
+        throw new Error('일괄 작업 종류가 올바르지 않습니다.');
+      const label=String(settings.text||'').trim().normalize('NFC');
+      if(settings.kind==='watermark' && (!label || label.length>40 || /[\\x00-\\x1f\\x7f]/.test(label)))
+        throw new Error('워터마크 문구는 1~40자로 입력해 주세요.');
+      for(let index=0;index<files.length;index++){
+        if(handlers.cancelled())break;
+        const file=files[index];
+        handlers.progress(index,files.length,file.name);
+        try{
+          const bytes=await readPdfInputFile(file);
+          const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
+          editablePdfForm(original);
+          if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
+          if(original.getPages().some(page=>((page.getRotation().angle%360)+360)%360!==0))
+            throw new Error('회전된 페이지가 포함된 PDF는 위치가 잘못될 수 있어 일괄 표시를 지원하지 않습니다.');
+          const {PDFDocument,StandardFonts,rgb,degrees}=window.PDFLib;
+          const next=await PDFDocument.load(bytes,{updateMetadata:false});
+          const font=settings.kind==='watermark'
+            ? await window.SunriseKoreanFont.embed(next,[label])
+            : await next.embedFont(StandardFonts.Helvetica);
+          const pages=next.getPages(),total=pages.length;
+          for(let pageIndex=0;pageIndex<total;pageIndex++){
+            if(handlers.cancelled())break;
+            const page=pages[pageIndex],box=page.getCropBox();
+            if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.width<100||box.height<100)
+              throw new Error('표시할 수 없는 페이지 크기입니다.');
+            if(settings.kind==='watermark'){
+              const size=Math.min(40,Math.max(12,box.width/15)),width=font.widthOfTextAtSize(label,size);
+              // Position the center of the diagonal text along the crop-box center.
+              const angle=Math.PI/4;
+              const x=box.x+box.width/2-Math.cos(angle)*width/2;
+              const y=box.y+box.height/2-Math.sin(angle)*width/2;
+              page.drawText(label,{x,y,size,font,rotate:degrees(45),color:rgb(.45,.45,.45),opacity:.18});
+            }else{
+              const labelText=(pageIndex+1)+' / '+total,size=10;
+              page.drawText(labelText,{x:box.x+box.width-24-font.widthOfTextAtSize(labelText,size),
+                y:box.y+17,size,font,color:rgb(.3,.3,.3),opacity:1});
+            }
+          }
+          if(handlers.cancelled())break;
+          const output=await next.save({updateFieldAppearances:false});
+          if(!ArrayBuffer.isView(output)||output.BYTES_PER_ELEMENT!==1)
+            throw new Error('저장 결과 바이트를 확인하지 못했습니다.');
+          const reopened=await PDFDocument.load(output,{updateMetadata:false});
+          verifyBatchPdfStructure(original,reopened);
+          if(handlers.cancelled())break;
+          handlers.result({index,name:file.name,bytes:output,originalSize:bytes.byteLength});
+        }catch(error){
+          if(handlers.cancelled())break;
+          handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});
+        }
+      }
+    }
+
+    function openBatchMarkModal() {
+      openModal({title:'PDF 일괄 워터마크·페이지 번호',icon:'fa-layer-group',width:'620px',
+        bodyHtml:`<p>최대 5개 PDF, 파일당 50 MiB·합계 100 MiB. 원본은 변경하지 않고 파일별로 다운로드합니다.</p>
+        <input id="markPdfFiles" type="file" accept="application/pdf,.pdf" multiple>
+        <label for="markKind">일괄 작업</label><select id="markKind" class="dialog-select">
+          <option value="watermark">워터마크 추가</option><option value="page-number">페이지 번호 추가</option>
+        </select>
+        <label for="markText">워터마크 문구 (한글 지원)</label>
+        <input id="markText" class="dialog-input" type="text" value="대외비" maxlength="40">
+        <p>워터마크는 중앙 대각선에 옅게 표시합니다. 페이지 번호는 각 파일마다 1부터 시작하여 오른쪽 아래에 표시합니다.</p>
+        <p>서명·XFA·회전 페이지 문서는 보존을 위해 제외합니다. 완료 파일은 개별 다운로드하세요.</p>
+        <p id="markStatus" role="status" aria-live="polite"></p><div id="markResults"></div>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="markStart">일괄 적용</button>
+          <button type="button" class="dialog-btn" id="markCancel">닫기</button></div>`,
+        onMount:()=>{
+          const get=id=>document.getElementById(id),start=get('markStart'),cancel=get('markCancel');
+          const status=get('markStatus'),results=get('markResults'),kind=get('markKind'),text=get('markText'),input=get('markPdfFiles');
+          let running=false,cancelled=false;
+          const sync=()=>{text.disabled=kind.value!=='watermark'};
+          kind.addEventListener('change',sync);sync();
+          const open=()=>get('modalBackdrop').classList.contains('open')&&get('markStart')===start;
+          cancel.addEventListener('click',()=>{if(running){cancelled=true;cancel.disabled=true;status.textContent='현재 파일 처리 후 중단합니다.';}else closeModal()});
+          start.addEventListener('click',async()=>{
+            if(running)return;
+            const files=Array.from(input.files||[]),settings={kind:kind.value,text:text.value};
+            running=true;cancelled=false;start.disabled=true;cancel.textContent='작업 취소';
+            input.disabled=kind.disabled=text.disabled=true;results.replaceChildren();
+            try{
+              await batchMarkPdfs(files,settings,{
+                cancelled:()=>cancelled||!open(),
+                progress:(index,total,name)=>{status.textContent=`${index+1}/${total} 처리 중: ${name}`},
+                result:({name,bytes})=>{
+                  const row=document.createElement('p'),button=document.createElement('button');
+                  button.type='button';
+                  const suffix=settings.kind==='watermark'?'_watermarked':'_numbered';
+                  button.textContent=`${name} 결과 다운로드`;
+                  button.addEventListener('click',()=>downloadBytes(bytes,name.replace(/\\.pdf$/i,'')+suffix+'.pdf'));
+                  row.append(button);results.append(row);
+                },
+                error:({name,message})=>{const row=document.createElement('p');row.textContent=`${name}: ${message}`;results.append(row)}
+              });
+              if(open())status.textContent=cancelled?'취소했습니다. 완료한 파일은 다운로드할 수 있습니다.':'일괄 작업이 완료됐습니다. 파일을 확인해 주세요.';
+            }catch(error){if(open())status.textContent=error.message||'작업을 처리하지 못했습니다.';}
+            finally{running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
+              input.disabled=false;kind.disabled=false;sync()}
+          });
+        }});
     }
 
     function openBatchCompressModal() {
