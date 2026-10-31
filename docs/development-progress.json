@@ -1,0 +1,378 @@
+{
+  "schema": 1,
+  "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
+  "asOf": "2026-10-31",
+  "basis": "PR #9 / PR #10의 구현·Node 검사 기록; 미확인 실기는 미검증으로 보수적 기재. 실증 수치가 아닌 잠정 검토 점수",
+  "excluded": [
+    "USR-20 (OCR)"
+  ],
+  "scoreWeights": {
+    "implementation": 40,
+    "automated": 30,
+    "practical": 20,
+    "deployment": 10
+  },
+  "phaseMethod": "1~7단계 동일 가중치; 단계 점수는 해당 기능의 산술 평균",
+  "features": [
+    {
+      "id": "ADM-01",
+      "name": "운영 홈·KPI",
+      "phase": 1,
+      "implementation": 70,
+      "automated": 60,
+      "practical": 10,
+      "deployment": 35,
+      "note": "기본 대시보드 보유, 기간 필터·실운영 교차검증 미완"
+    },
+    {
+      "id": "ADM-02",
+      "name": "방문 통계",
+      "phase": 1,
+      "implementation": 65,
+      "automated": 65,
+      "practical": 10,
+      "deployment": 35,
+      "note": "KST 경계·익명 세션 검사, 재방문 정의 고도화 필요"
+    },
+    {
+      "id": "ADM-03",
+      "name": "사용시간 분석",
+      "phase": 1,
+      "implementation": 55,
+      "automated": 50,
+      "practical": 0,
+      "deployment": 30,
+      "note": "활성 시간 추정, 완료 세션 분리·실측 필요"
+    },
+    {
+      "id": "ADM-04",
+      "name": "기능 오류율",
+      "phase": 1,
+      "implementation": 35,
+      "automated": 35,
+      "practical": 0,
+      "deployment": 30,
+      "note": "오류 건수 수집, 실행 분모·실패율 부족"
+    },
+    {
+      "id": "ADM-05",
+      "name": "문의 관리",
+      "phase": 1,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 15,
+      "deployment": 35,
+      "note": "상태·검색·처리 이력 구현, 실제 업무 흐름 검증 필요"
+    },
+    {
+      "id": "ADM-06",
+      "name": "공지사항 관리",
+      "phase": 1,
+      "implementation": 80,
+      "automated": 80,
+      "practical": 0,
+      "deployment": 0,
+      "note": "Work PR9 Draft UI·API 및 7일 정책, 운영 미배포"
+    },
+    {
+      "id": "ADM-07",
+      "name": "업데이트 관리",
+      "phase": 1,
+      "implementation": 80,
+      "automated": 75,
+      "practical": 0,
+      "deployment": 0,
+      "note": "Work PR9 Draft 게시/편집, 배포 연동 검증 필요"
+    },
+    {
+      "id": "ADM-08",
+      "name": "서비스 상태",
+      "phase": 1,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "핵심 API·장애 운영 화면 미구현"
+    },
+    {
+      "id": "ADM-09",
+      "name": "배포·버전",
+      "phase": 1,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "운영 버전 자동 동기화 미구현"
+    },
+    {
+      "id": "ADM-10",
+      "name": "보존·백업",
+      "phase": 1,
+      "implementation": 45,
+      "automated": 40,
+      "practical": 0,
+      "deployment": 25,
+      "note": "일부 예약 삭제, 백업/복구 리허설 미완"
+    },
+    {
+      "id": "ADM-11",
+      "name": "계정 보안",
+      "phase": 1,
+      "implementation": 80,
+      "automated": 85,
+      "practical": 15,
+      "deployment": 45,
+      "note": "로그인 운영 중, 비밀번호 변경 PR10 Draft, 침투·운영 검증 필요"
+    },
+    {
+      "id": "ADM-12",
+      "name": "이용 품질",
+      "phase": 1,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "완료율·복구율 집계 미구현"
+    },
+    {
+      "id": "ADM-13",
+      "name": "통계 CSV",
+      "phase": 1,
+      "implementation": 70,
+      "automated": 70,
+      "practical": 0,
+      "deployment": 0,
+      "note": "Work PR9 Draft 30일 일별 CSV, 운영 미배포"
+    },
+    {
+      "id": "ADM-14",
+      "name": "운영 알림",
+      "phase": 1,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "내부 운영 알림 미구현"
+    },
+    {
+      "id": "USR-01",
+      "name": "PDF 병합",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 70,
+      "practical": 15,
+      "deployment": 35,
+      "note": "기존 병합, 양식 안전 차단·특수 PDF 실검증 필요"
+    },
+    {
+      "id": "USR-02",
+      "name": "분할·추출",
+      "phase": 2,
+      "implementation": 65,
+      "automated": 60,
+      "practical": 10,
+      "deployment": 35,
+      "note": "기본 기능 존재, 일괄 범위·재열기 확대 필요"
+    },
+    {
+      "id": "USR-03",
+      "name": "페이지 편집",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 10,
+      "deployment": 35,
+      "note": "복제·회전·삭제 회귀, 실무 파일 실검증 부족"
+    },
+    {
+      "id": "USR-04",
+      "name": "텍스트 삽입",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 70,
+      "practical": 10,
+      "deployment": 35,
+      "note": "한글 지원, 실다운로드 위치·폰트 확인 필요"
+    },
+    {
+      "id": "USR-10",
+      "name": "PDF 양식",
+      "phase": 2,
+      "implementation": 80,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 0,
+      "note": "Work PR9 Draft 한글 필드·체크박스, 독립 실기 미완"
+    },
+    {
+      "id": "USR-11",
+      "name": "PDF 일괄 처리",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 0,
+      "deployment": 0,
+      "note": "다중 압축·워터마크·페이지 번호 Draft, 일괄 분할·병합 잔여"
+    },
+    {
+      "id": "USR-18",
+      "name": "저장 안전성",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 85,
+      "practical": 10,
+      "deployment": 30,
+      "note": "디스크 저장·재열기 Node 검증, 실제 브라우저 다운로드 미완"
+    },
+    {
+      "id": "USR-06",
+      "name": "표·도형",
+      "phase": 3,
+      "implementation": 50,
+      "automated": 35,
+      "practical": 5,
+      "deployment": 30,
+      "note": "기본 삽입, 셀/도형 재편집과 시각적 검사 필요"
+    },
+    {
+      "id": "USR-07",
+      "name": "주석·형광펜",
+      "phase": 3,
+      "implementation": 45,
+      "automated": 35,
+      "practical": 5,
+      "deployment": 30,
+      "note": "기본 삽입, 원본 주석 편집·삭제 기능 부족"
+    },
+    {
+      "id": "USR-08",
+      "name": "북마크·목차",
+      "phase": 3,
+      "implementation": 70,
+      "automated": 75,
+      "practical": 0,
+      "deployment": 30,
+      "note": "텍스트 기반 제목 후보 Draft, 계층·실무 PDF 검증 필요"
+    },
+    {
+      "id": "USR-09",
+      "name": "PDF 압축",
+      "phase": 3,
+      "implementation": 75,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 30,
+      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요"
+    },
+    {
+      "id": "USR-12",
+      "name": "제출 전 품질 검사",
+      "phase": 3,
+      "implementation": 40,
+      "automated": 45,
+      "practical": 0,
+      "deployment": 0,
+      "note": "용량·페이지 방향 검사, 빈쪽·폰트 미검"
+    },
+    {
+      "id": "USR-17",
+      "name": "이미지·텍스트 추출",
+      "phase": 3,
+      "implementation": 50,
+      "automated": 45,
+      "practical": 0,
+      "deployment": 30,
+      "note": "페이지 렌더·텍스트 추출, 원본 내장 이미지 추출 미완"
+    },
+    {
+      "id": "USR-19",
+      "name": "모바일 UX",
+      "phase": 3,
+      "implementation": 50,
+      "automated": 25,
+      "practical": 10,
+      "deployment": 35,
+      "note": "일부 반응형 UI, 실제 모바일 파일/터치 검증 부족"
+    },
+    {
+      "id": "USR-05",
+      "name": "원문 직접 수정",
+      "phase": 4,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "정확한 제한 영역 기술 연구 미완"
+    },
+    {
+      "id": "USR-13",
+      "name": "민감정보 완전 삭제",
+      "phase": 4,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "보안삭제 검증 전, 출시 금지"
+    },
+    {
+      "id": "USR-14",
+      "name": "PDF 암호 보호",
+      "phase": 4,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "암호 및 권한 호환 검증 미완"
+    },
+    {
+      "id": "USR-15",
+      "name": "전자서명",
+      "phase": 4,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "시각적 서명·인증서 기반 서명 분리 설계 미완"
+    },
+    {
+      "id": "USR-16",
+      "name": "Word·Excel 변환",
+      "phase": 4,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "서식·한글 변환 정확도 검증 미완"
+    },
+    {
+      "id": "TECH-01",
+      "name": "코드·언어·성능 고도화",
+      "phase": 5,
+      "implementation": 30,
+      "automated": 35,
+      "practical": 0,
+      "deployment": 0,
+      "note": "모듈 분리와 CI 적용, 타입·메모리·번들 분석 미완"
+    },
+    {
+      "id": "QA-01",
+      "name": "전체 통합 안정화",
+      "phase": 6,
+      "implementation": 20,
+      "automated": 35,
+      "practical": 0,
+      "deployment": 0,
+      "note": "계약 검사 확대, 실제 Windows/모바일·업무 PDF 검증 미완"
+    },
+    {
+      "id": "REL-01",
+      "name": "최종 배포·운영 인계",
+      "phase": 7,
+      "implementation": 0,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "PR9/10 Draft; 전체 릴리스·운영 인수검사 미시행"
+    }
+  ]
+}
