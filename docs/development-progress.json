@@ -268,11 +268,11 @@
       "id": "USR-12",
       "name": "제출 전 품질 검사",
       "phase": 3,
-      "implementation": 40,
-      "automated": 45,
+      "implementation": 70,
+      "automated": 80,
       "practical": 0,
       "deployment": 0,
-      "note": "용량·페이지 방향 검사, 빈쪽·폰트 미검"
+      "note": "저장 PDF 제출 전 검사 모듈: 페이지·방향·크기, 글꼴 리소스, 필수 양식, XFA/서명, 내용 연산 기반 빈쪽 후보·부분 검사 경고, 49개 CI PASS; Chrome·Edge 실제 PDF 표시 검증 미완"
     },
     {
       "id": "USR-17",
