@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
-  "asOf": "2026-10-31",
+  "asOf": "2026-11-01",
   "basis": "PR #9 / PR #10의 구현·Node 검사 기록; 미확인 실기는 미검증으로 보수적 기재. 실증 수치가 아닌 잠정 검토 점수",
   "excluded": [
     "USR-20 (OCR)"
@@ -108,21 +108,21 @@
       "id": "ADM-10",
       "name": "보존·백업",
       "phase": 1,
-      "implementation": 45,
-      "automated": 40,
-      "practical": 0,
+      "implementation": 70,
+      "automated": 90,
+      "practical": 20,
       "deployment": 25,
-      "note": "일부 예약 삭제, 백업/복구 리허설 미완"
+      "note": "90일 경과 문의·연관 상태 이력·고아 이력을 함께 정리. 14일 익명 세션·만료 세션 경계 및 멱등성 실 SQLite 검사, 합성 데이터 VACUUM INTO 로컬 백업·복원 무결성 PASS. 운영 D1 복원 리허설 미실시"
     },
     {
       "id": "ADM-11",
       "name": "계정 보안",
       "phase": 1,
       "implementation": 80,
-      "automated": 85,
-      "practical": 15,
+      "automated": 95,
+      "practical": 35,
       "deployment": 45,
-      "note": "로그인 운영 중, 비밀번호 변경 PR10 Draft, 침투·운영 검증 필요"
+      "note": "실제 HTTPS Chromium+로컬 SQLite에서 초기 등록·독립 브라우저 2개 로그인·Secure HttpOnly 쿠키·비밀번호 변경 시 전체 세션 폐기·재로그인·로그아웃 PASS. 운영 도메인·실계정/침투 검사 미완"
     },
     {
       "id": "ADM-12",
