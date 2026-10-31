@@ -58,31 +58,31 @@
       "id": "ADM-05",
       "name": "문의 관리",
       "phase": 1,
-      "implementation": 75,
-      "automated": 75,
-      "practical": 15,
+      "implementation": 82,
+      "automated": 92,
+      "practical": 20,
       "deployment": 35,
-      "note": "상태·검색·처리 이력 구현, 실제 업무 흐름 검증 필요"
+      "note": "문의 검색·상태/메모 편집 후 상세 유지 및 이력 즉시 재조회. SQLite 기존 계약과 Chromium 가상 API 업무 흐름 통과; 실제 운영 관리자 로그인/문의 응대 미검증"
     },
     {
       "id": "ADM-06",
       "name": "공지사항 관리",
       "phase": 1,
-      "implementation": 80,
-      "automated": 80,
-      "practical": 0,
+      "implementation": 85,
+      "automated": 92,
+      "practical": 20,
       "deployment": 0,
-      "note": "Work PR9 Draft UI·API 및 7일 정책, 운영 미배포"
+      "note": "최초 게시일 7일 정책의 실제 SQLite 공개 피드·수정/숨김/재게시 만료 보호, Chromium 관리 UI CRUD/만료 표시 통과; 운영 배포 미검증"
     },
     {
       "id": "ADM-07",
       "name": "업데이트 관리",
       "phase": 1,
-      "implementation": 80,
-      "automated": 75,
-      "practical": 0,
+      "implementation": 85,
+      "automated": 90,
+      "practical": 20,
       "deployment": 0,
-      "note": "Work PR9 Draft 게시/편집, 배포 연동 검증 필요"
+      "note": "업데이트 등록/수정 및 최초 게시일 만료 보호 SQLite+Chromium 시험, 만료 게시물 관리자 조회 유지; 운영 실기 미검증"
     },
     {
       "id": "ADM-08",
@@ -138,11 +138,11 @@
       "id": "ADM-13",
       "name": "통계 CSV",
       "phase": 1,
-      "implementation": 70,
-      "automated": 70,
-      "practical": 0,
+      "implementation": 78,
+      "automated": 90,
+      "practical": 20,
       "deployment": 0,
-      "note": "Work PR9 Draft 30일 일별 CSV, 운영 미배포"
+      "note": "30일 익명 통계 CSV 실제 Chromium 다운로드 및 SQLite 30일 필터·UTF-8 BOM 원시 바이트·비공개 API 검증; Excel/운영 브라우저 실기 미완"
     },
     {
       "id": "ADM-14",
