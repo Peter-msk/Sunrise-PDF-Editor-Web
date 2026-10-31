@@ -1,5 +1,6 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
+import {readDeploymentReports} from './admin-deployments.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
@@ -61,6 +62,7 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/deployments')return readDeploymentReports(request,env);
   if(path==='/api/admin/save-quality'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     try{

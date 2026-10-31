@@ -62,6 +62,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <label class="check"><input type="checkbox" id="operationsAutoRefresh"> 관리자 화면이 열려 있을 때 1분마다 확인</label><p class="muted" id="operationsAutoStatus" role="status">자동 확인 꺼짐</p>
 <ul class="operation-alerts" id="operationAlerts" aria-live="polite"><li>운영 정보를 확인하고 있습니다.</li></ul></div>
 </section>
+<section class="panel" aria-labelledby="deploymentTitle"><div class="toolbar"><h2 id="deploymentTitle">최근 배포 파이프라인 보고</h2><button id="deploymentsReload" type="button">배포 이력 조회</button></div><p class="muted">서명된 파이프라인 보고를 표시합니다. 현재 Worker 버전 확인과는 별개의 정보이며, 보고 수신 시각이 표시됩니다.</p><p id="deploymentsStatus" role="status">배포 보고를 불러오는 중입니다.</p><div id="deploymentsList" style="max-height:220px;overflow:auto"></div></section>
 <p><a id="statisticsDownload" href="/api/admin/statistics.csv?days=14">선택 기간 익명 통계 CSV 다운로드</a> <span class="muted">· 날짜별 방문 세션과 활성 편집 시간만 포함합니다.</span></p>
 <section class="panel" aria-labelledby="sessionTitle"><div class="toolbar"><h2 id="sessionTitle">관리자 로그인 세션</h2><button id="sessionsReload" type="button">세션 조회</button></div><p id="sessionsStatus" role="status">세션 정보를 불러오는 중입니다.</p><p class="muted">전체 세션을 종료하면 현재 브라우저와 다른 브라우저 모두 다시 로그인해야 합니다.</p><button id="sessionsRevoke" type="button">모든 관리자 세션 종료</button></section>
 <section class="panel" aria-labelledby="qualityTitle" style="margin-top:12px">
@@ -148,10 +149,10 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <script type="module">
 const $=id=>document.getElementById(id),fmt=n=>Number(n||0).toLocaleString('ko-KR');
 let records=[],selected=null,publications={announcements:[],releases:[],today:''},selectedPublication=null;
-let operationAlerts=[],healthAlerts=[],qualityAlerts=[];
+let operationAlerts=[],healthAlerts=[],qualityAlerts=[],deploymentAlerts=[];
 function renderOperationAlerts(){
  const root=$('operationAlerts');root.replaceChildren();
- const messages=[...new Set([...healthAlerts,...qualityAlerts,...operationAlerts])];
+ const messages=[...new Set([...healthAlerts,...qualityAlerts,...operationAlerts,...deploymentAlerts])];
  $('operationAlertCount').textContent=String(messages.length);
  for(const message of messages.length?messages:['현재 확인이 필요한 문의·연결 오류가 없습니다.']){
   const li=document.createElement('li');li.textContent=message;root.append(li);
@@ -246,7 +247,7 @@ async function loadSaveQuality(){
 $('qualityReload').addEventListener('click',()=>{loadQuality();loadSaveQuality()});
 $('operationsReload').addEventListener('click',async()=>{
  const button=$('operationsReload');button.disabled=true;
- try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),dashboard()]);}
+ try{await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadDeployments(),dashboard()]);}
  finally{button.disabled=false;}
 });
 let autoRefreshPending=false;
@@ -261,7 +262,7 @@ setInterval(async()=>{
  if(!$('operationsAutoRefresh').checked||document.visibilityState!=='visible'||autoRefreshPending)return;
  autoRefreshPending=true;updateAutoStatus('자동 확인 중…');
  try{
-  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),dashboard()]);
+  const results=await Promise.allSettled([loadHealth(),loadQuality(),loadSaveQuality(),loadDeployments(),dashboard()]);
   const label=results.some(result=>result.status==='rejected')?'일부 자동 조회 실패':'자동 확인 완료';
   updateAutoStatus($('operationsAutoRefresh').checked?label+' · '+new Date().toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul'}):'자동 확인 꺼짐');
  }finally{autoRefreshPending=false}
@@ -407,6 +408,27 @@ async function loadSessions(){
   $('sessionsStatus').textContent='활성 로그인 '+fmt(d.activeSessions)+'개 · 유휴 '+d.idleMinutes+'분 / 최대 '+d.absoluteHours+'시간';
  }catch{$('sessionsStatus').textContent='세션 정보를 불러오지 못했습니다.'}
 }
+async function loadDeployments(){
+ try{
+  const d=await read('/api/admin/deployments');
+  if(d.source!=='signed-pipeline-report'||!Array.isArray(d.items))throw Error('Invalid history');
+  const root=$('deploymentsList');root.replaceChildren();
+  const names={succeeded:'성공 보고',failed:'실패 보고',rolled_back:'롤백 보고'};
+  for(const item of d.items){
+   const line=document.createElement('p');
+   const date=new Date(item.received_at);
+   line.textContent=(item.environment==='production'?'운영':'시험')+' · '+(names[item.status]||'상태 확인 필요')+' · '+date.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' · '+String(item.commit_sha||'').slice(0,8);
+   root.append(line);
+  }
+  const latest=d.items.find(item=>item.environment==='production');
+  deploymentAlerts=latest?.status==='failed'?['최근 운영 배포의 실패 보고가 있습니다. 배포 파이프라인을 확인하세요.']:[];
+  $('deploymentsStatus').textContent=d.items.length?d.items.length+'건의 배포 보고':'아직 수신된 배포 보고가 없습니다.';
+ }catch{
+  deploymentAlerts=['배포 이력을 조회할 수 없습니다. 연동 상태를 확인하세요.'];
+  $('deploymentsList').replaceChildren();$('deploymentsStatus').textContent='배포 보고 연동 대기 또는 조회 실패';
+ }finally{renderOperationAlerts()}
+}
+$('deploymentsReload').addEventListener('click',loadDeployments);
 $('sessionsReload').addEventListener('click',loadSessions);
 $('sessionsRevoke').addEventListener('click',async()=>{
  if(!confirm('현재 브라우저를 포함한 모든 관리자 로그인을 종료할까요?'))return;
@@ -416,5 +438,5 @@ $('sessionsRevoke').addEventListener('click',async()=>{
 });
 loadSessions();
 renderPublicationPreview();
-Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
+Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality(),loadDeployments()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
 </script></body></html>

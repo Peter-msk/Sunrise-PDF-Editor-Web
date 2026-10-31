@@ -98,11 +98,11 @@
       "id": "ADM-09",
       "name": "배포·버전",
       "phase": 1,
-      "implementation": 75,
+      "implementation": 88,
       "automated": 85,
       "practical": 10,
       "deployment": 0,
-      "note": "Wrangler version_metadata 바인딩과 실제 Worker 버전 ID·태그·버전 생성시각 표시, 미설정 및 설정값 대체 처리 Node·Chromium 검증. 버전 생성일은 배포 시각이 아님; 운영 배포 이력 미검증"
+      "note": "서명 배포 보고 API·저장 테이블·보고 스크립트·최근 이력 UI 소스 추가. 실제 파이프라인/비밀값 연결과 기능 검증 미실시"
     },
     {
       "id": "ADM-10",
@@ -148,11 +148,11 @@
       "id": "ADM-14",
       "name": "운영 알림",
       "phase": 1,
-      "implementation": 85,
+      "implementation": 92,
       "automated": 90,
       "practical": 10,
       "deployment": 0,
-      "note": "관리자 화면 표시 중 선택적 1분 자동 갱신 추가. 외부 알림·배포 실패 연동·신규 기능 검증 및 운영 반영은 미완"
+      "note": "최근 운영 배포 실패 보고와 이력 조회 불가 알림을 내부 운영 알림에 연결. 실제 보고 연동 및 신규 기능 검증은 미완"
     },
     {
       "id": "USR-01",
