@@ -23,7 +23,7 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
  const pdf=await lib.PDFDocument.create();const page=pdf.addPage([450,640]);pdf.setTitle('Business Form');
  const field=pdf.getForm().createTextField('client');field.addToPage(page,{x:25,y:440,width:200,height:30});field.setText('Sample');
  const box=pdf.getForm().createCheckBox('accepted');box.addToPage(page,{x:30,y:400,width:20,height:20});box.check();
- const source=await pdf.save({updateFieldAppearances:false});
+ const source=await pdf.save({updateFieldAppearances:false}),originalSnapshot=Uint8Array.from(source);
  const file=(name,data=source)=>({name,size:data.byteLength,data});
  const invalid=file('bad.pdf',new Uint8Array([1,2,3]));
  await ctx.batchMarkPdfs([file('good-a.pdf'),invalid,file('good-b.pdf')],{kind:'watermark',text:'대외비'},handlers);
@@ -37,7 +37,7 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
   assert.equal(doc.getTitle(),'Business Form');
   assert(r.bytes.byteLength>0);
  }
- assert.deepEqual([...source],[...fs.readFileSync('/dev/null').length?source:source],'Input source unchanged');
+ assert.deepEqual([...source],[...originalSnapshot],'Input source unchanged');
  output.length=0;errors.length=0;progress.length=0;
  await ctx.batchMarkPdfs([file('number.pdf')],{kind:'page-number',text:''},handlers);
  assert.equal(output.length,1);
