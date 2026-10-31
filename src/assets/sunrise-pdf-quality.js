@@ -7,13 +7,28 @@
 })(typeof globalThis!=='undefined'?globalThis:undefined,function(){
   'use strict';
   const MAX_FILE=50*1024*1024,MAX_SCAN=120,MAX_ISSUES=120;
-  const display=(a,b)=>a&&b?String(a)+' · '+String(b):String(a||b||'');
+  // pdf-lib can discard unsupported XFA while opening a document. Inspect the
+  // original bytes before parsing, but treat this as an indicator only:
+  // compressed object streams and escaped names can hide a marker.
+  function hasRawPdfName(bytes,name){
+    const token=Array.from('/'+name,c=>c.charCodeAt(0));
+    const delimiter=b=>b===0||b===9||b===10||b===12||b===13||b===32||
+      b===40||b===41||b===47||b===60||b===62||b===91||b===93||b===123||b===125;
+    for(let i=0;i<=bytes.byteLength-token.length;i++){
+      if(i>0&&!delimiter(bytes[i-1]))continue;
+      let matched=true;
+      for(let j=0;j<token.length;j++)if(bytes[i+j]!==token[j]){matched=false;break;}
+      if(matched&&(i+token.length===bytes.byteLength||delimiter(bytes[i+token.length])))return true;
+    }
+    return false;
+  }
   async function inspect(raw,opts){
     const PDFLib=opts?.PDFLib;
     if(!PDFLib?.PDFDocument?.load)throw Error('PDF 구조 검사 엔진을 불러오지 못했습니다.');
     const bytes=raw instanceof ArrayBuffer?new Uint8Array(raw):raw;
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength||bytes.byteLength>MAX_FILE)
       throw Error('PDF는 50 MiB 이하의 파일만 검사할 수 있습니다.');
+    const rawXfa=hasRawPdfName(bytes,'XFA');
     const pdf=await PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
     const pages=pdf.getPages();
     if(!pages.length)throw Error('페이지가 없는 PDF입니다.');
@@ -67,13 +82,14 @@
     if(orientation.portrait&&orientation.landscape)
       emit('review','mixed-orientation','세로·가로 페이지가 혼합되어 있습니다. 제출 형식에 맞는지 확인해 주세요.');
     const cat=pdf.catalog;
+    if(rawXfa)emit('review','xfa-form','원본 PDF에서 XFA 구조 표기가 발견되었습니다. 지원되지 않는 양식이 누락될 수 있으므로 별도 확인하세요.');
     if(cat.get(N('Perms')))emit('review','signature','서명·권한 관련 구조가 있습니다. 서명 유효성은 별도 검사해야 합니다.');
     if(cat.get(N('Encrypt')))emit('review','security','암호·권한 설정이 있습니다. 제출처의 허용 여부를 확인해 주세요.');
     if(cat.get(N('AcroForm'))){
       try{
         const dict=resolve(cat.get(N('AcroForm')));
-        if(dict?.get?.(N('XFA')))
-          emit('review','xfa-form','XFA 양식이 포함되어 있습니다. 입력값의 표시·저장 호환성을 별도로 확인하세요.');
+        if(dict?.get?.(N('XFA'))&&!rawXfa)
+          emit('review','xfa-form','XFA 양식 구조가 확인되었습니다. 입력값의 표시·저장 호환성을 별도로 확인하세요.');
         const fields=pdf.getForm().getFields();
         formFields=fields.length;
         for(const field of fields){
