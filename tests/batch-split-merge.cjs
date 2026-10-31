@@ -71,7 +71,7 @@ const name=lib.PDFName.of;
  await pages.process([file('outline.pdf',await bookmark.save())],{mode:'split',pagesPerFile:1},handlers,options);
  assert.match(errors[0]?.message||'',/Outlines/);
  const annotated=await lib.PDFDocument.create();const annotatedPage=annotated.addPage();
- annotatedPage.node.set(name('Annots'),annotated.context.obj([]));
+ annotatedPage.node.set(name('Annots'),annotated.context.obj([annotated.context.obj({Type:'Annot',Subtype:'Text'})]));
  errors.length=0;
  await pages.process([file('annotations.pdf',await annotated.save())],{mode:'split',pagesPerFile:1},handlers,options);
  assert.match(errors[0]?.message||'',/Annots/);
