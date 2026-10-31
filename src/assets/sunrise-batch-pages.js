@@ -7,6 +7,20 @@
   'use strict';
   const MiB=1024*1024,MAX_FILES=5,MAX_TOTAL_BYTES=100*MiB,MAX_FILE_BYTES=50*MiB;
   const MAX_SOURCE_PAGES=150,MAX_MERGED_PAGES=250,MAX_OUTPUTS=50;
+  // Split outputs stay available for individual downloads until the modal
+  // closes. Bound their combined bytes, not only the number of files.
+  function reserveOutputBytes(usedBytes,nextBytes){
+    if(!Number.isSafeInteger(usedBytes)||usedBytes<0||
+       !Number.isSafeInteger(nextBytes)||nextBytes<=0||nextBytes>MAX_FILE_BYTES||
+       usedBytes+nextBytes>MAX_TOTAL_BYTES)
+      throw new Error('일괄 결과 전체 용량은 100 MiB, 파일당 50 MiB 이하로 제한됩니다. 분할 크기를 늘리거나 파일을 나눠 처리하세요.');
+    return usedBytes+nextBytes;
+  }
+  // Yield at file/chunk boundaries so the browser can receive a Cancel click.
+  // PDF parsing or a single page-copy itself is not interruptible.
+  async function yieldToBrowser(){
+    await new Promise(resolve=>setTimeout(resolve,0));
+  }
   const protectedCatalog=['AcroForm','Perms','Outlines','Names','AF','Collection',
     'StructTreeRoot','MarkInfo','OpenAction','AA','OCProperties','DSS','PageLabels'];
   const protectedPage=['Annots','AA','Metadata','StructParents','B','PresSteps'];
@@ -88,15 +102,18 @@
       const perFile=Number(settings.pagesPerFile);
       if(!Number.isSafeInteger(perFile)||perFile<1||perFile>100)
         throw new Error('출력 PDF당 페이지 수는 1~100쪽이어야 합니다.');
-      let emitted=0;
+      let emitted=0,emittedBytes=0;
       for(let i=0;i<files.length;i++){
         if(cancelled())break;
         const file=files[i];progress(i,files.length,file.name);
+        await yieldToBrowser();
+        if(cancelled())break;
         try{
           const source=await readSource(file,opts);
           const chunkCount=Math.ceil(source.pages.length/perFile);
           if(emitted+chunkCount>MAX_OUTPUTS)throw new Error('이번 작업의 결과 파일 수가 최대 50개를 초과합니다. 출력당 페이지 수를 늘려 주세요.');
           const staged=[];
+          let stagedBytes=0;
           for(let chunk=0;chunk<chunkCount;chunk++){
             if(cancelled())break;
             const start=chunk*perFile,end=Math.min(source.pages.length,start+perFile);
@@ -111,11 +128,17 @@
             const copied=await pdf.copyPages(source.pdf,range);
             copied.forEach(page=>pdf.addPage(page));
             const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts);
+            stagedBytes=reserveOutputBytes(emittedBytes+stagedBytes,bytes.byteLength);
+            // reserveOutputBytes returns cumulative bytes; keep per-file bytes
+            // independent of any already emitted files.
+            stagedBytes-=emittedBytes;
             staged.push({index:i,part:chunk+1,startPage:start+1,endPage:end,totalParts:chunkCount,name:file.name,bytes});
+            await yieldToBrowser();
           }
           if(cancelled())break;
           for(const item of staged)result(item);
           emitted+=staged.length;
+          emittedBytes+=stagedBytes;
         }catch(e){if(cancelled())break;error({index:i,name:file.name,message:e?.message||'분할에 실패했습니다.'})}
       }
       return;
@@ -125,6 +148,8 @@
     for(let i=0;i<files.length;i++){
       if(cancelled())return;
       const file=files[i];progress(i,files.length,file.name);
+      await yieldToBrowser();
+      if(cancelled())return;
       try{
         const loaded=await readSource(file,opts);
         sources.push(loaded);expected.push(...loaded.pages);
@@ -146,5 +171,5 @@
       if(!cancelled())result({index:0,name:'Sunrise_batch_merged.pdf',bytes,startPage:1,endPage:expected.length,totalParts:1,part:1});
     }catch(e){if(!cancelled())error({index:-1,name:'병합 결과',message:e?.message||'병합 결과 검증에 실패했습니다.'})}
   }
-  return {process,checkFiles,checkSource,verifyPages};
+  return {process,checkFiles,checkSource,verifyPages,reserveOutputBytes};
 });
