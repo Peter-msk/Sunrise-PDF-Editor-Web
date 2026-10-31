@@ -44,6 +44,16 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
  const numbered=await lib.PDFDocument.load(output[0].bytes);
  assert.equal(numbered.getForm().getTextField('client').getText(),'Sample');
  assert.notDeepEqual([...output[0].bytes],[...source],'Output should contain added page number');
+ // Common office PDFs have no AcroForm: inspection must not synthesize one.
+ const plain=await lib.PDFDocument.create();plain.addPage([450,640]);
+ const plainBytes=await plain.save();
+ output.length=0;errors.length=0;
+ await ctx.batchMarkPdfs([file('plain.pdf',plainBytes)],{kind:'page-number',text:''},handlers);
+ assert.equal(output.length,1,'ordinary non-form PDF must succeed');
+ assert.equal(errors.length,0);
+ const plainSaved=await lib.PDFDocument.load(output[0].bytes);
+ assert.equal(plainSaved.catalog.get(lib.PDFName.of('AcroForm')),undefined,'must not create a blank form dictionary');
+
  const rotated=await lib.PDFDocument.load(source);rotated.getPage(0).setRotation(lib.degrees(90));
  errors.length=0;output.length=0;
  await ctx.batchMarkPdfs([file('rotated.pdf',await rotated.save())],{kind:'watermark',text:'TEST'},handlers);
