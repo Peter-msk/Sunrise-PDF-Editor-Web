@@ -21,9 +21,9 @@ async function browserProof(password,salt,iterations=600000){
    if(sql.includes('SELECT id,username,password_salt,password_hash,iterations'))return accounts.value;
    if(sql.startsWith('UPDATE admin_sessions SET last_seen_ms')){
     const [,key,now,cutoff]=this.args,session=sessions.get(key);
-    return session&&session.expires_ms>now&&session.last_seen_ms>cutoff?{admin_id:1}:null;
+    return session&&session.expires_ms>now&&session.last_seen_ms>cutoff?{admin_id:1,created_ms:session.created_ms}:null;
    }
-   if(sql.includes('SELECT username FROM admin_accounts'))return accounts.value?{username:accounts.value.username}:null;
+   if(sql.includes('SELECT username,updated_at FROM admin_accounts'))return accounts.value?{username:accounts.value.username,updated_at:accounts.value.updated_at||null}:null;
    if(sql.startsWith('SELECT COALESCE(SUM(visits)'))return {visits:0,seconds:0};
    if(sql.startsWith('SELECT COALESCE(visits'))return {visits:0,seconds:0};
    return null;
