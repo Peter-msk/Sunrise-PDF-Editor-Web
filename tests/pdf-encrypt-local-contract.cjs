@@ -14,12 +14,26 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   doc.addPage([400,600]).drawText('SECRET APPLICATION',{x:40,y:500,size:14});
   const raw=Buffer.from(await doc.save());
   await fs.writeFile(original,raw);
-  let inputs=[],state='normal';
+  let inputs=[],state='normal',mutateOriginal=false;
   async function mock(args,payload){
    inputs.push({args,payload});
    if(args[0]==='--version')return {code:0,stdout:'qpdf version 12.2.0'};
    if(args[0]==='--requires-password')return {code:args[1].includes('.sunrise-pdf-lock-')?0:2,stdout:''};
-   if(args[0]==='--is-encrypted')return {code:0,stdout:''};
+   if(args[0]==='--is-encrypted'){
+    if(mutateOriginal){
+     const before=await fs.stat(original);
+     const edited=Buffer.from(raw);
+     edited[12]^=1; // Same file length; leave timestamp unchanged.
+     await fs.writeFile(original,edited);
+     await fs.utimes(original,before.atime,before.mtime);
+     const after=await fs.stat(original);
+     assert.equal(after.size,before.size,'Tamper fixture must preserve input size');
+     assert.equal(after.mtimeMs,before.mtimeMs,'Tamper fixture must preserve original mtime');
+     assert.equal(after.ino,before.ino,'Tamper fixture must retain file identity');
+     mutateOriginal=false;
+    }
+    return {code:0,stdout:''};
+   }
    if(args[0]==='@-'){
     const lines=payload.split('\n');
     if(lines.includes('--encrypt')){
@@ -58,6 +72,18 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   await assert.rejects(protect.protectPdfFile({inputPath:original,outputPath:target,password,qpdf:mock}),/암호화 엔진/);
   await assert.rejects(fs.stat(target),{code:'ENOENT'});
   state='normal';
+  // Regression: replacing bytes in-place while preserving length and mtime
+  // must never publish a protected PDF derived from a moving source.
+  const tamperedTarget=path.join(tmp,'tampered.pdf');
+  const fixedTime=new Date('2024-01-01T00:00:00.000Z');
+  await fs.utimes(original,fixedTime,fixedTime);
+  mutateOriginal=true;
+  await assert.rejects(
+   protect.protectPdfFile({inputPath:original,outputPath:tamperedTarget,password,qpdf:mock}),
+   /원본 PDF.*변경/
+  );
+  await assert.rejects(fs.stat(tamperedTarget),{code:'ENOENT'});
+  await fs.writeFile(original,raw);
   const success=await protect.protectPdfFile({inputPath:original,outputPath:target,password,qpdf:mock});
   assert.equal(success.verified,true);
   assert.equal(success.method,'qpdf AES-256');
