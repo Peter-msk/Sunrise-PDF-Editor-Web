@@ -69,6 +69,16 @@
    return {...item,level};
   });
  }
+ function removeSubtree(bookmarks,index){
+  const entries=normalizeLevels(bookmarks);
+  if(!Number.isInteger(index)||index<0||index>=entries.length)
+   throw Error('삭제할 북마크 위치가 올바르지 않습니다.');
+  const level=entries[index].level;
+  let end=index+1;
+  while(end<entries.length&&entries[end].level>level)end++;
+  const next=entries.slice(0,index).concat(entries.slice(end));
+  return {bookmarks:normalizeLevels(next),removedCount:end-index};
+ }
  function changeLevel(bookmarks,index,direction){
   if(!Number.isInteger(index)||index<0||index>=bookmarks.length||![-1,1].includes(direction))
    throw Error('북마크 들여쓰기 대상이 올바르지 않습니다.');
@@ -95,5 +105,5 @@
   return normalizeLevels(candidates.map(x=>({title:x.titles.find(t=>frequency.get(t.toLocaleLowerCase())===1),page:x.page}))
    .filter(x=>x.title).map(x=>({...x,level:inferLevel(x.title)})).slice(0,limit));
  }
- return {chooseHeading,suggestBookmarks,getLines,inferLevel,normalizeLevels,changeLevel};
+ return {chooseHeading,suggestBookmarks,getLines,inferLevel,normalizeLevels,changeLevel,removeSubtree};
 });
