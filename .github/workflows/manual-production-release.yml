@@ -36,6 +36,8 @@ jobs:
           test -n "$DEPLOYMENT_EVENT_SECRET"
       - run: npm ci --ignore-scripts
       - run: npm run build
+      - name: Production D1 and administrator safety gate (read-only)
+        run: node scripts/admin-production-gate.cjs
       - name: Deploy reviewed source
         id: deploy
         continue-on-error: true
