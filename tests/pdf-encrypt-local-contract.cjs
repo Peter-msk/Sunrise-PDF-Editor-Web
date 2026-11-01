@@ -18,7 +18,7 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   async function mock(args,payload){
    inputs.push({args,payload});
    if(args[0]==='--version')return {code:0,stdout:'qpdf version 12.2.0'};
-   if(args[0]==='--requires-password')return {code:args[1]===original?2:0,stdout:''};
+   if(args[0]==='--requires-password')return {code:args[1].includes('.sunrise-pdf-lock-')?0:2,stdout:''};
    if(args[0]==='--is-encrypted')return {code:0,stdout:''};
    if(args[0]==='@-'){
     const lines=payload.split('\n');
