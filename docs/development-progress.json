@@ -270,9 +270,9 @@
       "phase": 3,
       "implementation": 82,
       "automated": 88,
-      "practical": 0,
+      "practical": 20,
       "deployment": 0,
-      "note": "기존 저장 PDF 구조/필수양식/빈쪽 후보 검사에 CSV·JSON 로컬 리포트 다운로드 구현, 수식주입 방어·파일 변경 시 이전 검사결과 차단과 Node/빌드 검증 완료. 실제 브라우저 리포트 다운로드 사용성·실무 파일 수용은 별도"
+      "note": "저장 PDF 구조/필수양식/빈쪽 후보 검사 + CSV·JSON 로컬 리포트 다운로드, 수식주입 방어. Linux Chromium·Windows Chrome/Edge에서 실제 저장 PDF 검사→리포트 JSON/CSV 디스크 다운로드·내용검사 PASS. 실무 PDF의 시각 품질·서명 유효성·운영 배포 미검증"
     },
     {
       "id": "USR-17",
