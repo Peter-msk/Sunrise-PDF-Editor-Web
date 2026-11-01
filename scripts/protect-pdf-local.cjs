@@ -96,11 +96,21 @@ async function protectPdfFile({inputPath,outputPath,password,qpdf=invokeQpdf}){
  const dir=await fs.mkdtemp(path.join(path.dirname(target),'.sunrise-pdf-lock-'));
  await fs.chmod(dir,0o700).catch(()=>{});
  const stage=path.join(dir,'protected.pdf');
+ const snapshot=path.join(dir,'source.pdf');
  try{
+  // QPDF must process the exact bytes that were checked for signatures.
+  // Passing the live original path permits a replacement between checks and use.
+  await fs.copyFile(source,snapshot,fs.constants.COPYFILE_EXCL);
+  const snapshotStat=await fs.lstat(snapshot);
+  if(!snapshotStat.isFile()||snapshotStat.isSymbolicLink()||snapshotStat.size!==stat.size)
+   throw Error('암호화 입력 사본의 형식 또는 크기가 변경됐습니다.');
+  const snapshotDigest=crypto.createHash('sha256').update(await fs.readFile(snapshot)).digest('hex');
+  if(snapshotDigest!==initialDigest)
+   throw Error('원본 PDF가 검증과 암호화 사이에 변경됐습니다.');
   // @- carries the password via stdin rather than the process list.
   const cmd=[
    '--encrypt','--user-password='+password,'--owner-password='+owner,
-   '--bits=256','--',source,stage
+   '--bits=256','--',snapshot,stage
   ];
   const encrypted=await qpdf(['@-'],argsOnStdin(cmd));
   if(encrypted.code!==0)throw Error('AES-256 암호화 엔진이 실패했습니다.');
