@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 Node/SQLite 28개·전체 Node 67개·릴리스 빌드, Linux Chromium/Windows Chrome/Edge 각 관리자 3개+PDF 저장 1개 및 운영 구조/바인딩 읽기 증거. 실제 운영 반영/사용자 PC는 미확인인 잠정 관리 점수; USR-17 내장 이미지 추출 소스/계약 검사 코드 신규 작성(실행 결과 미확인).; USR-08 계층형 PDF 북마크 및 Node 계층 재열기 계약 통과",
+  "basis": "기존 관리자·사용자 전체 Node 계약 및 릴리스 빌드 통과, Linux Chromium·Windows Chrome·Edge PDF 열기/편집/다운로드/복원과 관리자 자동 브라우저 회귀 통과(2026-11-01). USR-06 표/도형, USR-07 메모/강조 테스트는 자동화된 합성 샘플이며 실사용 고객 PC·운영 Cloudflare 배포/D1 마이그레이션·OCR은 미실시.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -228,21 +228,21 @@
       "id": "USR-06",
       "name": "표·도형",
       "phase": 3,
-      "implementation": 50,
-      "automated": 35,
-      "practical": 5,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 15,
       "deployment": 30,
-      "note": "기본 삽입, 셀/도형 재편집과 시각적 검사 필요"
+      "note": "삽입 표 다행·다열 셀 재편집/크기·데이터 검증, 사각형·타원·선 삽입과 색·선두께·크기·투명도 재편집 및 PDF 편집 메타데이터 복원 구현. Node/Chromium/Windows Chrome·Edge 회귀 통과. 원본 PDF 벡터 직접 편집 및 업무 PDF 수용·운영 배포 미완"
     },
     {
       "id": "USR-07",
       "name": "주석·형광펜",
       "phase": 3,
-      "implementation": 45,
-      "automated": 35,
-      "practical": 5,
+      "implementation": 65,
+      "automated": 70,
+      "practical": 10,
       "deployment": 30,
-      "note": "기본 삽입, 원본 주석 편집·삭제 기능 부족"
+      "note": "Sunrise 삽입 메모·강조 영역 문구/배경색/크기/투명도 재편집, 왼쪽 검토 패널에서 수정, Undo/PDF 저장 복원 구현. Node/Chromium/Windows Chrome·Edge 회귀 통과. 기존 원본 PDF의 고유 주석 객체 직접 편집·삭제/실무 문서 수용 미완"
     },
     {
       "id": "USR-08",

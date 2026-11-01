@@ -1970,6 +1970,7 @@
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
               { id: "insertTable", label: "표 삽입", icon: "fa-table", shortcut: "Ctrl+Alt+B", docReq: true },
+              { id: "insertShape", label: "도형 삽입", icon: "fa-draw-polygon", docReq: true },
               { id: "insertPageNumber", label: "페이지 번호 삽입", icon: "fa-list-ol", docReq: true },
               { id: "insertHeaderFooter", label: "머리말/꼬리말", icon: "fa-heading", docReq: true },
             ],
@@ -3736,6 +3737,33 @@
           el.style.alignItems = "center";
           el.style.justifyContent = "center";
           el.textContent = item.text;
+        } else if (item.type === "Shape") {
+          el.style.background = "transparent";
+          const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+          const w = Math.max(20, Number(item.width) || 180), h = Math.max(20, Number(item.height) || 90);
+          const stroke = Math.max(1,Math.min(15,Number(item.strokeWidth) || 2));
+          svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+          svg.setAttribute("preserveAspectRatio","none");
+          svg.setAttribute("width","100%");svg.setAttribute("height","100%");
+          svg.style.pointerEvents="none";
+          const kind = ["rect","ellipse","line"].includes(item.shapeKind) ? item.shapeKind : "rect";
+          const node = document.createElementNS("http://www.w3.org/2000/svg",kind === "line" ? "line" : kind);
+          if (kind === "rect") {
+            node.setAttribute("x",String(stroke/2));node.setAttribute("y",String(stroke/2));
+            node.setAttribute("width",String(Math.max(1,w-stroke)));
+            node.setAttribute("height",String(Math.max(1,h-stroke)));
+          } else if (kind === "ellipse") {
+            node.setAttribute("cx",String(w/2));node.setAttribute("cy",String(h/2));
+            node.setAttribute("rx",String(Math.max(1,(w-stroke)/2)));
+            node.setAttribute("ry",String(Math.max(1,(h-stroke)/2)));
+          } else {
+            node.setAttribute("x1",String(stroke/2));node.setAttribute("y1",String(stroke/2));
+            node.setAttribute("x2",String(w-stroke/2));node.setAttribute("y2",String(h-stroke/2));
+          }
+          node.setAttribute("stroke",item.color || "#1F6F9F");
+          node.setAttribute("stroke-width",String(stroke));
+          node.setAttribute("fill",kind === "line" ? "none" : item.bgColor || "transparent");
+          svg.appendChild(node);el.appendChild(svg);
         } else if (item.type === "Note") {
           el.style.borderLeft = "4px solid #E58A18";
           el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.12)";
@@ -4300,7 +4328,7 @@
                 <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                   <strong style="color:var(--primary)">[${escapeHtml(ov.type)}]</strong> ${escapeHtml(ov.text || "표 항목")}
                 </div>
-                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${ov.pageIndex + 1}쪽</span>
+                <span style="display:flex;gap:4px;align-items:center;flex-shrink:0"><small style="color:var(--text-muted)">${ov.pageIndex + 1}쪽</small><button type="button" class="compact-btn" data-ov-edit="${escapeHtml(ov.id)}" aria-label="항목 수정">수정</button></span>
               </div>
             `;
           });
@@ -4308,6 +4336,17 @@
         container.innerHTML = html;
         document.getElementById("cmAddNoteBtn")?.addEventListener("click", () => executeCommand("insertNote"));
         document.getElementById("cmExportCsvBtn")?.addEventListener("click", () => exportOverlaysToCsv(doc));
+        container.querySelectorAll("[data-ov-edit]").forEach(button => {
+          button.addEventListener("click", event => {
+            event.stopPropagation();
+            const target=doc.overlays.find(ov=>ov.id===button.dataset.ovEdit);
+            if(!target||doc.operationBusy)return;
+            doc.currentPage=target.pageIndex;
+            state.selectedInsertId=target.id;
+            renderCurrentPageCanvas();
+            openEditInsertItemModal();
+          });
+        });
         container.querySelectorAll("[data-ov-id]").forEach((row) => {
           row.addEventListener("click", () => {
             const target = doc.overlays.find((o) => o.id === row.dataset.ovId);
@@ -4742,12 +4781,24 @@
         offCanvas.height = Math.round(h * dpr);
         octx.scale(dpr, dpr);
 
-        if (item.bgColor && item.bgColor !== "transparent") {
+        if (item.type !== "Shape" && item.bgColor && item.bgColor !== "transparent") {
           octx.fillStyle = item.bgColor;
           octx.fillRect(0, 0, w, h);
         }
 
-        if (item.type === "Stamp") {
+        if (item.type === "Shape") {
+          const stroke=Math.max(1,Math.min(15,Number(item.strokeWidth)||2));
+          const kind=["rect","ellipse","line"].includes(item.shapeKind)?item.shapeKind:"rect";
+          octx.beginPath();
+          octx.strokeStyle=item.color || "#1F6F9F";
+          octx.fillStyle=item.bgColor || "#FFFFFF";
+          octx.lineWidth=stroke;
+          if (kind === "rect") octx.rect(stroke/2,stroke/2,Math.max(1,w-stroke),Math.max(1,h-stroke));
+          else if (kind === "ellipse") octx.ellipse(w/2,h/2,Math.max(1,(w-stroke)/2),Math.max(1,(h-stroke)/2),0,0,2*Math.PI);
+          else {octx.moveTo(stroke/2,stroke/2);octx.lineTo(w-stroke/2,h-stroke/2);}
+          if (kind !== "line") octx.fill();
+          octx.stroke();
+        } else if (item.type === "Stamp") {
           octx.strokeStyle = item.color || "#1F6F9F";
           octx.lineWidth = 2;
           octx.strokeRect(1.5, 1.5, w - 3, h - 3);
@@ -4756,7 +4807,9 @@
           octx.fillRect(0, 0, 4, h);
         }
 
-        if (item.type === "Table" && Array.isArray(item.cells) && item.cells.length > 0) {
+        if (item.type === "Shape") {
+          // Shape geometry has already been painted; no text overlay.
+        } else if (item.type === "Table" && Array.isArray(item.cells) && item.cells.length > 0) {
           const rows = item.cells.length;
           const cols = Math.max(1, item.cells[0]?.length || 1);
           const cw = w / cols;
@@ -5312,6 +5365,11 @@
         case "insertTable":
           if (!doc) return;
           openInsertTableModal(doc);
+          break;
+
+        case "insertShape":
+          if (!doc) return;
+          openInsertShapeModal(doc);
           break;
 
         case "insertPageNumber":
@@ -7178,6 +7236,89 @@
       });
     }
 
+    // A table is editable metadata until PDF export; enforce bounded rectangular
+    // cells so preview and exported raster never disagree about row/column counts.
+    function validateEditableTableCells(cells) {
+      if (!Array.isArray(cells) || cells.length < 2 || cells.length > 12)
+        throw new Error("표는 2~12행으로 입력해 주세요.");
+      const columns = Array.isArray(cells[0]) ? cells[0].length : 0;
+      if (columns < 2 || columns > 8 ||
+          cells.some(row => !Array.isArray(row) || row.length !== columns))
+        throw new Error("표의 각 행은 같은 개수의 셀(2~8열)을 가져야 합니다.");
+      return cells.map(row => row.map(cell => {
+        const text = String(cell ?? "").trim();
+        if (text.length > 80 || /[\r\n\t]/.test(text))
+          throw new Error("셀 내용은 줄바꿈 없이 80자 이내로 작성해 주세요.");
+        return text;
+      }));
+    }
+    function parseEditableTableText(text) {
+      const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+      while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+      return validateEditableTableCells(lines.map(line => line.split("\t")));
+    }
+    function validateOverlayDimension(value, min, max, name) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < min || n > max)
+        throw new Error(name + "은(는) " + min + "~" + max + " 범위여야 합니다.");
+      return Math.round(n * 100) / 100;
+    }
+    function openInsertShapeModal(doc) {
+      const size = doc.pageSizes[doc.currentPage] || {width:595,height:842};
+      openModal({
+        title:"도형 삽입 (사각형 · 타원 · 선)",icon:"fa-draw-polygon",width:"470px",
+        bodyHtml:`
+          <div class="dialog-form-grid">
+            <label for="shapeKindInput">도형 종류:</label>
+            <select id="shapeKindInput" class="dialog-select">
+              <option value="rect">사각형</option><option value="ellipse">타원</option><option value="line">대각선</option>
+            </select>
+            <label for="shapeWidthInput">너비 (pt):</label>
+            <input id="shapeWidthInput" type="number" class="dialog-input" min="20" max="800" value="180">
+            <label for="shapeHeightInput">높이 (pt):</label>
+            <input id="shapeHeightInput" type="number" class="dialog-input" min="20" max="800" value="90">
+            <label for="shapeColorInput">선 색상:</label>
+            <input id="shapeColorInput" type="color" class="dialog-input" value="#1F6F9F">
+            <label for="shapeFillInput">채움 색상:</label>
+            <input id="shapeFillInput" type="color" class="dialog-input" value="#FFFFFF">
+            <label for="shapeStrokeInput">선 두께 (pt):</label>
+            <input id="shapeStrokeInput" type="number" class="dialog-input" min="1" max="15" value="2">
+          </div>
+        `,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="shapeConfirmBtn">도형 삽입</button>
+          <button type="button" class="dialog-btn" id="shapeCancelBtn">취소</button></div>`,
+        onMount:()=>{
+          document.getElementById("shapeCancelBtn").addEventListener("click",closeModal);
+          document.getElementById("shapeConfirmBtn").addEventListener("click",()=>{
+            if (activeDoc() !== doc || doc.operationBusy) return;
+            let width,height,strokeWidth;
+            try {
+              width=validateOverlayDimension(document.getElementById("shapeWidthInput").value,20,800,"너비");
+              height=validateOverlayDimension(document.getElementById("shapeHeightInput").value,20,800,"높이");
+              strokeWidth=validateOverlayDimension(document.getElementById("shapeStrokeInput").value,1,15,"선 두께");
+            } catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+            const shapeKind=document.getElementById("shapeKindInput").value;
+            if (!["rect","ellipse","line"].includes(shapeKind)) return;
+            const color=document.getElementById("shapeColorInput").value;
+            const bgColor=document.getElementById("shapeFillInput").value;
+            const id="ov_"+overlayIdCounter++;
+            const metricFinish=beginOperationMetric('overlay_insert');let outcome='failed';
+            try {
+              saveUndoSnapshot(doc,"도형 삽입");
+              doc.overlays.push({id,pageIndex:doc.currentPage,type:"Shape",shapeKind,
+                x:Math.max(0,Math.min(90,size.width-width)),y:Math.max(0,Math.min(140,size.height-height)),
+                width,height,color,bgColor,strokeWidth,opacity:1,text:""});
+              state.selectedInsertId=id;
+              closeModal();renderCurrentPageCanvas();renderLeftPane();
+              showToast("도형을 추가했습니다. 클릭하여 수정하거나 드래그하세요.","fa-draw-polygon");
+              outcome='succeeded';
+            }finally{metricFinish(outcome);}
+          });
+        }
+      });
+    }
+
     function openInsertTableModal(doc) {
       openModal({
         title: "표 삽입 (결재란 / 데이터 표)",
@@ -7222,6 +7363,9 @@
             try {
             const hCells = document.getElementById("tblHeaderInput").value.split(",").map((s) => s.trim());
             const rCells = document.getElementById("tblRowInput").value.split(",").map((s) => s.trim());
+            let cells;
+            try { cells = validateEditableTableCells([hCells, rCells]); }
+            catch (error) { showToast(error.message, "fa-triangle-exclamation"); return; }
             saveUndoSnapshot(doc, "표 삽입");
             const id = `ov_${overlayIdCounter++}`;
             doc.overlays.push({
@@ -7233,7 +7377,7 @@
               y: 100,
               width: 240,
               height: 64,
-              cells: [hCells, rCells],
+              cells,
               color: "#1B2631",
               bgColor: "#FFFFFF",
               opacity: 0.98,
@@ -7369,52 +7513,108 @@
     }
 
     function openEditInsertItemModal() {
-      const doc = activeDoc();
-      if (!doc) return;
-      const item = doc.overlays.find((o) => o.id === state.selectedInsertId) || doc.overlays.find((o) => o.pageIndex === doc.currentPage);
+      const doc=activeDoc();
+      if (!doc || doc.operationBusy) return;
+      const item=doc.overlays.find(o=>o.id===state.selectedInsertId) ||
+        doc.overlays.find(o=>o.pageIndex===doc.currentPage);
       if (!item) {
-        showToast("현재 페이지에서 수정할 삽입 항목을 먼저 클릭/터치하세요.", "fa-hand-pointer");
-        return;
+        showToast("현재 페이지에서 수정할 항목을 클릭/터치하세요.","fa-hand-pointer");return;
       }
-      state.selectedInsertId = item.id;
+      state.selectedInsertId=item.id;
+      const isTable=item.type==="Table",isShape=item.type==="Shape";
+      const isAnnotation=["Note","Highlight"].includes(item.type);
+      const dimensions=isTable||isShape||isAnnotation;
+      const safeColor=value=>/^#[0-9a-f]{6}$/i.test(value||"")?value:"#1F6F9F";
+      const fillColor=/^#[0-9a-f]{6}$/i.test(item.bgColor||"")?item.bgColor:
+        (item.type==="Highlight"?"#FFEB3B":item.type==="Note"?"#FFF6D6":"#FFFFFF");
+      let contentFields="";
+      if(isTable) {
+        const grid=Array.isArray(item.cells)?item.cells.map(row=>row.join("\t")).join("\n"):"";
+        contentFields=`<label for="editTableCellsInput">표 셀 편집 (탭으로 열 분리, 줄바꿈으로 행 분리):</label>
+          <textarea id="editTableCellsInput" class="dialog-input" rows="6" style="min-height:110px;width:100%">${escapeHtml(grid)}</textarea>`;
+      } else if(isShape) {
+        contentFields=`<label for="editShapeKindInput">도형 종류:</label>
+          <select id="editShapeKindInput" class="dialog-select">
+            <option value="rect" ${item.shapeKind==="rect"?"selected":""}>사각형</option>
+            <option value="ellipse" ${item.shapeKind==="ellipse"?"selected":""}>타원</option>
+            <option value="line" ${item.shapeKind==="line"?"selected":""}>대각선</option>
+          </select>
+          <label for="editStrokeWidthInput">선 두께 (pt):</label>
+          <input id="editStrokeWidthInput" class="dialog-input" type="number" min="1" max="15" value="${item.strokeWidth||2}">`;
+      } else {
+        contentFields=`<label for="editItemTextInput">문구 수정:</label>
+          <textarea id="editItemTextInput" class="dialog-input" rows="${isAnnotation?4:2}" style="width:100%">${escapeHtml(item.text||"")}</textarea>
+          <label for="editItemSizeInput">글자 크기 (pt):</label>
+          <input id="editItemSizeInput" type="number" class="dialog-input" min="8" max="72" value="${item.fontSize||13}">`;
+      }
+      const boxFields=dimensions?`
+        <label for="editItemWidthInput">너비 (pt):</label>
+        <input id="editItemWidthInput" type="number" class="dialog-input" min="20" max="800" value="${item.width||(isTable?240:isShape?180:220)}">
+        <label for="editItemHeightInput">높이 (pt):</label>
+        <input id="editItemHeightInput" type="number" class="dialog-input" min="20" max="800" value="${item.height||(isTable?64:isShape?90:64)}">`:"";
+      const paintFields=(isShape||isAnnotation)?`
+        <label for="editItemBgInput">배경/채움 색상:</label>
+        <input id="editItemBgInput" type="color" class="dialog-input" value="${fillColor}">
+        <label for="editItemOpacityInput">투명도 (0.1~1):</label>
+        <input id="editItemOpacityInput" type="number" class="dialog-input" step="0.05" min="0.1" max="1" value="${item.opacity??1}">`:"";
       openModal({
-        title: `삽입 항목 수정 (${item.type})`,
-        icon: "fa-pen-to-square",
-        width: "460px",
-        bodyHtml: `
-          <div class="dialog-form-grid">
-            <label for="editItemTextInput">문구 수정:</label>
-            <input type="text" id="editItemTextInput" class="dialog-input" value="${escapeHtml(item.text || "")}" />
-            <label for="editItemSizeInput">글자 크기:</label>
-            <input type="number" id="editItemSizeInput" class="dialog-input" min="8" max="72" value="${item.fontSize || 13}" />
-            <label for="editItemColorInput">색상:</label>
-            <input type="color" id="editItemColorInput" class="dialog-input" value="${item.color && item.color.startsWith("#") ? item.color : "#1F6F9F"}" style="height:34px;padding:2px" />
-          </div>
-        `,
-        footerHtml: `
-          <div></div>
-          <div class="modal-footer-right">
-            <button type="button" class="dialog-btn primary" id="editItemConfirmBtn">수정 저장</button>
-            <button type="button" class="dialog-btn" id="editItemCancelBtn">취소</button>
-          </div>
-        `,
-        onMount: () => {
-          document.getElementById("editItemCancelBtn").addEventListener("click", closeModal);
-          document.getElementById("editItemConfirmBtn").addEventListener("click", () => {
-            const metricFinish=beginOperationMetric('overlay_edit');let metricOutcome='cancelled';
+        title:`삽입 항목 수정 (${item.type})`,icon:"fa-pen-to-square",width:"500px",
+        bodyHtml:`<div class="dialog-form-grid">
+          ${contentFields}
+          <label for="editItemColorInput">글자/선 색상:</label>
+          <input id="editItemColorInput" type="color" class="dialog-input" value="${safeColor(item.color)}">
+          ${boxFields}
+          ${paintFields}
+        </div>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="editItemConfirmBtn">수정 저장</button>
+          <button type="button" class="dialog-btn" id="editItemCancelBtn">취소</button></div>`,
+        onMount:()=>{
+          document.getElementById("editItemCancelBtn").addEventListener("click",closeModal);
+          document.getElementById("editItemConfirmBtn").addEventListener("click",()=>{
+            if(activeDoc()!==doc||doc.operationBusy||!doc.overlays.includes(item)) {
+              showToast("수정 중 문서 상태가 변경되었습니다.","fa-triangle-exclamation");return;
+            }
+            let cells,text,fontSize,width,height,strokeWidth,opacity;
             try {
-            saveUndoSnapshot(doc, `항목 수정 (${item.type})`);
-            item.text = document.getElementById("editItemTextInput").value;
-            item.fontSize = Number(document.getElementById("editItemSizeInput").value) || 13;
-            item.color = document.getElementById("editItemColorInput").value;
-            closeModal();
-            renderCurrentPageCanvas();
-            renderLeftPane();
-            showToast("선택 항목을 수정했습니다.", "fa-pen-to-square");
-            metricOutcome='succeeded';
-            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
+              if(isTable) cells=parseEditableTableText(document.getElementById("editTableCellsInput").value);
+              else if(isShape) strokeWidth=validateOverlayDimension(
+                document.getElementById("editStrokeWidthInput").value,1,15,"선 두께");
+              else {
+                text=document.getElementById("editItemTextInput").value;
+                if(text.length>4000)throw new Error("문구는 4000자 이내로 입력해 주세요.");
+                fontSize=validateOverlayDimension(
+                  document.getElementById("editItemSizeInput").value,8,72,"글자 크기");
+              }
+              if(dimensions) {
+                width=validateOverlayDimension(document.getElementById("editItemWidthInput").value,20,800,"너비");
+                height=validateOverlayDimension(document.getElementById("editItemHeightInput").value,20,800,"높이");
+              }
+              if(isShape||isAnnotation)
+                opacity=validateOverlayDimension(document.getElementById("editItemOpacityInput").value,.1,1,"투명도");
+            } catch(error) {showToast(error.message,"fa-triangle-exclamation");return;}
+            const metricFinish=beginOperationMetric('overlay_edit');let outcome='failed';
+            try {
+              saveUndoSnapshot(doc,`항목 수정 (${item.type})`);
+              if(isTable){
+                item.cells=cells;item.text="표 ("+cells[0].join("/")+")";
+              }else if(isShape){
+                const kind=document.getElementById("editShapeKindInput").value;
+                if(["rect","ellipse","line"].includes(kind))item.shapeKind=kind;
+                item.strokeWidth=strokeWidth;
+              }else{item.text=text;item.fontSize=fontSize;}
+              item.color=document.getElementById("editItemColorInput").value;
+              if(dimensions){item.width=width;item.height=height;}
+              if(isShape||isAnnotation){
+                item.bgColor=document.getElementById("editItemBgInput").value;
+                item.opacity=opacity;
+              }
+              closeModal();renderCurrentPageCanvas();renderLeftPane();renderRightPane();
+              showToast("선택 항목을 수정했습니다. PDF 저장 후에도 편집 상태가 보존됩니다.","fa-pen-to-square");
+              outcome='succeeded';
+            }finally{metricFinish(outcome);}
           });
-        },
+        }
       });
     }
 
