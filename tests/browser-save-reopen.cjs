@@ -145,6 +145,32 @@ async function main(){
    await download.saveAs(disk);
    const actual=fs.readFileSync(disk);
    assert(actual.byteLength>100);
+   // USR-12: inspect the saved disk PDF and download the actual browser reports.
+   await page.evaluate(()=>executeCommand('checkSavedPdf'));
+   await page.locator('#savedPdfCheckInput').setInputFiles({
+     name:'quality-report-fixture.pdf',mimeType:'application/pdf',buffer:actual
+   });
+   await page.waitForFunction(()=>!document.getElementById('savedQualityJsonBtn')?.disabled,
+     null,{timeout:40000});
+   const jsonDownload=page.waitForEvent('download',{timeout:20000});
+   await page.locator('#savedQualityJsonBtn').click();
+   const jsonSaved=await jsonDownload;
+   const jsonPath=path.join(downloadDir,'preflight.json');
+   await jsonSaved.saveAs(jsonPath);
+   const report=JSON.parse(fs.readFileSync(jsonPath,'utf8'));
+   assert.equal(report.format,'Sunrise PDF Preflight 1');
+   assert.equal(report.pageCount,2);
+   assert(Array.isArray(report.issues));
+   assert(!('sourceName' in report),'report must not include original filename');
+   const csvDownload=page.waitForEvent('download',{timeout:20000});
+   await page.locator('#savedQualityCsvBtn').click();
+   const csvSaved=await csvDownload;
+   const csvPath=path.join(downloadDir,'preflight.csv');
+   await csvSaved.saveAs(csvPath);
+   const csv=fs.readFileSync(csvPath,'utf8');
+   assert(csv.startsWith('\ufeff')&&csv.includes('총 페이지')&&csv.includes('page'),
+     'CSV must be UTF-8 BOM with summary');
+   await page.locator('#modalCloseBtn').click();
    const reopened=await PDFLib.PDFDocument.load(actual);
    assert.equal(reopened.getPageCount(),2);
    const restored=await editState.restore(new Uint8Array(actual),PDFLib);
@@ -194,7 +220,7 @@ async function main(){
    assert((part.suggestedFilename()||'').includes('_p4-4.pdf'));
    await page.locator('#splitCloseBtn').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: browser edit/table/shape/note roundtrip, embedded PNG extraction, bounded range-based PDF split, Save As/form/rotation');
+   console.log('PASS: browser table/shape/note edits; embedded PNG, local quality JSON/CSV, range split, PDF Save As/form/rotation');
    await context.close();
  }finally{
    if(browser)await browser.close();
