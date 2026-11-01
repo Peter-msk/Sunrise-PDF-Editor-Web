@@ -4328,7 +4328,7 @@
                 <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                   <strong style="color:var(--primary)">[${escapeHtml(ov.type)}]</strong> ${escapeHtml(ov.text || "표 항목")}
                 </div>
-                <span style="font-size:11px;color:var(--text-muted);flex-shrink:0">${ov.pageIndex + 1}쪽</span>
+                <span style="display:flex;gap:4px;align-items:center;flex-shrink:0"><small style="color:var(--text-muted)">${ov.pageIndex + 1}쪽</small><button type="button" class="compact-btn" data-ov-edit="${escapeHtml(ov.id)}" aria-label="항목 수정">수정</button></span>
               </div>
             `;
           });
@@ -4336,6 +4336,17 @@
         container.innerHTML = html;
         document.getElementById("cmAddNoteBtn")?.addEventListener("click", () => executeCommand("insertNote"));
         document.getElementById("cmExportCsvBtn")?.addEventListener("click", () => exportOverlaysToCsv(doc));
+        container.querySelectorAll("[data-ov-edit]").forEach(button => {
+          button.addEventListener("click", event => {
+            event.stopPropagation();
+            const target=doc.overlays.find(ov=>ov.id===button.dataset.ovEdit);
+            if(!target||doc.operationBusy)return;
+            doc.currentPage=target.pageIndex;
+            state.selectedInsertId=target.id;
+            renderCurrentPageCanvas();
+            openEditInsertItemModal();
+          });
+        });
         container.querySelectorAll("[data-ov-id]").forEach((row) => {
           row.addEventListener("click", () => {
             const target = doc.overlays.find((o) => o.id === row.dataset.ovId);
