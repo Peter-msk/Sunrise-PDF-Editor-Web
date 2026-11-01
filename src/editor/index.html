@@ -1571,6 +1571,8 @@
       .dialog-input:not([type="checkbox"]), .dialog-select, .dialog-textarea { min-height: 42px; font-size: 16px; }
       #nativeAnnotationSelect { min-height: 116px; max-height: 28dvh !important; }
       #nativeAnnotationText { min-height: 92px; }
+      .bulk-form-row { grid-template-columns: minmax(0, 1fr) !important; overflow-wrap: anywhere; }
+      .bulk-form-row > input { width: 100%; min-width: 0; }
       .download-fallback {
         display: flex;
         flex-direction: column;
@@ -7452,7 +7454,7 @@
           cancel.addEventListener('click',closeModal);
           fields.forEach((field,i)=>{
             const row=document.createElement('div');
-            row.className='dialog-form-grid';
+            row.className='dialog-form-grid bulk-form-row';
             row.style.gridTemplateColumns='minmax(120px,1fr) minmax(160px,2fr)';
             row.style.padding='6px';
             row.style.border='1px solid var(--border-soft)';
