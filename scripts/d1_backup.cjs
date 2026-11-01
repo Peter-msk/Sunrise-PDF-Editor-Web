@@ -6,7 +6,8 @@ const [database,output]=process.argv.slice(2);
 let privateDir;
 try{
  if(!database||!/^[A-Za-z0-9_-]{1,100}$/.test(database)||!output)throw Error('Usage: node scripts/d1_backup.cjs DATABASE NEW_EXPORT.sql');
- const destination=path.resolve(output),repo=path.resolve(__dirname,'..');
+ const requested=path.resolve(output),parent=fs.realpathSync(path.dirname(requested));
+ const destination=path.join(parent,path.basename(requested)),repo=fs.realpathSync(path.resolve(__dirname,'..'));
  if(destination===repo||destination.startsWith(repo+path.sep))throw Error('Choose private storage outside the source repository');
  if(fs.existsSync(destination))throw Error('Output already exists');
  privateDir=fs.mkdtempSync(path.join(path.dirname(destination),'.sunrise-d1-export-'));fs.chmodSync(privateDir,0o700);

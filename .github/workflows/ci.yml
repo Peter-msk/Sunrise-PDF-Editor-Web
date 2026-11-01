@@ -97,3 +97,37 @@ jobs:
       - name: Ensure browser test did not alter application sources
         run: |
           test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"
+
+  browser-windows:
+    name: Windows administrator and PDF - ${{ matrix.browser }}
+    runs-on: windows-2025
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, msedge]
+    env:
+      SUNRISE_BROWSER_CHANNEL: ${{ matrix.browser }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned release dependencies
+        run: npm ci --ignore-scripts --no-audit
+      - name: Build the deployed assets
+        run: npm run build
+      - name: Validate operator tools with synthetic fixtures
+        run: npm run test:admin:operations
+      - name: Install isolated browser controller
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit playwright@1.58.0
+      - name: Windows PDF download and reopen
+        run: node tests/browser-save-reopen.cjs
+      - name: Windows administrator dashboard, workflows and HTTPS authentication
+        run: npm run test:admin:browser
+      - name: Ensure validation did not modify application sources
+        shell: bash
+        run: test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"

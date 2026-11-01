@@ -82,7 +82,7 @@ async function main(){
  let browser;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await require('./helpers/launch-browser.cjs')(chromium);
   const context=await browser.newContext({acceptDownloads:true,viewport:{width:1360,height:900}});
   const page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));

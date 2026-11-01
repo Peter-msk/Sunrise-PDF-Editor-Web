@@ -37,7 +37,7 @@ async function main(){
  const server=http.createServer(respond);let browser;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await require('./helpers/launch-browser.cjs')(chromium);
   const page=await browser.newPage({viewport:{width:1250,height:850}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port+'/admin/',{waitUntil:'load',timeout:30000});

@@ -56,7 +56,7 @@ async function main(){
  try{
    await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
    const host='http://127.0.0.1:'+server.address().port;
-   browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+   browser=await require('./helpers/launch-browser.cjs')(chromium);
    const context=await browser.newContext({acceptDownloads:true,viewport:{width:1366,height:880}});
    const page=await context.newPage();
    const pageErrors=[];
