@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
 const {DatabaseSync}=require('node:sqlite');
 (async()=>{
  const sqlite=new DatabaseSync(':memory:');
- for(const name of ['0001_inquiries_and_site_updates.sql','0002_admin_analytics.sql'])sqlite.exec(fs.readFileSync('migrations/'+name,'utf8'));
+ for(const name of ['0001_inquiries_and_site_updates.sql','0002_admin_analytics.sql','0015_admin_edit_revisions.sql'])sqlite.exec(fs.readFileSync('migrations/'+name,'utf8'));
  const add=sqlite.prepare('INSERT INTO inquiries(category,email,message,status,created_at) VALUES (?,?,?,?,?)');
  for(let i=0;i<127;i++)add.run('기타',`case${i}@example.test`,i%2?'검색 대상':'다른 문의',i%2?'new':'read','2026-10-31T03:00:00.000Z');
  const db={prepare(query){const s=sqlite.prepare(query);return {args:[],bind(...args){this.args=args;return this},async all(){return {results:s.all(...this.args)}}}}};

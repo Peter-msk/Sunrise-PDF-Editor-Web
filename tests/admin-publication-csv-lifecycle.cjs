@@ -11,6 +11,7 @@ const {DatabaseSync}=require('node:sqlite');
  sqlite.exec("UPDATE site_releases SET released_at=date('now','+9 hours','-6 days') WHERE id=2");
  sqlite.exec(fs.readFileSync('migrations/0002_admin_analytics.sql','utf8'));
  sqlite.exec(fs.readFileSync('migrations/0004_publication_lifetime.sql','utf8'));
+ sqlite.exec(fs.readFileSync('migrations/0015_admin_edit_revisions.sql','utf8'));
  const db={prepare(sql){
   const stmt=sqlite.prepare(sql);return {args:[],bind(...v){this.args=v;return this},
    async first(){return stmt.get(...this.args)},
@@ -33,9 +34,9 @@ const {DatabaseSync}=require('node:sqlite');
  assert(!publicFeed.releases.some(x=>x.id===1),'eight-day release must be absent');
 
  const initial=sqlite.prepare('SELECT first_published_at FROM site_announcements WHERE id=1').get().first_published_at;
- const updated={title:'수정된 만료 안내',body:'내용 수정 후 재게시',level:'warning',is_active:false};
+ const updated={title:'수정된 만료 안내',body:'내용 수정 후 재게시',level:'warning',is_active:false,revision:0};
  assert.equal((await admin('/api/admin/site-updates/announcement/1','PATCH',updated)).status,200);
- assert.equal((await admin('/api/admin/site-updates/announcement/1','PATCH',{...updated,is_active:true})).status,200);
+ assert.equal((await admin('/api/admin/site-updates/announcement/1','PATCH',{...updated,is_active:true,revision:1})).status,200);
  assert.equal(sqlite.prepare('SELECT first_published_at FROM site_announcements WHERE id=1').get().first_published_at,initial);
  publicFeed=await getPublic();
  assert(!publicFeed.announcements.some(x=>x.id===1),'re-publishing must not extend expired publication');
@@ -43,8 +44,8 @@ const {DatabaseSync}=require('node:sqlite');
  assert(adminFeed.announcements.some(x=>x.id===1&&x.visibility==='expired'),'expired item must remain visible in admin');
 
  const firstRelease=sqlite.prepare('SELECT first_published_at FROM site_releases WHERE id=1').get().first_published_at;
- assert.equal((await admin('/api/admin/site-updates/release/1','PATCH',{version:'기존 릴리스 수정',added:'수정',improved:'',removed:'',is_active:false})).status,200);
- assert.equal((await admin('/api/admin/site-updates/release/1','PATCH',{version:'기존 릴리스 수정',added:'수정',improved:'',removed:'',is_active:true})).status,200);
+ assert.equal((await admin('/api/admin/site-updates/release/1','PATCH',{version:'기존 릴리스 수정',added:'수정',improved:'',removed:'',is_active:false,revision:0})).status,200);
+ assert.equal((await admin('/api/admin/site-updates/release/1','PATCH',{version:'기존 릴리스 수정',added:'수정',improved:'',removed:'',is_active:true,revision:1})).status,200);
  assert.equal(sqlite.prepare('SELECT first_published_at FROM site_releases WHERE id=1').get().first_published_at,firstRelease);
  publicFeed=await getPublic();assert(!publicFeed.releases.some(x=>x.id===1));
 

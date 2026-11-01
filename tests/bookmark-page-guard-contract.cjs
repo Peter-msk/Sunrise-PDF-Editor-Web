@@ -16,7 +16,7 @@ const ctx = vm.createContext({window:{PDFLib:lib}, state, Set, Array, console,
   openModal: config => {modal = config; config.onMount();}, document: {getElementById: id => elements[id]},
   remapPageItems: (doc, order) => { doc.overlays = []; doc.bookmarks = []; }});
 vm.runInContext(section('    function allowPageStructureChange(', '    function openPastePagesModal(') +
-  section('    async function deleteSelectedPagesFromDoc(', '    async function rotateSelectedPages('), ctx);
+  section('    async function deleteSelectedPagesFromDoc(', '    async function rotateSelectedPages('), require('./helpers/editor-metrics.cjs')(ctx));
 async function createDoc(withOutline) {
   const pdf = await lib.PDFDocument.create(); pdf.addPage([100,100]); pdf.addPage([100,100]);
   if (withOutline) {
@@ -29,16 +29,16 @@ async function createDoc(withOutline) {
 }
 (async()=>{
   const doc = await createDoc(true); ctx.doc = doc; const original = doc.bytes;
-  await vm.runInContext('deleteSelectedPagesFromDoc(doc)',ctx);
+  await vm.runInContext('deleteSelectedPagesFromDoc(doc)',require('./helpers/editor-metrics.cjs')(ctx));
   assert.equal(doc.bytes, original); assert.equal(snapshots, 0); assert.match(toast, /북마크 보호/);
-  await vm.runInContext('copySelectedPagesToClipboard(doc, true)',ctx);
+  await vm.runInContext('copySelectedPagesToClipboard(doc, true)',require('./helpers/editor-metrics.cjs')(ctx));
   assert.equal(doc.bytes, original); assert.equal(snapshots, 0); assert.equal(state.pageClipboard.sourceName, 'unchanged');
-  vm.runInContext('openReorderPagesModal(doc)', ctx); await callbacks.confirm();
+  vm.runInContext('openReorderPagesModal(doc)', require('./helpers/editor-metrics.cjs')(ctx)); await callbacks.confirm();
   assert.equal(doc.bytes, original); assert.equal(snapshots, 0); assert.ok(modal);
-  await vm.runInContext('copySelectedPagesToClipboard(doc, false)',ctx);
+  await vm.runInContext('copySelectedPagesToClipboard(doc, false)',require('./helpers/editor-metrics.cjs')(ctx));
   assert.equal(state.pageClipboard.sourceName, 'test.pdf'); assert.equal(doc.bytes, original);
   const normal = await createDoc(false); ctx.doc = normal;
-  await vm.runInContext('deleteSelectedPagesFromDoc(doc)',ctx);
+  await vm.runInContext('deleteSelectedPagesFromDoc(doc)',require('./helpers/editor-metrics.cjs')(ctx));
   assert.equal(snapshots, 1); assert.equal((await lib.PDFDocument.load(normal.bytes)).getPageCount(), 1);
   console.log('PASS: outline protection for delete, cut and reorder; copy and ordinary delete remain available');
 })().catch(error => {console.error(error); process.exitCode=1;});

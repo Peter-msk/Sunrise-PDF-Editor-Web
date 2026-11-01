@@ -16,7 +16,7 @@ const context=vm.createContext({
   return pdf.getForm();
  }
 });
-vm.runInContext(source.slice(start,end),context);
+vm.runInContext(source.slice(start,end),require('./helpers/editor-metrics.cjs')(context));
 (async()=>{
  const form=await lib.PDFDocument.create();
  form.setTitle('Batch Integrity Fixture');

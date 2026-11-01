@@ -5,6 +5,7 @@ const {DatabaseSync}=require('node:sqlite');
   const sqlite=new DatabaseSync(':memory:');
   sqlite.exec(fs.readFileSync('migrations/0001_inquiries_and_site_updates.sql','utf8'));
   sqlite.exec(fs.readFileSync('migrations/0002_admin_analytics.sql','utf8'));
+ sqlite.exec(fs.readFileSync('migrations/0015_admin_edit_revisions.sql','utf8'));
   const insert=sqlite.prepare('INSERT INTO inquiries(category,email,message,status) VALUES (?,?,?,?)');
   insert.run('기능 문의','a@example.test','배율 50% 확인','new');
   insert.run('기능 문의','b@example.test','문서명 A_B 확인','answered');

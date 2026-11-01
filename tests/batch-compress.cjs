@@ -3,7 +3,7 @@ const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js'),source=fs.readFileSyn
 const s=source.indexOf('    function guardBatchSource('),e=source.indexOf('    function openBatchCompressModal(',s);assert(s>=0&&e>s);
 let cancelled=false,results=[],errors=[],progress=[];
 const ctx=vm.createContext({window:{PDFLib:lib},Number,Error,readPdfInputFile:async f=>{if(f.size>50*1024*1024)throw Error('50 MiB 초과');return f.data},editablePdfForm:pdf=>{if(pdf.catalog.get(lib.PDFName.of('Perms')))throw Error('서명 문서')},compressPdfImages:async bytes=>({bytes})});
-vm.runInContext(source.slice(s,e),ctx);
+vm.runInContext(source.slice(s,e),require('./helpers/editor-metrics.cjs')(ctx));
 const handlers={cancelled:()=>cancelled,progress:(...x)=>progress.push(x),result:x=>results.push(x),error:x=>errors.push(x)};
 (async()=>{
  const pdf=await lib.PDFDocument.create();pdf.addPage();const data=await pdf.save();

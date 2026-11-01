@@ -24,7 +24,7 @@ function calculate(data){
  const phases=Array.from({length:7},(_,index)=>{
   const phase=index+1,entries=items.filter(e=>e.phase===phase);
   if(!entries.length)throw Error('단계에 요구사항이 없습니다: '+phase);
-  return {phase,name:phaseNames[phase],count:entries.length,percent:Math.round(entries.reduce((n,e)=>n+e.score,0)/entries.length)};
+  return {phase,name:phaseNames[phase],count:entries.length,implementation:Math.round(entries.reduce((n,e)=>n+e.implementation,0)/entries.length),percent:Math.round(entries.reduce((n,e)=>n+e.score,0)/entries.length)};
  });
  const overall=Math.round(phases.reduce((n,e)=>n+e.percent,0)/phases.length);
  return {items,phases,overall};
@@ -38,18 +38,20 @@ function render(data,report){
  out+='- OCR(USR-20)은 개발과 진행률 산정 모두 제외.\n';
  out+='- **산식:** 기능별 점수 = 구현×'+data.scoreWeights.implementation+'% + 자동검사×'+data.scoreWeights.automated+'% + 실사용 검증×'+data.scoreWeights.practical+'% + 운영반영×'+data.scoreWeights.deployment+'%; 단계 = 해당 기능 평균(반올림); 총괄 = 1~7단계 동일 가중치 평균(반올림).\n';
  out+='- **주의:** 점수는 소스·테스트·배포 증거에 대한 계획 관리용 보수적 추정치입니다. 외부 품질 인증이나 실제 완료율을 뜻하지 않습니다.\n';
- out+='- 소스: PR #9 및 종속 PR #10. 운영未배포 기능은 운영반영 0으로 기록합니다.\n\n';
- out+='## 단계별\n\n| 단계 | 진행률 | 추적 항목 |\n|---|---:|---:|\n';
- for(const e of report.phases)out+='| '+e.phase+'. '+e.name+' | '+pct(e.percent)+' | '+e.count+' |\n';
- out+='| **총괄** | **'+pct(report.overall)+'** | **36개** |\n\n';
+ out+='- 소스: PR #9 / PR #10 및 feat/admin-fast-development-20261101. 과거 검사는 신규 변경의 통과 증거가 아닙니다.\n';
+ out+='- 관리자 소스 구현률: **'+report.phases[0].implementation+'%**. 아래 종합 점수는 검증·운영 반영을 포함하며 소스 작성률과 다릅니다.\n\n';
+ if(data.adminSourceStatus?.state==='implementation-complete-candidate')out+='- 관리자 소스 단계: 작성 마감 후보본. 최신 실행 검증은 ADMIN_VALIDATION_REPORT.md, 범위는 ADMIN_SOURCE_CLOSEOUT.md를 참조합니다. 운영 수용은 별도입니다.\n\n';
+ out+='## 단계별\n\n| 단계 | 소스 구현률 | 종합 진행률 | 추적 항목 |\n|---|---:|---:|---:|\n';
+ for(const e of report.phases)out+='| '+e.phase+'. '+e.name+' | '+pct(e.implementation)+' | '+pct(e.percent)+' | '+e.count+' |\n';
+ out+='| **총괄** | — | **'+pct(report.overall)+'** | **36개** |\n\n';
  for(const [title,predicate] of [
   ['관리자 기능 — ADM-01~14',e=>e.id.startsWith('ADM-')],
   ['사용자 기능 — USR-01~19',e=>e.id.startsWith('USR-')],
   ['공통 고도화·검증·배포',e=>!e.id.startsWith('ADM-')&&!e.id.startsWith('USR-')]
  ]){
-  out+='## '+title+'\n\n| ID | 기능 | 진행률 | 현재 근거/미완료 범위 |\n|---|---|---:|---|\n';
+  out+='## '+title+'\n\n| ID | 기능 | 소스 구현률 | 종합 진행률 | 현재 근거/미완료 범위 |\n|---|---|---:|---:|---|\n';
   for(const x of report.items.filter(predicate))
-   out+='| '+x.id+' | '+x.name+' | '+pct(x.score)+' | '+x.note.replaceAll('|','/')+' |\n';
+   out+='| '+x.id+' | '+x.name+' | '+pct(x.implementation)+' | '+pct(x.score)+' | '+x.note.replaceAll('|','/')+' |\n';
   out+='\n';
  }
  out+='## 갱신 정책\n\n1. 기능·테스트·실사용·배포 증빙이 생길 때 관련 원천 JSON만 갱신합니다.\n2. `npm run progress:write`로 표를 생성하고 `npm run progress:check`로 위조/불일치를 방지합니다.\n3. 매 개발 보고마다 기능별 변경률·7개 단계·총괄 진행률을 다시 표시합니다.\n4. 미확인 상태는 완료로 기록하지 않고, 검증 실패 시 점수를 낮출 수 있습니다.\n5. **완료 100%**는 전체 계획 수용 기준 충족 및 운영 배포 확인 뒤에만 부여합니다.\n';

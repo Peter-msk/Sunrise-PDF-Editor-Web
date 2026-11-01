@@ -27,7 +27,20 @@
  }
  ensureVisit();
  if(area!=='editor')return;
- let last=performance.now(),lastFeature='기타',lastErrorAt=0;
+ let last=performance.now(),lastInteraction=last,sampleAt=last,activeSeconds=0,usageDay=kstDay(),lastFeature='기타',lastErrorAt=0;
+ let foreground=document.visibilityState==='visible'&&document.hasFocus();
+ function sampleUsage(now){
+  const day=kstDay(),elapsed=now-sampleAt;
+  if(elapsed<0||elapsed>30000){activeSeconds=0;usageDay=day;sampleAt=now;return}
+  let since=sampleAt;
+  if(day!==usageDay){activeSeconds=0;usageDay=day;const sinceMidnight=(Date.now()+9*3600000)%86400000;since=Math.max(since,now-sinceMidnight)}
+  if(foreground){const until=Math.min(now,lastInteraction+120000);activeSeconds=Math.min(15,activeSeconds+Math.max(0,until-since)/1000)}
+  sampleAt=now;
+ }
+ function presenceChanged(){const now=performance.now();sampleUsage(now);foreground=document.visibilityState==='visible'&&document.hasFocus()}
+ for(const name of ['pointerdown','keydown','wheel','touchstart'])document.addEventListener(name,()=>{const now=performance.now();sampleUsage(now);lastInteraction=now},{capture:true,passive:true});
+ document.addEventListener('visibilitychange',presenceChanged);
+ window.addEventListener('focus',presenceChanged);window.addEventListener('blur',presenceChanged);
  const classify=s=>{
    s=String(s||'').toLowerCase().slice(0,100);
    if(/compress|압축/.test(s))return '압축';
@@ -81,14 +94,25 @@
    };
    finish.id=id;return finish;
  };
+ let operationQueue=Promise.resolve();
+ window.sunriseTelemetryOperationStart=feature=>{
+   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete'].includes(feature))return ()=>{};
+   let id;try{id=crypto.randomUUID()}catch{return ()=>{}};
+   let recorded=false,ended=false;
+   operationQueue=operationQueue.then(async()=>{if(await ensureVisit())recorded=await send('operation',{operationId:id,feature,stage:'started'})}).catch(()=>{});
+   return stage=>{
+     if(ended||!['succeeded','failed','cancelled'].includes(stage))return;
+     ended=true;operationQueue=operationQueue.then(()=>recorded?send('operation',{operationId:id,feature,stage}):false).catch(()=>{});
+   };
+ };
  let pulsePending=false;
  setInterval(async()=>{
-   const now=performance.now(),diff=(now-last)/1000;last=now;
-   if(document.visibilityState==='visible'&&document.hasFocus()&&diff>=8&&diff<=30&&!pulsePending){
-     pulsePending=true;
-     try{if(await ensureVisit())await send('pulse',{area:'editor',seconds:Math.min(15,Math.round(diff))});}
-     finally{pulsePending=false;}
-   }
+   const now=performance.now(),diff=(now-last)/1000;last=now;sampleUsage(now);
+   if(diff<8||diff>30){activeSeconds=0;return}
+   const seconds=Math.floor(activeSeconds);
+   if(seconds<1||pulsePending)return;
+   activeSeconds-=seconds;pulsePending=true;
+   try{if(await ensureVisit())await send('pulse',{area:'editor',seconds});}
+   finally{pulsePending=false;}
  },15000);
- document.addEventListener('visibilitychange',()=>{last=performance.now()});
 })();

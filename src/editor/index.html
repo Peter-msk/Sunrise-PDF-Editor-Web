@@ -2953,6 +2953,7 @@
       if (doc.operationBusy || doc.pdfJsDoc !== reader || activeDoc() !== doc) return;
       const bytes = doc.bytes;
       doc.operationBusy = true;
+      const finish=beginOperationMetric('bookmark_edit');let outcome='cancelled';
       let info;
       try {
         const pdf = await window.PDFLib.PDFDocument.load(bytes);
@@ -2968,11 +2969,13 @@
         await reloadDocPdfJs(doc, {info}); info = null;
         await refreshAllViews();
         showToast(remove ? "북마크를 삭제했습니다. PDF를 저장해 주세요." : newPage === null ? "북마크 이름을 변경했습니다. PDF를 저장해 주세요." : "북마크 페이지를 변경했습니다. PDF를 저장해 주세요.", "fa-bookmark");
+        outcome='succeeded';
       } catch (error) {
+        outcome='failed';
         if (info?.pdfJsDoc && doc.pdfJsDoc !== info.pdfJsDoc) await info.pdfJsDoc.destroy();
         console.warn("Unable to modify PDF bookmark", error);
         showToast(`북마크를 ${remove ? "삭제" : "변경"}하지 못했습니다: ${error.message || error}`, "fa-circle-exclamation");
-      } finally { doc.operationBusy = false; }
+      } finally { doc.operationBusy = false; finish(outcome); }
     }
 
     async function outlinePage(reader, dest) {
@@ -2994,6 +2997,7 @@
         showToast("북마크 제목 분석 기능을 불러오지 못했습니다.", "fa-circle-exclamation"); return;
       }
       const limit = Math.min(doc.pageCount, 150), pages = [];
+      const finish=beginOperationMetric('bookmark_auto');let outcome='cancelled';
       doc.operationBusy = true;
       try {
         for (let i = 0; i < limit; i++) {
@@ -3013,6 +3017,7 @@
         const proposed = window.SunriseAutoBookmarks.suggestBookmarks(pages, 80)
           .filter(item => !existing.has(item.page));
         if (!proposed.length) {
+          outcome='succeeded';
           showToast("확인 가능한 텍스트 제목을 찾지 못했습니다. 스캔 이미지에는 OCR을 적용하지 않습니다.", "fa-circle-info");
           return;
         }
@@ -3031,11 +3036,13 @@
         })));
         ensureLeftPanelOpen("bookmarks");
         showToast("텍스트 제목 북마크 " + proposed.length + "개를 추가했습니다. PDF 저장 후 재열어 확인해 주세요.", "fa-bookmark");
+        outcome='succeeded';
       } catch (error) {
+        outcome='failed';
         console.warn("Text-layer bookmark generation failed", error?.name || "error");
         showToast("자동 북마크를 만들지 못했습니다. 원본 문서는 변경되지 않았습니다.", "fa-circle-exclamation");
       } finally {
-        doc.operationBusy = false;
+        doc.operationBusy = false; finish(outcome);
       }
     }
 
@@ -3077,7 +3084,16 @@
       return bytes;
     }
 
+    function beginOperationMetric(feature) {
+      try {
+        const finish=window.sunriseTelemetryOperationStart?.(feature);
+        return stage=>{try{finish?.(stage)}catch(_){}};
+      } catch (_) { return ()=>{}; }
+    }
+
     async function openPdfFromBytes(fileName, uint8Bytes, options = { switchActive: true }) {
+      const finish=beginOperationMetric('open');let outcome='failed';
+      try {
       const originalBytes = uint8Bytes instanceof Uint8Array ? uint8Bytes : new Uint8Array(uint8Bytes);
       if (!window.PDFLib || !window.pdfjsLib) throw new Error("PDF 편집 엔진을 불러오지 못했습니다. 페이지를 새로고침해 주세요.");
       if (originalBytes.byteLength < 8 || new TextDecoder("ascii").decode(originalBytes.slice(0, 8)).indexOf("%PDF-") !== 0) {
@@ -3143,7 +3159,9 @@
         renderDocTabs();
         updateCommandStates();
       }
+      outcome='succeeded';
       return newDoc;
+      } finally { finish(outcome); }
     }
 
     function addRecentFile(name, pageCount, bytes) {
@@ -4998,6 +5016,7 @@
       const openAfter = Boolean(document.getElementById("mergeOpenAfterCheck")?.checked);
       const downloadNow = Boolean(document.getElementById("mergeDownloadCheck")?.checked);
 
+      const finish=beginOperationMetric('merge');let outcome='cancelled';
       try {
         const { PDFDocument } = window.PDFLib;
         const mergedPdf = await PDFDocument.create();
@@ -5022,9 +5041,11 @@
           downloadBytes(mergedBytes, outName);
         }
         showToast(`PDF 병합 완료: ${outName} (${state.mergeQueue.length}개 문서, 총 ${totalMergedPages}쪽)`, "fa-object-group");
+        outcome='succeeded';
       } catch (err) {
+        outcome='failed';
         showToast(`PDF 병합 중 오류 발생: ${err.message || err}`, "fa-circle-exclamation");
-      }
+      } finally { finish(outcome); }
     }
 
     // =========================================================================
@@ -5342,6 +5363,7 @@
 
         case "addBookmark":
           if (!doc) return;
+          { const metricFinish=beginOperationMetric('bookmark_add');let metricOutcome='failed';try {
           saveUndoSnapshot(doc, "북마크 추가");
           doc.bookmarks.push({
             id: `bm_${Date.now()}`,
@@ -5350,10 +5372,13 @@
           });
           ensureLeftPanelOpen("bookmarks");
           showToast(`${doc.currentPage + 1}쪽 북마크를 추가했습니다. PDF를 저장해 주세요.`, "fa-bookmark");
+          metricOutcome='succeeded';
+          } finally {metricFinish(metricOutcome);} }
           break;
 
         case "autoBookmarks":
           if (!doc) return;
+          { const metricFinish=beginOperationMetric('bookmark_add');let metricOutcome='failed';try {
           saveUndoSnapshot(doc, "전체 페이지 북마크 추가");
           doc.bookmarks.push(...Array.from({ length: doc.pageCount }, (_, idx) => ({
             id: `bm_auto_${Date.now()}_${idx}`,
@@ -5362,6 +5387,8 @@
           })));
           ensureLeftPanelOpen("bookmarks");
           showToast(`전체 ${doc.pageCount}쪽의 북마크를 만들었습니다. PDF를 저장해 주세요.`, "fa-book-open");
+          metricOutcome='succeeded';
+          } finally {metricFinish(metricOutcome);} }
           break;
 
         case "tocPageBookmarks":
@@ -5748,6 +5775,7 @@
       for(let index=0;index<files.length;index++){
         if(handlers.cancelled())break;
         const file=files[index]; handlers.progress(index,files.length,file.name);
+        const finish=beginOperationMetric('batch_compress');let outcome='cancelled';
         try {
           const bytes=await readPdfInputFile(file);
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
@@ -5760,7 +5788,8 @@
           verifyBatchPdfStructure(original,check);
           if(handlers.cancelled())break;
           handlers.result({index,name:file.name,bytes:result.bytes,originalSize:bytes.byteLength});
-        }catch(error){if(handlers.cancelled())break;handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});}
+          outcome='succeeded';
+        }catch(error){if(handlers.cancelled())break;outcome='failed';handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});}finally{finish(outcome)}
       }
     }
 
@@ -5780,6 +5809,7 @@
         if(handlers.cancelled())break;
         const file=files[index];
         handlers.progress(index,files.length,file.name);
+        const finish=beginOperationMetric('batch_mark');let outcome='cancelled';
         try{
           const bytes=await readPdfInputFile(file);
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
@@ -5820,10 +5850,12 @@
           verifyBatchPdfStructure(original,reopened);
           if(handlers.cancelled())break;
           handlers.result({index,name:file.name,bytes:output,originalSize:bytes.byteLength});
+          outcome='succeeded';
         }catch(error){
           if(handlers.cancelled())break;
+          outcome='failed';
           handlers.error({index,name:file.name,message:error.message||'처리에 실패했습니다.'});
-        }
+        }finally{finish(outcome)}
       }
     }
 
@@ -5923,6 +5955,7 @@
             running=true;cancelled=false;start.disabled=true;
             files.disabled=mode.disabled=true;sync();cancel.textContent='작업 취소';results.replaceChildren();
             let successes=0,failures=0;
+            const finish=beginOperationMetric(settings.mode==='merge'?'batch_merge':'batch_split');let outcome='cancelled';
             try{
               await window.SunriseBatchPages.process(selected,settings,{
                 cancelled:()=>cancelled||!open(),
@@ -5946,9 +5979,11 @@
                 PDFLib:window.PDFLib,
                 readFile:readPdfInputFile
               });
+              outcome=cancelled||!open()?'cancelled':failures?'failed':'succeeded';
               if(open())status.textContent=cancelled?'작업이 취소되었습니다.':'완료 '+successes+'개 / 실패 '+failures+'개. 결과를 개별 확인해 주세요.';
-            }catch(error){if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';}
+            }catch(error){outcome=cancelled||!open()?'cancelled':'failed';if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';}
             finally{
+              finish(outcome);
               running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
               files.disabled=false;mode.disabled=false;sync();
             }
@@ -6160,6 +6195,8 @@
         onMount: () => {
           document.getElementById("blankInsertCancelBtn").addEventListener("click", closeModal);
           document.getElementById("blankInsertConfirmBtn").addEventListener("click", async () => {
+            const metricFinish=beginOperationMetric('page_insert');let metricOutcome='cancelled';
+            try {
             const posMode = document.getElementById("blankPosSelect").value;
             const sizeMode = document.getElementById("blankSizeSelect").value;
             const count = Math.max(1, Math.min(20, Number(document.getElementById("blankCountInput").value) || 1));
@@ -6190,12 +6227,16 @@
             closeModal();
             await refreshAllViews();
             showToast(`빈 페이지 ${count}장을 삽입했습니다.`, "fa-file-circle-plus");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
     }
 
     async function duplicateSelectedPages(doc) {
+      const finish=beginOperationMetric('page_duplicate');let outcome='cancelled';
+      try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
       const { PDFDocument } = window.PDFLib;
@@ -6216,6 +6257,8 @@
       doc.selectedPages = new Set([doc.currentPage]);
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 복제했습니다.`, "fa-clone");
+      outcome='succeeded';
+      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
     }
 
     // Resolve supported local destinations to stable page references. Refuse
@@ -6418,6 +6461,8 @@
     }
 
     async function copySelectedPagesToClipboard(doc, isCut = false) {
+      const metricFinish=beginOperationMetric('page_clipboard');let metricOutcome='cancelled';
+      try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
       if (isCut && indices.length >= doc.pageCount) {
@@ -6459,6 +6504,8 @@
       } else {
         showToast(`${indices.length}개 페이지를 클립보드에 복사했습니다.`, "fa-copy");
       }
+      metricOutcome='succeeded';
+      } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
     }
 
     function openPastePagesModal(doc) {
@@ -6494,6 +6541,8 @@
         onMount: () => {
           document.getElementById("pasteCancelBtn").addEventListener("click", closeModal);
           document.getElementById("pasteConfirmBtn").addEventListener("click", async () => {
+            const metricFinish=beginOperationMetric('page_insert');let metricOutcome='cancelled';
+            try {
             const posMode = document.getElementById("pastePosSelect").value;
             const { PDFDocument } = window.PDFLib;
             const originalBytes = doc.bytes;
@@ -6523,6 +6572,8 @@
             closeModal();
             await refreshAllViews();
             showToast(`클립보드 페이지 ${copied.length}장을 붙여넣었습니다.`, "fa-paste");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -6555,6 +6606,8 @@
         onMount: () => {
           document.getElementById("extractCancelBtn").addEventListener("click", closeModal);
           document.getElementById("extractConfirmBtn").addEventListener("click", async () => {
+            const metricFinish=beginOperationMetric('page_extract');let metricOutcome='cancelled';
+            try {
             const rangeStr = document.getElementById("extractRangeInput").value;
             let outName = (document.getElementById("extractNameInput").value || "extracted.pdf").trim();
             if (!outName.toLowerCase().endsWith(".pdf")) outName += ".pdf";
@@ -6574,6 +6627,8 @@
             await openPdfFromBytes(outName, outBytes, { switchActive: true });
             downloadBytes(outBytes, outName);
             showToast(`${indices.length}개 페이지를 추출했습니다: ${outName}`, "fa-file-export");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -6648,9 +6703,11 @@
     }
 
     async function splitDocumentPages(doc) {
+      const finish=beginOperationMetric('split');let outcome='failed';
+      try {
       const { PDFDocument } = window.PDFLib;
       const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
-      if (!allowPageFormStructure(srcDoc)) return;
+      if (!allowPageFormStructure(srcDoc)) { outcome='cancelled'; return; }
       const stem = doc.name.replace(/\.pdf$/i, "");
       for (let i = 0; i < doc.pageCount; i++) {
         const single = await PDFDocument.create();
@@ -6660,9 +6717,13 @@
         downloadBytes(bytes, `${stem}_page_${String(i + 1).padStart(2, "0")}.pdf`);
       }
       showToast(`전체 ${doc.pageCount}쪽을 개별 PDF 파일로 분할 다운로드했습니다.`, "fa-table-columns");
+      outcome='succeeded';
+      } finally { finish(outcome); }
     }
 
     async function deleteSelectedPagesFromDoc(doc) {
+      const finish=beginOperationMetric('page_delete');let outcome='cancelled';
+      try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
       if (indices.length >= doc.pageCount) {
@@ -6695,6 +6756,8 @@
       await reloadDocPdfJs(doc);
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 삭제했습니다.`, "fa-trash-can");
+      outcome='succeeded';
+      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
     }
 
     function openReorderPagesModal(doc) {
@@ -6728,6 +6791,8 @@
           });
           document.getElementById("reorderCancelBtn").addEventListener("click", closeModal);
           document.getElementById("reorderConfirmBtn").addEventListener("click", async () => {
+            const metricFinish=beginOperationMetric('page_reorder');let metricOutcome='cancelled';
+            try {
             const tokens = document.getElementById("reorderInput").value.split(",").map((s) => s.trim());
             const nums = tokens.map((s) => /^\d+$/.test(s) ? Number(s) - 1 : -1);
             if (nums.length !== doc.pageCount || new Set(nums).size !== doc.pageCount ||
@@ -6752,6 +6817,8 @@
             closeModal();
             await refreshAllViews();
             showToast("페이지 순서를 변경했습니다.", "fa-shuffle");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -6769,6 +6836,7 @@
           !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.width) || !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.height))) {
         showToast("삽입 항목의 위치 또는 방향을 확인할 수 없어 회전을 중단했습니다.", "fa-triangle-exclamation"); return;
       }
+      const finish=beginOperationMetric('page_rotate');let outcome='failed';
       doc.operationBusy = true;
       const anchorPage = doc.currentPage, oldBytes = doc.bytes, oldReader = doc.pdfJsDoc;
       const overlayState = JSON.stringify(doc.overlays);
@@ -6789,7 +6857,7 @@
         const nextBytes = await pdfDoc.save();
         const info = await parsePageCountAndMeta(nextBytes);
         if (doc.bytes !== oldBytes || doc.pdfJsDoc !== oldReader || activeDoc() !== doc || JSON.stringify(doc.overlays) !== overlayState) {
-          await info.pdfJsDoc.destroy(); throw new Error("문서가 변경되어 회전을 취소했습니다.");
+          await info.pdfJsDoc.destroy(); outcome='cancelled'; throw new Error("문서가 변경되어 회전을 취소했습니다.");
         }
         saveUndoSnapshot(doc, `페이지 회전 (${deltaDegrees > 0 ? "시계" : "반시계"} 90°)`);
         doc.bytes = nextBytes;
@@ -6805,10 +6873,11 @@
           await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         }
         showToast(`${indices.length}개 페이지를 회전했습니다.`, deltaDegrees > 0 ? "fa-rotate-right" : "fa-rotate-left");
+        outcome='succeeded';
       } catch (error) {
         console.error("페이지 회전 실패", error);
         showToast(`페이지 회전에 실패했습니다: ${error.message || error}`, "fa-circle-exclamation");
-      } finally { doc.scrollSyncSuspended = false; doc.operationBusy = false; }
+      } finally { doc.scrollSyncSuspended = false; doc.operationBusy = false; finish(outcome); }
     }
 
     // =========================================================================
@@ -6828,6 +6897,8 @@
     }
 
     async function createPdfFormField(bytes, spec) {
+      const finish=beginOperationMetric('form_create');let outcome='failed';
+      try {
       const {PDFDocument} = window.PDFLib;
       if (!/^[^\.\x00-\x1f]{1,80}$/.test(spec.name) || !spec.name.trim() || spec.name !== spec.name.trim()) throw new Error("필드 이름은 1~80자이며 앞뒤 공백과 마침표를 사용할 수 없습니다.");
       if (!['text','date','checkbox'].includes(spec.kind) || !Number.isSafeInteger(spec.page)) throw new Error("필드 종류 또는 페이지가 올바르지 않습니다.");
@@ -6853,10 +6924,14 @@
         const font=await window.SunriseKoreanFont.embed(pdf,[spec.value || ' ']);
         field.updateAppearances(font);
       }
-      return pdf.save({updateFieldAppearances:false});
+      const output=await pdf.save({updateFieldAppearances:false});
+      outcome='succeeded';return output;
+      } finally { finish(outcome); }
     }
 
     async function updatePdfFormField(bytes, name, value) {
+      const finish=beginOperationMetric('form_fill');let outcome='failed';
+      try {
       const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
       if(typeof name!=='string' || name.length>512)throw new Error('필드 이름이 올바르지 않습니다.');
       const pdf=await PDFDocument.load(bytes), form=editablePdfForm(pdf);
@@ -6873,7 +6948,9 @@
         if(typeof value!=='boolean')throw new Error('체크박스 상태를 확인해 주세요.');
         if(value)field.check();else field.uncheck();field.updateAppearances();
       }else throw new Error('이 종류의 양식 필드는 아직 수정할 수 없습니다.');
-      return pdf.save({updateFieldAppearances:false});
+      const output=await pdf.save({updateFieldAppearances:false});
+      outcome='succeeded';return output;
+      } finally { finish(outcome); }
     }
 
     async function openFillFormFieldModal(doc) {
@@ -7010,6 +7087,8 @@
               return;
             }
 
+            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            try {
             saveUndoSnapshot(doc, `${title}: ${text}`);
             const targetPages = scope === "all" ? Array.from({ length: doc.pageCount }, (_, i) => i) : [doc.currentPage];
             let lastId = null;
@@ -7034,6 +7113,8 @@
             renderCurrentPageCanvas();
             renderLeftPane();
             showToast(`${title} 완료 (${targetPages.length}개 페이지)`, "fa-check");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -7079,6 +7160,8 @@
           });
           document.getElementById("tblCancelBtn").addEventListener("click", closeModal);
           document.getElementById("tblConfirmBtn").addEventListener("click", () => {
+            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            try {
             const hCells = document.getElementById("tblHeaderInput").value.split(",").map((s) => s.trim());
             const rCells = document.getElementById("tblRowInput").value.split(",").map((s) => s.trim());
             saveUndoSnapshot(doc, "표 삽입");
@@ -7102,6 +7185,8 @@
             renderCurrentPageCanvas();
             renderLeftPane();
             showToast("현재 페이지에 표를 삽입했습니다.", "fa-table");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -7128,6 +7213,8 @@
         onMount: () => {
           document.getElementById("pgNumCancelBtn").addEventListener("click", closeModal);
           document.getElementById("pgNumConfirmBtn").addEventListener("click", () => {
+            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            try {
             const tpl = document.getElementById("pgNumFormatInput").value || "- {page} / {total} -";
             saveUndoSnapshot(doc, "페이지 번호 일괄 삽입");
             for (let i = 0; i < doc.pageCount; i++) {
@@ -7149,6 +7236,8 @@
             closeModal();
             renderCurrentPageCanvas();
             showToast(`전체 ${doc.pageCount}쪽에 페이지 번호를 삽입했습니다.`, "fa-list-ol");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -7177,6 +7266,8 @@
         onMount: () => {
           document.getElementById("hfCancelBtn").addEventListener("click", closeModal);
           document.getElementById("hfConfirmBtn").addEventListener("click", () => {
+            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            try {
             const hTxt = document.getElementById("hfHeaderText").value.trim();
             const fTxt = document.getElementById("hfFooterText").value.trim();
             saveUndoSnapshot(doc, "머리말/꼬리말 삽입");
@@ -7212,6 +7303,8 @@
             closeModal();
             renderCurrentPageCanvas();
             showToast("머리말/꼬리말을 적용했습니다.", "fa-heading");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
@@ -7250,6 +7343,8 @@
         onMount: () => {
           document.getElementById("editItemCancelBtn").addEventListener("click", closeModal);
           document.getElementById("editItemConfirmBtn").addEventListener("click", () => {
+            const metricFinish=beginOperationMetric('overlay_edit');let metricOutcome='cancelled';
+            try {
             saveUndoSnapshot(doc, `항목 수정 (${item.type})`);
             item.text = document.getElementById("editItemTextInput").value;
             item.fontSize = Number(document.getElementById("editItemSizeInput").value) || 13;
@@ -7258,12 +7353,16 @@
             renderCurrentPageCanvas();
             renderLeftPane();
             showToast("선택 항목을 수정했습니다.", "fa-pen-to-square");
+            metricOutcome='succeeded';
+            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });
         },
       });
     }
 
     function duplicateSelectedInsertItem(doc) {
+      const metricFinish=beginOperationMetric('overlay_duplicate');let metricOutcome='cancelled';
+      try {
       const target = doc.overlays.find((o) => o.id === state.selectedInsertId) || doc.overlays.find((o) => o.pageIndex === doc.currentPage);
       if (!target) {
         showToast("복제할 삽입 항목을 먼저 선택하세요.", "fa-copy");
@@ -7280,9 +7379,13 @@
       renderLeftPane();
       renderRightPane();
       showToast(`선택 항목(${target.type})을 복제했습니다.`, "fa-copy");
+      metricOutcome='succeeded';
+      } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
     }
 
     function deleteSelectedInsertItem(doc) {
+      const metricFinish=beginOperationMetric('overlay_delete');let metricOutcome='cancelled';
+      try {
       const target = doc.overlays.find((o) => o.id === state.selectedInsertId) || doc.overlays.find((o) => o.pageIndex === doc.currentPage);
       if (!target) {
         showToast("삭제할 삽입 항목이 없습니다.", "fa-eraser");
@@ -7295,6 +7398,8 @@
       renderLeftPane();
       renderRightPane();
       showToast("선택한 삽입 항목을 삭제했습니다.", "fa-eraser");
+      metricOutcome='succeeded';
+      } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
     }
 
     // =========================================================================
@@ -7427,6 +7532,7 @@
           hit.kind!=="text" || !hit.highlightRect || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
         showToast("위치를 확인할 수 있는 본문 검색 결과에서만 형광펜을 추가할 수 있습니다.","fa-circle-info"); return;
       }
+      const finish=beginOperationMetric('highlight');let outcome='failed';
       doc.operationBusy=true;
       const oldBytes=doc.bytes, reader=doc.pdfJsDoc;
       try {
@@ -7435,16 +7541,17 @@
         const nextBytes=await pdfDoc.save(), info=await parsePageCountAndMeta(nextBytes);
         if (activeDoc()!==doc || doc.bytes!==oldBytes || doc.pdfJsDoc!==reader || doc.currentPage!==hit.pageIndex ||
             state.searchResults[state.activeSearchHitIndex]!==hit || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
-          await info.pdfJsDoc.destroy(); throw new Error("문서 또는 검색 결과가 변경되어 작업을 취소했습니다.");
+          await info.pdfJsDoc.destroy(); outcome='cancelled'; throw new Error("문서 또는 검색 결과가 변경되어 작업을 취소했습니다.");
         }
         saveUndoSnapshot(doc,"검색 결과 형광펜 추가"); doc.bytes=nextBytes;
         await reloadDocPdfJs(doc,{info,selection:[hit.pageIndex]});
         await refreshAllViews();
         showToast("형광펜을 추가했습니다. PDF를 저장하면 주석이 보존됩니다.","fa-highlighter");
+        outcome='succeeded';
       } catch (error) {
         console.error("형광펜 추가 실패",error);
         showToast(`형광펜 추가 실패: ${error.message || error}`,"fa-circle-exclamation");
-      } finally { doc.operationBusy=false; }
+      } finally { doc.operationBusy=false; finish(outcome); }
     }
 
     async function runDocumentSearch(term, options = {}) {
@@ -7453,6 +7560,8 @@
       state.searchResults = []; state.activeSearchHitIndex = -1; state.searchScrollHit = null;
       document.getElementById("searchIndicator")?.replaceChildren();
       if (!doc || !term) { if (countEl) countEl.textContent = "-"; return; }
+      const finish=beginOperationMetric('search');let outcome='cancelled';
+      try {
       state.lastSearchTerm = term; if (inlineInput && inlineInput.value !== term) inlineInput.value = term;
       if (countEl) countEl.textContent = "검색 중";
       const reader = doc.pdfJsDoc;
@@ -7503,6 +7612,8 @@
       } else if (countEl) countEl.textContent="0건";
       if (options.openSidePanel!==false) ensureLeftPanelOpen("search"); else renderLeftPane();
       showToast(`'${term}' 검색 결과: ${state.searchResults.length}건${truncated ? " (최대 5000건)" : ""}`,"fa-magnifying-glass");
+      outcome='succeeded';
+      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
     }
 
     function stepSearchHit(delta) {
@@ -7520,8 +7631,10 @@
     }
 
     async function openExtractTextModal(doc) {
+      const finish=beginOperationMetric('extract_text');let outcome='failed';
+      try {
       showToast("문서 텍스트를 준비하고 있습니다.", "fa-file-lines");
-      if (!await ensurePageTexts(doc) || activeDoc() !== doc) return;
+      if (!await ensurePageTexts(doc) || activeDoc() !== doc) { outcome='cancelled'; return; }
       const fullText = Array.from({ length: doc.pageCount }, (_, i) => {
         const t = doc.pageTexts[i] || "";
         const ov = doc.overlays
@@ -7553,6 +7666,8 @@
           });
         },
       });
+      outcome='succeeded';
+      } finally { finish(outcome); }
     }
 
     async function renderImageForExport(pdf, pageNumber) {
@@ -7811,6 +7926,8 @@
     function placePendingItem(event) {
       const pending = state.pendingPlacement, doc = activeDoc();
       if (!pending || pending.doc !== doc || doc.operationBusy) return;
+      const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+      try {
       const rect = document.getElementById("pageStage").getBoundingClientRect();
       const size = doc.pageSizes[doc.currentPage] || {width:595, height:842};
       const x = Math.max(0, Math.min(size.width - 1, (event.clientX - rect.left) / doc.zoom));
@@ -7825,6 +7942,8 @@
       renderOverlayItems(doc, doc.currentPage, doc.zoom);
       renderLeftPane(); updateCommandStates();
       showToast(`${pending.title} 완료`, "fa-check");
+      metricOutcome='succeeded';
+      } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
     }
 
     // =========================================================================
@@ -8060,6 +8179,7 @@
       document.getElementById("insertPdfInput").addEventListener("change", async (e) => {
         const doc = activeDoc();
         const file = e.target.files?.[0];
+        const metricFinish=doc&&file?beginOperationMetric('page_insert'):()=>{};let metricOutcome='cancelled';
         try {
           if (!doc || !file || !window.PDFLib) return;
           const buf = await readPdfInputFile(file);
@@ -8081,9 +8201,12 @@
           await reloadDocPdfJs(doc);
           await refreshAllViews();
           showToast(`${file.name}에서 ${copied.length}개 페이지를 삽입했습니다.`, "fa-file-import");
+          metricOutcome='succeeded';
         } catch (error) {
+          metricOutcome='failed';
           showToast(`PDF 페이지 삽입 실패: ${error.message || error}`, "fa-circle-exclamation");
         } finally {
+          metricFinish(metricOutcome);
           e.target.value = "";
         }
       });

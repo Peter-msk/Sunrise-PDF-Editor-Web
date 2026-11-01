@@ -19,7 +19,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
   wall+=15000;elapsed+=15000;
   await tick();
   assert.deepEqual(events.map(x=>x.type),['visit','visit','pulse']);
-  assert.equal(events[2].seconds,15);
+  assert.equal(events[2].seconds,5,'only the five foreground seconds after KST midnight belong to the new day');
   wall+=15000;elapsed+=15000;
   await tick();
   assert.deepEqual(events.map(x=>x.type),['visit','visit','pulse','pulse']);

@@ -22,7 +22,7 @@ function respond(req,res){
  }
  if(url.pathname==='/api/admin/health'){json(healthy,healthy.status==='ready'?200:503);return}
  if(url.pathname==='/api/admin/quality'){json(quality);return}
- if(url.pathname==='/api/admin/save-quality'){json({windowDays:14,attempts:5,ready:2,failed:1,cancelled:1,pending:1,retries:1,recovered:1});return}
+ if(url.pathname==='/api/admin/save-quality'){json({windowDays:Number(url.searchParams.get('days')||14),version:url.searchParams.get('version'),attempts:5,ready:2,failed:1,cancelled:1,pending:1,retries:1,recovered:1});return}
  if(url.pathname==='/api/admin/overview'){
   const days=Number(url.searchParams.get('days')||14);requestedDays.push(days);
   json({since:today,days,visits:{today:2,week:5,total:30},usage:{today:360,total:1200},
@@ -30,14 +30,14 @@ function respond(req,res){
    definitions:'익명 탭 세션 집계'});return;
  }
  if(url.pathname==='/api/admin/inquiries'){json({items:[]});return}
- if(url.pathname==='/api/admin/site-updates'){json({today,announcements:[],releases:[]});return}
+ if(url.pathname==='/api/admin/site-updates'){json({today,announcements:[],releases:[],next:{announcement:null,release:null}});return}
  res.writeHead(404);res.end('Not found');
 }
 async function main(){
  const server=http.createServer(respond);let browser;
  try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
-  browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+  browser=await require('./helpers/launch-browser.cjs')(chromium);
   const page=await browser.newPage({viewport:{width:1250,height:850}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port+'/admin/',{waitUntil:'load',timeout:30000});

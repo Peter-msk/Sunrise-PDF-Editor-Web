@@ -8,7 +8,7 @@ async function compact(code, module = false) {
   return result.code;
 }
 (async () => {
-  let html = fs.readFileSync(path.join(root, 'src/editor/index.html'), 'utf8');
+  let html = fs.readFileSync(path.join(root, 'src/editor/index.html'), 'utf8').replace(/\r\n?/g, '\n');
   const start = html.indexOf('  <script>\n');
   const end = html.indexOf('  </script>', start);
   if (start < 0 || end < start) throw new Error('Editor script boundary not found');
