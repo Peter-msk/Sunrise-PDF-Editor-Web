@@ -15,6 +15,7 @@
   <script src="/assets/sunrise-batch-pages.js"></script>
   <script src="/assets/sunrise-pdf-quality.js"></script>
   <script src="/assets/sunrise-pdf-quality-report.js"></script>
+  <script src="/assets/sunrise-comment-report.js"></script>
   <script src="/assets/sunrise-embedded-images.js"></script>
   <script src="/assets/sunrise-special-pdf.js"></script>
   <script src="/assets/sunrise-office-export.js"></script>
@@ -8477,13 +8478,41 @@
       }
     }
 
-    function exportOverlaysToCsv(doc) {
-      const rows = ["페이지,유형,내용,X좌표,Y좌표"];
-      doc.overlays.forEach((o) => {
-        rows.push(`${o.pageIndex + 1},"${o.type}","${(o.text || "").replace(/"/g, '""')}",${o.x},${o.y}`);
-      });
-      downloadBytes(new TextEncoder().encode("\uFEFF" + rows.join("\n")), `${doc.name.replace(/\.pdf$/i, "")}_comments.csv`, "text/csv;charset=utf-8");
-      showToast("주석 및 삽입 항목 CSV를 저장했습니다.", "fa-file-csv");
+    // All comments, including original standard annotations, stay local.
+    // This is a report export, not a PDF annotation redaction operation.
+    async function exportOverlaysToCsv(doc) {
+      if (!doc || doc.operationBusy) return false;
+      const originalBytes=doc.bytes, originalReader=doc.pdfJsDoc;
+      const overlayState=JSON.stringify(doc.overlays);
+      try {
+        if (!window.PDFLib || !window.SunriseCommentReport?.createCsv)
+          throw new Error("검토 의견표 생성 구성요소가 없습니다.");
+        const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
+        const native=[];
+        for(let pageIndex=0;pageIndex<pdf.getPageCount();pageIndex++) {
+          for(const item of listNativeAnnotations(pdf,pageIndex)) {
+            native.push({...item,pageIndex});
+            if(native.length>2000)throw new Error("원본 PDF 주석이 2000건을 초과하여 일괄 추출할 수 없습니다.");
+          }
+          // Yield periodically so the UI can still respond on large documents.
+          if(pageIndex%24===23)await new Promise(resolve=>setTimeout(resolve,0));
+          if(doc.bytes!==originalBytes || doc.pdfJsDoc!==originalReader || activeDoc()!==doc ||
+            JSON.stringify(doc.overlays)!==overlayState)
+            throw new Error("보고서 작성 중 문서가 변경되었습니다. 다시 생성해 주세요.");
+        }
+        const overlays=JSON.parse(overlayState);
+        const csv=window.SunriseCommentReport.createCsv(overlays,native);
+        if(doc.bytes!==originalBytes || doc.pdfJsDoc!==originalReader || activeDoc()!==doc ||
+          JSON.stringify(doc.overlays)!==overlayState)
+          throw new Error("문서가 변경되어 의견표 다운로드를 취소했습니다.");
+        downloadBytes(new TextEncoder().encode(csv),
+          doc.name.replace(/\.pdf$/i,"")+"_comments.csv","text/csv;charset=utf-8");
+        showToast("검토 의견표: Sunrise 삽입 "+overlays.length+"건 + 원본 메모·형광펜 "+native.length+"건 다운로드 시작","fa-file-csv");
+        return true;
+      } catch(error) {
+        showToast("검토 의견표 생성 실패: "+(error.message||error),"fa-triangle-exclamation");
+        return false;
+      }
     }
 
     function openCompareModal(doc) {
@@ -8684,7 +8713,7 @@
         width: "540px",
         bodyHtml: `
           <div class="dialog-info-box">
-            문서 내 주석·스탬프·수정 내역(${doc.overlays.length}건)을 취합하여 표준 검토 의견표 CSV를 생성합니다.
+            Sunrise 삽입 주석·스탬프·수정 내역(${doc.overlays.length}건)과 기존 PDF 원본 메모·형광펜을 함께 취합하여 검토 의견표 CSV를 생성합니다. 원본 주석은 추출 시 실제 건수를 계산합니다.
           </div>
         `,
         footerHtml: `
@@ -8696,9 +8725,13 @@
         `,
         onMount: () => {
           document.getElementById("revCloseBtn").addEventListener("click", closeModal);
-          document.getElementById("revCsvBtn").addEventListener("click", () => {
-            closeModal();
-            exportOverlaysToCsv(doc);
+          document.getElementById("revCsvBtn").addEventListener("click", async () => {
+            const button=document.getElementById("revCsvBtn");
+            if(button.disabled)return;
+            button.disabled=true;
+            try {
+              if(await exportOverlaysToCsv(doc))closeModal();
+            } finally {button.disabled=false;}
           });
         },
       });
