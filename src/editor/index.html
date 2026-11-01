@@ -4269,9 +4269,13 @@
         container.querySelectorAll("[data-bm-delete]").forEach(button => button.addEventListener("click", event => {
           event.stopPropagation();
           const index = Number(button.dataset.bmDelete);
-          if (!doc.bookmarks[index]) return;
-          saveUndoSnapshot(doc, "북마크 삭제"); doc.bookmarks.splice(index, 1);
-          doc.bookmarks = window.SunriseAutoBookmarks.normalizeLevels(doc.bookmarks); renderLeftPane();
+          if (!doc.bookmarks[index] || doc.operationBusy) return;
+          const next = window.SunriseAutoBookmarks.removeSubtree(doc.bookmarks, index);
+          if (next.removedCount > 1 &&
+              !window.confirm("선택한 북마크와 하위 북마크 " + (next.removedCount - 1) + "개를 함께 삭제하시겠습니까?")) return;
+          saveUndoSnapshot(doc, "북마크 삭제");
+          doc.bookmarks = next.bookmarks;
+          renderLeftPane();
         }));
         return;
       }
