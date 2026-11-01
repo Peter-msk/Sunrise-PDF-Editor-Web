@@ -107,8 +107,8 @@ async function main(){
    await page.locator('#insTextInput').waitFor({state:'visible'});
    await page.locator('#insTextInput').fill('Visual QA Signer');
    await page.locator('#insConfirmBtn').click();
-   const visualLabel=await page.locator('#annotationOverlay [data-overlay-id]').last().textContent();
-   assert(visualLabel.includes('전자서명·인증서 서명 아님'));
+   await page.locator('#annotationOverlay [data-overlay-id]',{hasText:'전자서명·인증서 서명 아님'})
+     .waitFor({state:'visible',timeout:30000});
 
    // USR-05: restricted editable text layer, but original must remain extractable.
    await page.evaluate(()=>executeCommand('visualTextCorrection'));
