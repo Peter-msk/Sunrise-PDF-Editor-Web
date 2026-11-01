@@ -8682,7 +8682,10 @@
             count=get("nativeAnnotationCount"), status=get("nativeAnnotationStatus"),
             edit=get("nativeAnnotationEdit"), remove=get("nativeAnnotationDelete"),
             jump=get("nativeAnnotationJump");
-          get("nativeAnnotationClose").addEventListener("click",closeModal);
+          const closeButton=get("nativeAnnotationClose");
+          const modalIsCurrent=()=>isCurrent() && get("nativeAnnotationSelect")===select &&
+            get("modalBackdrop")?.classList.contains("open");
+          closeButton.addEventListener("click",closeModal);
           const current=()=>{
             const key=select.value;
             return annotations.find(item=>item.pageIndex+":"+item.index===key);
@@ -8714,7 +8717,7 @@
           refreshList();
           jump.addEventListener("click",async()=>{
             const item=current();
-            if(!item||doc.operationBusy||!isCurrent()){
+            if(!item||doc.operationBusy||!modalIsCurrent()){
               status.textContent="문서가 변경되었습니다. 주석 목록을 다시 열어주세요.";return;
             }
             doc.currentPage=item.pageIndex;
@@ -8725,14 +8728,14 @@
           });
           const run=async action=>{
             const item=current();
-            if(!item||doc.operationBusy||!isCurrent()){
+            if(!item||doc.operationBusy||!modalIsCurrent()){
               status.textContent="문서 또는 주석이 변경되어 다시 열어야 합니다.";return;
             }
             if(action==="delete"&&!window.confirm(
               (item.pageIndex+1)+"쪽 원본 주석을 화면에서 삭제할까요? 개인정보의 완전 삭제는 아닙니다."))return;
             doc.operationBusy=true;
             edit.disabled=true;remove.disabled=true;jump.disabled=true;
-            search.disabled=true;type.disabled=true;select.disabled=true;
+            search.disabled=true;type.disabled=true;select.disabled=true;closeButton.disabled=true;
             const finish=beginOperationMetric("native_annotation_edit");
             let outcome="failed",info;
             try{
@@ -8743,9 +8746,9 @@
               const next=await pdf.save({updateFieldAppearances:false});
               await verifySavedPdfBytes(originalBytes,next);
               info=await parsePageCountAndMeta(next);
-              if(!isCurrent()){
+              if(!modalIsCurrent()){
                 outcome="cancelled";
-                throw new Error("수정 중 문서 상태가 변경되었습니다.");
+                throw new Error("수정 중 창 또는 문서 상태가 변경되었습니다.");
               }
               saveUndoSnapshot(doc,action==="edit"?"원본 주석 문구 수정":"원본 주석 삭제");
               doc.bytes=next;doc.currentPage=item.pageIndex;
@@ -8761,7 +8764,7 @@
               finish(outcome);
               doc.operationBusy=false;
               edit.disabled=false;remove.disabled=false;jump.disabled=false;
-              search.disabled=false;type.disabled=false;select.disabled=false;
+              search.disabled=false;type.disabled=false;select.disabled=false;closeButton.disabled=false;
               updateCommandStates();
               if(outcome!=="succeeded")refreshSelection();
             }
