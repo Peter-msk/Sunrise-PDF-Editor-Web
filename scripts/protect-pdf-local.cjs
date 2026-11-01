@@ -34,6 +34,28 @@ function validatePassword(secret){
  if(bytes<12||bytes>MAX_SECRET_BYTES)throw Error('암호는 UTF-8 기준 12~200바이트여야 합니다.');
  return secret;
 }
+// Encryption rewrites the PDF and invalidates any existing certification signature.
+// Reject signature dictionaries/ByteRange markers conservatively before doing so.
+async function rejectSignedSource(source){
+ let doc;
+ try{
+  const PDFLib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
+  const raw=await fs.readFile(source);
+  doc=await PDFLib.PDFDocument.load(raw,{updateMetadata:false});
+  const name=PDFLib.PDFName.of;
+  if(doc.catalog.has(name('Perms'))||raw.includes(Buffer.from('/ByteRange')))
+   throw Error('전자서명이 있는 PDF는 기존 서명이 무효화될 수 있어 암호 보호를 차단합니다.');
+  for(const field of doc.getForm().getFields()){
+   const kind=field.acroField?.dict?.get(name('FT'));
+   if(kind?.toString()==='/Sig')
+    throw Error('전자서명 필드가 있는 PDF는 암호 보호를 지원하지 않습니다.');
+  }
+ }catch(error){
+  if(/전자서명/.test(error.message))throw error;
+  throw Error('서명 여부를 확인할 수 없는 PDF는 안전을 위해 암호 보호하지 않습니다.');
+ }
+}
+
 function argsOnStdin(lines){
  if(lines.some(x=>typeof x!=='string'||/[\r\n\u0000]/.test(x)))
   throw Error('QPDF 인수에 줄바꿈이나 제어문자가 있습니다.');
@@ -66,6 +88,7 @@ async function protectPdfFile({inputPath,outputPath,password,qpdf=invokeQpdf}){
   throw Error('QPDF 11.7 이상이 필요합니다.');
  const original=await qpdf(['--requires-password',source]);
  if(original.code!==2)throw Error('이미 암호화된 PDF이거나 입력 구조가 지원되지 않습니다.');
+ await rejectSignedSource(source);
  const owner=crypto.randomBytes(32).toString('base64url');
  const dir=await fs.mkdtemp(path.join(path.dirname(target),'.sunrise-pdf-lock-'));
  await fs.chmod(dir,0o700).catch(()=>{});
@@ -135,10 +158,7 @@ async function readHiddenSecret(prompt,stdin=process.stdin,stderr=process.stderr
 }
 async function cli(argv){
  if(argv.length!==2)throw Error('사용법: node scripts/protect-pdf-local.cjs 입력.pdf 새출력.pdf');
- const [first,second]=await Promise.all([
-  readHiddenSecret('PDF 열기 암호(12바이트 이상): '),
-  Promise.resolve(null)
- ]);
+ const first=await readHiddenSecret('PDF 열기 암호(12바이트 이상): ');
  const confirm=await readHiddenSecret('암호 재입력: ');
  if(first!==confirm)throw Error('입력한 두 암호가 서로 다릅니다.');
  const result=await protectPdfFile({inputPath:argv[0],outputPath:argv[1],password:first});
