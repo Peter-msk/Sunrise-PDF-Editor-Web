@@ -25,6 +25,14 @@ assert.deepEqual(helper.normalizeLevels([{level:2},{level:3},{level:3},{level:0}
 assert.equal(helper.changeLevel([{level:0},{level:0},{level:0}],0,1),null);
 assert.deepEqual(helper.changeLevel([{level:0},{level:0},{level:0}],1,1).map(x=>x.level),[0,1,0]);
 assert.deepEqual(helper.changeLevel([{level:0},{level:1},{level:2}],1,-1).map(x=>x.level),[0,0,1]);
+const nested=[{title:'A',level:0},{title:'A.1',level:1},{title:'A.1.1',level:2},
+ {title:'B',level:0},{title:'B.1',level:1},{title:'C',level:0}];
+const deletion=helper.removeSubtree(nested,3);
+assert.deepEqual(deletion.bookmarks.map(x=>x.title),['A','A.1','A.1.1','C']);
+assert.equal(deletion.removedCount,2);
+assert.deepEqual(helper.removeSubtree(nested,0).bookmarks.map(x=>x.title),['B','B.1','C']);
+assert.throws(()=>helper.removeSubtree(nested,99),/위치/);
+
 const editor=fs.readFileSync('src/editor/index.html','utf8');
 assert.match(editor,/data-bm-indent/);
 assert.match(editor,/data-bm-outdent/);
