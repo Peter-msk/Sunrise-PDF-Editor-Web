@@ -1,6 +1,8 @@
 // Password-only, single-admin authentication for Sunrise PDF Editor.
 // Cloudflare Access is not required. Fail closed until an operator configures
 // a high-entropy ADMIN_BOOTSTRAP_TOKEN secret and registers the first account.
+import {readJsonObject} from './bounded-json.mjs';
+import {securityEvent} from './admin-security-log.mjs';
 const COOKIE='__Host-sunrise_pdf_admin';
 const ITERATIONS=600000, ABS_MS=8*60*60*1000, IDLE_MS=30*60*1000;
 const LIMIT_WINDOW_MS=15*60*1000;
@@ -21,13 +23,6 @@ async function passwordVerifier(proof,salt,env){
  return Array.from(new Uint8Array(signature),x=>x.toString(16).padStart(2,'0')).join('');
 }
 function equalDigest(a,b){if(!a||!b||a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0}
-async function payload(request){
- if(!request.headers.get('content-type')?.toLowerCase().startsWith('application/json'))return null;
- if(Number(request.headers.get('content-length')||0)>4096)return null;
- let text;try{text=await request.text()}catch{return null}
- if(text.length>4096)return null;
- try{const value=JSON.parse(text);return value&&typeof value==='object'&&!Array.isArray(value)?value:null}catch{return null}
-}
 function cookieValue(request){
  const cookie=request.headers.get('cookie')||'';
  const parts=cookie.split(';').map(x=>x.trim());
@@ -42,10 +37,14 @@ export async function getAdminSession(request,env){
  if(!env?.DB)return null;
  const token=cookieValue(request);if(!token)return null;
  const now=Date.now(),hash=await digest(token);
- const existing=await env.DB.prepare('UPDATE admin_sessions SET last_seen_ms=? WHERE token_hash=? AND expires_ms>? AND last_seen_ms>? RETURNING admin_id').bind(now,hash,now,now-IDLE_MS).first();
+ const existing=await env.DB.prepare('UPDATE admin_sessions SET last_seen_ms=? WHERE token_hash=? AND expires_ms>? AND last_seen_ms>? RETURNING admin_id,created_ms').bind(now,hash,now,now-IDLE_MS).first();
  if(!existing)return null;
- const account=await env.DB.prepare('SELECT username FROM admin_accounts WHERE id=?').bind(existing.admin_id).first();
- return account?.username||null;
+ const account=await env.DB.prepare('SELECT username,updated_at FROM admin_accounts WHERE id=?').bind(existing.admin_id).first();
+ if(!account)return null;
+ // A password rotation invalidates all sessions created before that change,
+ // even if later session table cleanup fails.
+ const changed=account.updated_at?Date.parse(account.updated_at):0;
+ return Number.isFinite(changed)&&changed>0&&existing.created_ms<=changed?null:account.username;
 }
 async function throttle(request,env,namespace){
  const ip=request.headers.get('cf-connecting-ip')||'unknown';
@@ -75,16 +74,59 @@ export async function authRoutes(request,env,url){
   const user=await getAdminSession(request,env);
   return user?json({authenticated:true,username:user}):json({authenticated:false},401);
  }
- if(!['/api/auth/setup','/api/auth/login','/api/auth/logout'].includes(path))return json({error:'요청한 인증 경로가 없습니다.'},404);
+ if(path==='/api/auth/sessions'&&method==='GET'){
+  const user=await getAdminSession(request,env);
+  if(!user)return json({error:'관리자 로그인이 필요합니다.'},401);
+  const now=Date.now();
+  const account=await db.prepare('SELECT updated_at FROM admin_accounts WHERE id=1').first();
+  const changed=account?.updated_at?Date.parse(account.updated_at):0;
+  if(!Number.isFinite(changed))return json({error:'계정 상태를 확인하지 못했습니다.'},503);
+  const count=await db.prepare('SELECT COUNT(*) count FROM admin_sessions WHERE admin_id=1 AND expires_ms>? AND last_seen_ms>? AND created_ms>?').bind(now,now-IDLE_MS,changed).first();
+  return json({activeSessions:Number(count?.count||0),idleMinutes:IDLE_MS/60000,absoluteHours:ABS_MS/3600000});
+ }
+ if(!['/api/auth/setup','/api/auth/login','/api/auth/logout','/api/auth/logout-all','/api/auth/change-password'].includes(path))return json({error:'요청한 인증 경로가 없습니다.'},404);
  if(method!=='POST')return json({error:'허용되지 않은 요청입니다.'},405,{Allow:'POST'});
  if(!originOK(request,url))return json({error:'잘못된 요청 출처입니다.'},403);
+ if(path==='/api/auth/logout-all'){
+  if(!await getAdminSession(request,env))return json({error:'관리자 로그인이 필요합니다.'},401);
+  await db.prepare('DELETE FROM admin_sessions WHERE admin_id=1').run();
+  await securityEvent(db,'sessions_revoked');
+  return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
+ }
  if(path==='/api/auth/logout'){
   const token=cookieValue(request);
   if(token)await db.prepare('DELETE FROM admin_sessions WHERE token_hash=?').bind(await digest(token)).run();
   return json({ok:true},200,{'set-cookie':sessionCookie('',0)});
  }
- const data=await payload(request);
+ const data=await readJsonObject(request,4096);
  if(!data)return json({error:'입력 형식을 확인하세요.'},400);
+ if(path==='/api/auth/change-password'){
+  const user=await getAdminSession(request,env);
+  if(!user)return json({error:'관리자 로그인이 필요합니다.'},401);
+  if(!isHex(data.currentProof,64)||!isHex(data.newProof,64)||!isHex(data.newSalt,32)){
+   return json({error:'비밀번호 변경 요청 형식을 확인하세요.'},400);
+  }
+  const account=await db.prepare('SELECT id,username,password_salt,password_hash FROM admin_accounts WHERE id=1').first();
+  if(!account||account.username!==user||!String(account.password_salt).startsWith(SCHEME)){
+   return json({error:'관리자 계정 상태를 확인하지 못했습니다.'},503);
+  }
+  const oldSalt=account.password_salt.slice(SCHEME.length);
+  if(data.newSalt===oldSalt)return json({error:'새 비밀번호를 위해 새로운 암호화 설정이 필요합니다.'},400);
+  const oldVerifier=await passwordVerifier(data.currentProof,oldSalt,env);
+  if(!equalDigest(oldVerifier,account.password_hash)){
+   if(await throttle(request,env,'change-password'))return json({error:'비밀번호 확인에 실패했습니다. 15분 후 다시 시도하세요.'},429);
+   return json({error:'기존 비밀번호가 올바르지 않습니다.'},401);
+  }
+  const newVerifier=await passwordVerifier(data.newProof,data.newSalt,env);
+  // The browser rejects unchanged plaintext. Different salts intentionally
+  // produce different proofs, so the server does not claim to compare them.
+  const updated=await db.prepare("UPDATE admin_accounts SET password_salt=?,password_hash=?,iterations=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=1 AND password_hash=?")
+   .bind(SCHEME+data.newSalt,newVerifier,ITERATIONS,account.password_hash).run();
+  if(updated.meta?.changes!==1)return json({error:'다른 비밀번호 변경 요청이 처리되었습니다. 다시 로그인하세요.'},409);
+  await db.prepare('DELETE FROM admin_sessions WHERE admin_id=1').run();
+  await securityEvent(db,'password_changed');
+  return json({ok:true,message:'비밀번호가 변경됐습니다. 모든 관리자 세션이 종료됩니다.'},200,{'set-cookie':sessionCookie('',0)});
+ }
  if(path==='/api/auth/setup'){
   if(await configured(env))return json({error:'관리자 계정은 이미 등록되어 있습니다.'},409);
   // A missing bootstrap secret is a setup problem, not a failed login attempt.
@@ -109,13 +151,15 @@ export async function authRoutes(request,env,url){
  // A legacy server-side PBKDF2 record must be migrated, never silently weakened.
  if(typeof account.password_salt!=='string'||!account.password_salt.startsWith(SCHEME))return json({error:'기존 인증 기록을 관리자가 점검해야 합니다.'},503);
  const salt=account.password_salt.slice(SCHEME.length);
- if(!isHex(data.passwordProof,64))return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401);
+ if(!isHex(data.passwordProof,64)){await securityEvent(db,'login_failed');return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401)}
  const verifier=await passwordVerifier(data.passwordProof,salt,env);
  if(typeof data.username!=='string'||data.username!==account.username||!equalDigest(verifier,account.password_hash)){
+  await securityEvent(db,'login_failed');
   return json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'},401);
  }
  const token=randomHex(32),now=Date.now();
  await db.prepare('INSERT INTO admin_sessions(token_hash,admin_id,created_ms,last_seen_ms,expires_ms) VALUES (?,?,?,?,?)')
   .bind(await digest(token),account.id,now,now,now+ABS_MS).run();
+ await securityEvent(db,'login_succeeded');
  return json({ok:true},200,{'set-cookie':sessionCookie(token,ABS_MS/1000)});
 }

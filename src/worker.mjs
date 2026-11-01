@@ -1,5 +1,7 @@
-import {telemetry,adminApi} from './admin-api.mjs';
+import {telemetry,adminApi,PUBLICATION_WINDOW_SQL} from './admin-api.mjs';
 import {authRoutes,getAdminSession} from './admin-password-auth.mjs';
+import {runTrackedAdminRetention} from './admin-retention.mjs';
+import {acceptDeploymentReport} from './admin-deployments.mjs';
 // Sunrise PDF Editor Web: public release feed + private Cloudflare D1 inquiry inbox.
 // No PDF data is read, uploaded or retained by this Worker.
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'};
@@ -7,8 +9,8 @@ function respond(data,status=200,extra={}) { return new Response(JSON.stringify(
 function tooLong(value,max) { return typeof value!=='string' || value.length>max; }
 async function publicUpdates(db) {
   const [a,r]=await Promise.all([
-    db.prepare("SELECT id,title,body,level,published_at FROM site_announcements WHERE is_active=1 ORDER BY sort_order DESC,id DESC LIMIT 8").all(),
-    db.prepare("SELECT id,version,released_at,added,improved,removed FROM site_releases WHERE is_active=1 ORDER BY sort_order DESC,id DESC LIMIT 8").all()
+    db.prepare(`SELECT id,title,body,level,published_at FROM site_announcements WHERE is_active=1 AND ${PUBLICATION_WINDOW_SQL} ORDER BY sort_order DESC,id DESC LIMIT 8`).all(),
+    db.prepare(`SELECT id,version,released_at,added,improved,removed FROM site_releases WHERE is_active=1 AND ${PUBLICATION_WINDOW_SQL} ORDER BY sort_order DESC,id DESC LIMIT 8`).all()
   ]);
   return respond({announcements:a.results||[],releases:r.results||[]},200,{'cache-control':'public, max-age=60'});
 }
@@ -51,6 +53,9 @@ async function submitInquiry(request,env,url) {
 export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
+    if(url.pathname==='/api/operations/deployments'){
+      try{return await acceptDeploymentReport(request,env)}catch{return respond({error:'배포 이력을 기록하지 못했습니다.'},503)}
+    }
     if(url.pathname.startsWith('/api/auth/')){
       try{return await authRoutes(request,env,url)}
       catch(error){
@@ -64,12 +69,17 @@ export default {
       return env.ASSETS.fetch(request);
     }
     if(url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')){
-      const username=await getAdminSession(request,env);
+      let username;
+      try{username=await getAdminSession(request,env)}
+      catch(error){console.error('Admin session check failed',error?.name||'unknown');return respond({error:'관리자 인증을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.'},503);}
       if(!username){
         if(url.pathname.startsWith('/api/admin/'))return respond({error:'관리자 로그인이 필요합니다.'},401);
         return Response.redirect(url.origin+'/admin/login/',302);
       }
-      if(url.pathname.startsWith('/api/admin/'))return adminApi(request,env,url,username);
+      if(url.pathname.startsWith('/api/admin/')){
+        try{return await adminApi(request,env,url,username)}
+        catch(error){console.error('Admin API failed',error?.name||'unknown');return respond({error:'관리자 데이터를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'},503);}
+      }
       return env.ASSETS.fetch(request);
     }
     if(url.pathname==='/api/telemetry')return telemetry(request,env,url);
@@ -86,11 +96,7 @@ export default {
     return env.ASSETS.fetch(request);
   },
   async scheduled(_event,env) {
-    if(!env.DB) return;
-    await env.DB.prepare("DELETE FROM inquiries WHERE created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-90 days')").run();
-    await env.DB.prepare("DELETE FROM inquiry_rate_limits WHERE day < strftime('%Y-%m-%d','now','-2 days')").run();
-    await env.DB.prepare("DELETE FROM analytics_sessions WHERE day < date('now','+9 hours','-14 days')").run();
-    await env.DB.prepare('DELETE FROM admin_sessions WHERE expires_ms<? OR last_seen_ms<?').bind(Date.now(),Date.now()-30*60*1000).run();
-    await env.DB.prepare('DELETE FROM admin_login_limits WHERE window_start_ms<?').bind(Date.now()-24*60*60*1000).run();
+    if(!env.DB)return;
+    await runTrackedAdminRetention(env.DB);
   }
 };

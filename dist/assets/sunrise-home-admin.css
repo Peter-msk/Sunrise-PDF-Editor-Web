@@ -76,3 +76,18 @@
   .nav .actions{width:100%;justify-content:flex-end;gap:7px}
   .notice-rail{top:112px!important}
 }
+/* The details element owns scrolling; its content can shrink with the rail. */
+.rail-panel details,
+.rail-panel details[open]{
+  display:block;
+  flex:1 1 auto;
+  min-height:0;
+  height:auto;
+  max-height:100%;
+  overflow-y:auto;
+  overscroll-behavior-y:contain;
+  scrollbar-width:thin;
+  -webkit-overflow-scrolling:touch;
+}
+.rail-panel summary{position:sticky;top:0;z-index:1}
+.rail-items{overflow:visible;max-height:none!important}

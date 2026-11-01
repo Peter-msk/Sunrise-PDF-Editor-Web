@@ -1,0 +1,57 @@
+name: Manual production release
+on:
+  workflow_dispatch:
+    inputs:
+      confirmed_release:
+        description: Functional/browser review and schema preparation are complete
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: sunrise-production-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: inputs.confirmed_release && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DEPLOYMENT_EVENT_SECRET: ${{ secrets.DEPLOYMENT_EVENT_SECRET }}
+      DEPLOYMENT_ENVIRONMENT: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require production configuration
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$DEPLOYMENT_EVENT_SECRET"
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Production D1 and administrator safety gate (read-only)
+        run: node scripts/admin-production-gate.cjs
+      - name: Deploy reviewed source
+        id: deploy
+        continue-on-error: true
+        run: npm exec --yes --package=wrangler@4.102.0 -- wrangler deploy
+      - name: Report deployment outcome
+        if: always() && (steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure')
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+        run: |
+          if [ "$DEPLOY_OUTCOME" = "success" ]; then
+            node scripts/report-deployment.cjs succeeded
+          else
+            node scripts/report-deployment.cjs failed
+          fi
+      - name: Preserve failed deployment outcome
+        if: steps.deploy.outcome == 'failure'
+        run: exit 1

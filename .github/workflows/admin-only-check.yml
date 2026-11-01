@@ -1,0 +1,37 @@
+name: Admin-only release validation
+on:
+  push:
+    branches: [release/admin-only-20261101]
+  pull_request:
+    paths:
+      - 'src/admin-*.mjs'
+      - 'src/worker.mjs'
+      - 'src/bounded-json.mjs'
+      - 'src/operation-metrics.mjs'
+      - 'dist/admin/**'
+      - 'migrations/**'
+      - 'scripts/admin-production-gate.cjs'
+      - '.github/workflows/admin-only-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Administrator contracts and release scope
+        run: |
+          node tests/admin-password-change.cjs
+          node tests/admin-edit-conflicts-pagination.cjs
+          node tests/admin-operational-health.cjs
+          node tests/admin-schema-session-security.cjs
+          node tests/admin-deployment-reports.cjs
+          node tests/admin-release-scope.cjs
