@@ -8221,11 +8221,12 @@
       const finish=beginOperationMetric("extract_text");let outcome="failed";
       try {
         if(doc.pageCount>120)throw Error("Office 텍스트 변환은 최대 120쪽까지 지원합니다.");
-        showToast("PDF 텍스트 레이어를 판독하고 있습니다. OCR은 사용하지 않습니다.","fa-file-lines");
-        if(!await ensurePageTexts(doc) || activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original){
+        showToast("PDF 텍스트 줄바꿈 정보를 판독하고 있습니다. OCR은 사용하지 않습니다.","fa-file-lines");
+        const pages=await window.SunriseOfficeExport.extractPdfPages(reader,
+          ()=>activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original);
+        if(activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original){
           outcome="cancelled";return;
         }
-        const pages=Array.from({length:doc.pageCount},(_,i)=>doc.pageTexts[i]||"");
         if(!pages.some(text=>text.trim()))throw Error("PDF 텍스트 레이어가 없습니다. 이미지 기반 문서의 OCR은 지원하지 않습니다.");
         const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):window.SunriseOfficeExport.xlsx(pages);
         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
