@@ -46,6 +46,35 @@ const reader={numPages:1,getPage:async number=>{assert.equal(number,1);return pa
   assert.equal(pdf.catalog.get(N(key)),undefined,'fresh raster PDF should not copy '+key);
  await assert.rejects(special.exportMaskedPage({reader,pageNumber:1,rectangle:{x:10,y:20,width:50,height:40},
   PDFLib:lib,makeCanvas,cancelled:()=>true}),/취소/);
+ const pageSizes=[{width:300,height:400},{width:300,height:400}];
+ assert.deepEqual(special.parseMaskPlan('2,10,20,50,40\n1,0,0,20,20\n2,90,110,30,30',2,pageSizes),[
+  {pageNumber:1,rectangles:[{x:0,y:0,width:20,height:20}]},
+  {pageNumber:2,rectangles:[{x:10,y:20,width:50,height:40},{x:90,y:110,width:30,height:30}]}
+ ]);
+ for(const invalid of ['0,1,1,20,20','3,1,1,20,20','1,,1,20,20','1,1,2,3,4',
+  '1,1,2,20,20\n1,99,x,20,20',Array(37).fill('1,1,1,20,20').join('\n')]){
+  assert.throws(()=>special.parseMaskPlan(invalid,2,pageSizes),/행|범위|마스크|마스킹/);
+ }
+ const imageMarks=[];
+ const multiReader={numPages:2,getPage:async number=>({
+  getViewport:({scale})=>({width:300*scale,height:400*scale}),
+  render:()=>({promise:Promise.resolve()})
+ })};
+ const multiCanvas=()=>({
+  getContext:()=>({fillStyle:'#FFFFFF',fillRect(...v){imageMarks.push({v,color:this.fillStyle})}}),
+  toBlob:done=>done({size:fixture.length,arrayBuffer:async()=>Uint8Array.from(fixture).buffer})
+ });
+ const plan=special.parseMaskPlan('2,10,20,50,40\n1,0,0,20,20\n2,90,110,30,30',2,pageSizes);
+ const multi=await special.exportMaskedPages({
+  reader:multiReader,regions:plan,PDFLib:lib,makeCanvas:multiCanvas
+ });
+ assert.equal(multi.pages,2);assert.equal(multi.masked,3);
+ assert.deepEqual(multi.sourcePages,[1,2]);
+ assert.equal((await lib.PDFDocument.load(multi.bytes)).getPageCount(),2);
+ assert.equal(imageMarks.filter(x=>x.color==='#000000').length,3);
+ await assert.rejects(special.exportMaskedPages({
+  reader:multiReader,regions:plan,PDFLib:lib,makeCanvas:multiCanvas,cancelled:()=>true
+ }),/취소/);
  const doc=await lib.PDFDocument.create();const p=doc.addPage([300,400]),stream=p.getContentStream(false);
  const overlay=[
   {id:'correction',type:'Correction',text:'Replacement',pageIndex:0,x:50,y:50,
@@ -60,6 +89,8 @@ const reader={numPages:1,getPage:async number=>{assert.equal(number,1);return pa
  assert.deepEqual(restored.overlays.map(x=>x.type),['Correction','VisualSignature']);
  assert.match(editor,/case "visualTextCorrection"/);
  assert.match(editor,/case "maskedPageExport"/);
+ assert.match(editor,/case "maskedMultiExport"/);
+ assert.match(editor,/id="multiMaskConfirm"/);
  assert.match(editor,/case "insertVisualSignature"/);
  assert.match(editor,/id="correctTextSource"/);
  assert.match(editor,/id="maskConfirmed"/);

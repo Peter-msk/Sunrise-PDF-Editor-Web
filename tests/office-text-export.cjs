@@ -19,6 +19,25 @@ const readZip=bytes=>{
  assert(b.includes(Buffer.from('PK\x05\x06','binary')),'ZIP EOCD required');
  return found;
 };
+assert.equal(office.linesFromTextItems([
+ {str:'첫 번째',transform:[12,0,0,12,20,500],height:12,hasEOL:false},
+ {str:'문장',transform:[12,0,0,12,110,500],height:12,hasEOL:true},
+ {str:'두 번째 줄',transform:[12,0,0,12,20,475],height:12,hasEOL:false},
+ {str:'다음 줄',transform:[12,0,0,12,20,450],height:12,hasEOL:false}
+]),'첫 번째 문장\n두 번째 줄\n다음 줄');
+const reader={numPages:2,getPage:async number=>({
+ getTextContent:async()=>({items:number===1?[
+  {str:'PDF',transform:[10,0,0,10,10,100],height:10,hasEOL:false},
+  {str:'LINE',transform:[10,0,0,10,70,100],height:10,hasEOL:true},
+  {str:'AFTER',transform:[10,0,0,10,10,70],height:10,hasEOL:false}
+ ]:[{str:'SECOND PAGE',hasEOL:false}]})
+})};
+(async()=>{
+ const extracted=await office.extractPdfPages(reader);
+ assert.deepEqual(extracted,['PDF LINE\nAFTER','SECOND PAGE']);
+ await assert.rejects(office.extractPdfPages(reader,()=>true),/취소/);
+ assert.throws(()=>office.xlsx(['a'.repeat(32768)]),/32,767/);
+})().catch(e=>{console.error(e);process.exitCode=1});
 const sample=['안녕 & <PDF>','수질=정상\n=SUM(1,2)'];
 const doc=readZip(office.docx(sample));
 assert(doc['word/document.xml']?.includes('안녕 &amp; &lt;PDF&gt;'));

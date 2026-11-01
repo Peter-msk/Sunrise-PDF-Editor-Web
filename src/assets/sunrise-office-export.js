@@ -17,6 +17,46 @@
    return t;
   });
  }
+ // Preserve explicit PDF.js end-of-line markers and distinct horizontal text baselines.
+ // This is text extraction only: it does not reconstruct tables or visual layout.
+ function linesFromTextItems(items){
+  if(!Array.isArray(items)||items.length>40000)throw Error('PDF 텍스트 항목이 너무 많습니다.');
+  const rows=[];let line='',previousY=null,previousFont=null;
+  const push=()=>{rows.push(line.trimEnd());line='';};
+  for(const item of items){
+   if(!item||typeof item.str!=='string')continue;
+   const value=item.str.replace(/[\r\n]+/g,' ');
+   const t=item.transform;
+   const y=Array.isArray(t)&&t.length>=6&&Number.isFinite(t[5])?t[5]:null;
+   const height=Number.isFinite(item.height)&&item.height>0?item.height:12;
+   if(line&&y!==null&&previousY!==null&&Math.abs(y-previousY)>Math.max(2,Math.min(height,previousFont||height)*0.35))
+    push();
+   if(value){
+    const addSpace=line&&!(line.endsWith(' ')||value.startsWith(' '));
+    line+=(addSpace?' ':'')+value;
+   }
+   if(y!==null){previousY=y;previousFont=height;}
+   if(item.hasEOL)push();
+  }
+  if(line||!rows.length)push();
+  return rows.join('\n');
+ }
+ async function extractPdfPages(reader,cancelled){
+  if(!reader?.getPage||!Number.isSafeInteger(reader.numPages)||reader.numPages<1||reader.numPages>MAX_PAGES)
+   throw Error('텍스트 변환은 최대 120쪽까지 지원합니다.');
+  const pages=[];let bytes=0;
+  for(let number=1;number<=reader.numPages;number++){
+   if(cancelled?.())throw Error('문서 변경으로 변환이 취소됐습니다.');
+   const page=await reader.getPage(number);
+   const content=await page.getTextContent();
+   if(cancelled?.())throw Error('문서 변경으로 변환이 취소됐습니다.');
+   const text=linesFromTextItems(content.items);
+   bytes+=encoder.encode(text).byteLength;
+   if(bytes>MAX_TEXT)throw Error('변환할 텍스트가 2 MiB를 초과합니다.');
+   pages.push(text);
+  }
+  return normalizePages(pages);
+ }
  function push16(a,v){a.push(v&255,(v>>>8)&255)}
  function push32(a,v){push16(a,v);push16(a,v>>>16)}
  const crcTable=Array.from({length:256},(_,i)=>{
@@ -80,8 +120,9 @@
    for(const line of text.replace(/\r\n/g,'\n').split('\n'))rows.push([String(i+1),line]);
   });
   if(rows.length>30000)throw Error('Excel 변환 결과가 3만 행을 초과합니다.');
+  if(rows.some(row=>row.some(value=>value.length>32767)))throw Error('Excel 한 셀이 32,767자를 초과합니다. 데이터 손실을 막기 위해 중단했습니다.');
   const cell=(col,r,value)=>'<c r="'+col+r+'" t="inlineStr"><is><t xml:space="preserve">'+
-   escapeXml(value.slice(0,32767))+'</t></is></c>';
+   escapeXml(value)+'</t></is></c>';
   const sheet=header+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
    rows.map((row,i)=>'<row r="'+(i+1)+'">'+cell('A',i+1,row[0])+cell('B',i+1,row[1])+'</row>').join('')+
    '</sheetData></worksheet>';
@@ -95,5 +136,5 @@
    ['xl/worksheets/sheet1.xml',sheet]
   ]);
  }
- return {docx,xlsx,normalizePages};
+ return {docx,xlsx,normalizePages,linesFromTextItems,extractPdfPages};
 });
