@@ -6533,13 +6533,14 @@
       const originalBytes = doc.bytes;
       const pdfDoc = await PDFDocument.load(originalBytes);
       if (doc.bytes !== originalBytes || !allowPageStructureChange(pdfDoc)) return;
-      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 복제`);
       const copied = await pdfDoc.copyPages(pdfDoc, indices);
       const insertAt = Math.max(...indices) + 1;
       copied.forEach((p, offset) => pdfDoc.insertPage(insertAt + offset, p));
       const updatedBytes = await pdfDoc.save();
+      if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 복제를 취소했습니다.","fa-circle-exclamation");return;}
       const pageMap = Array.from({ length: doc.pageCount }, (_, index) => index);
       pageMap.splice(insertAt, 0, ...indices);
+      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 복제`);
       remapPageItems(doc, pageMap);
       doc.bytes = updatedBytes;
       await reloadDocPdfJs(doc);
@@ -6771,7 +6772,7 @@
       const clipBytes = await clipDoc.save();
       if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
 
-      state.pageClipboard = {
+      const clipboard = {
         sourceName: doc.name,
         count: indices.length,
         bytes: clipBytes,
@@ -6781,17 +6782,20 @@
       };
 
       if (isCut) {
-        saveUndoSnapshot(doc, `페이지 잘라내기 (${indices.length}쪽)`);
         for (const pageIdx of indices.slice().reverse()) {
           srcDoc.removePage(pageIdx);
         }
         const updatedBytes = await srcDoc.save();
+        if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 잘라내기를 취소했습니다.","fa-circle-exclamation");return;}
+        saveUndoSnapshot(doc, `페이지 잘라내기 (${indices.length}쪽)`);
+        state.pageClipboard=clipboard;
         remapPageItems(doc, Array.from({ length: doc.pageCount }, (_, index) => index).filter((index) => !indices.includes(index)));
         doc.bytes = updatedBytes;
         await reloadDocPdfJs(doc);
         await refreshAllViews();
         showToast(`${indices.length}개 페이지를 클립보드로 잘라냈습니다.`, "fa-scissors");
       } else {
+        state.pageClipboard=clipboard;
         showToast(`${indices.length}개 페이지를 클립보드에 복사했습니다.`, "fa-copy");
       }
       metricOutcome='succeeded';
@@ -7120,24 +7124,26 @@
       const pdfDoc = await PDFDocument.load(originalBytes);
       if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
       if (!allowPageStructureChange(pdfDoc, indices)) return;
-      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 삭제`);
       const delSet = new Set(indices);
       for (const idx of indices.slice().reverse()) {
         pdfDoc.removePage(idx);
       }
-      doc.overlays = doc.overlays
+      const nextOverlays = doc.overlays
         .filter((ov) => !delSet.has(ov.pageIndex))
         .map((ov) => {
           const shift = indices.filter((dIdx) => dIdx < ov.pageIndex).length;
           return { ...ov, pageIndex: ov.pageIndex - shift };
         });
-      doc.bookmarks = doc.bookmarks
+      const nextBookmarks = doc.bookmarks
         .filter((bm) => !delSet.has(bm.page))
         .map((bm) => {
           const shift = indices.filter((dIdx) => dIdx < bm.page).length;
           return { ...bm, page: bm.page - shift };
         });
-      doc.bytes = await pdfDoc.save();
+      const nextBytes=await pdfDoc.save();
+      if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 삭제를 취소했습니다.","fa-circle-exclamation");return;}
+      saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 삭제`);
+      doc.overlays=nextOverlays;doc.bookmarks=nextBookmarks;doc.bytes=nextBytes;
       await reloadDocPdfJs(doc);
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 삭제했습니다.`, "fa-trash-can");
@@ -7190,11 +7196,12 @@
             const pdfDoc = await PDFDocument.load(originalBytes);
             if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
             if (!allowPageStructureChange(pdfDoc)) return;
-            saveUndoSnapshot(doc, "페이지 순서 변경");
             const pages = pdfDoc.getPages();
             for (let i = pages.length - 1; i >= 0; i--) pdfDoc.removePage(i);
             nums.forEach((i) => pdfDoc.addPage(pages[i]));
             const updatedBytes = await pdfDoc.save();
+            if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 순서 변경을 취소했습니다.","fa-circle-exclamation");return;}
+            saveUndoSnapshot(doc, "페이지 순서 변경");
             remapPageItems(doc, nums);
             doc.currentPage = nums.indexOf(doc.currentPage);
             doc.bytes = updatedBytes;
