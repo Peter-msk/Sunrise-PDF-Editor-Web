@@ -71,6 +71,26 @@ async function main(){
    await page.locator('#openPdfInput').setInputFiles({name:filename,mimeType:'application/pdf',buffer:await fixture()});
    await page.waitForFunction(name=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes(name),
      filename,{timeout:40000});
+   // USR-16: actual binary DOCX/XLSX download for the PDF text layer.
+   const docxDownload=page.waitForEvent('download',{timeout:30000});
+   await page.evaluate(()=>executeCommand('exportWordText'));
+   const word=await docxDownload;
+   assert(word.suggestedFilename().endsWith('_text_only.docx'));
+   const wordFile=path.join(downloadDir,'text-only.docx');
+   await word.saveAs(wordFile);
+   const wordBuffer=fs.readFileSync(wordFile);
+   assert.equal(wordBuffer.readUInt32LE(0),0x04034b50,'Word document must be an actual ZIP OpenXML package');
+   assert(wordBuffer.includes(Buffer.from('Document Save Reopen Validation')),'Word document must contain original PDF text');
+   const xlsxDownload=page.waitForEvent('download',{timeout:30000});
+   await page.evaluate(()=>executeCommand('exportExcelText'));
+   const excel=await xlsxDownload;
+   assert(excel.suggestedFilename().endsWith('_text_only.xlsx'));
+   const excelFile=path.join(downloadDir,'text-only.xlsx');
+   await excel.saveAs(excelFile);
+   const excelBuffer=fs.readFileSync(excelFile);
+   assert.equal(excelBuffer.readUInt32LE(0),0x04034b50,'Excel spreadsheet must be an actual ZIP OpenXML package');
+   assert(excelBuffer.includes(Buffer.from('PDF Text')),'Excel workbook sheet title should exist');
+
    // Three end-user editing paths must be exercised in an actual Chromium/Chrome/Edge page.
    await page.evaluate(()=>executeCommand('insertShape'));
    await page.locator('#shapeConfirmBtn').waitFor({state:'visible'});
