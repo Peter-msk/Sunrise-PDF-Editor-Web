@@ -3904,6 +3904,7 @@
           });
           el.appendChild(tbl);
         } else {
+          if(item.type==="Text"){el.style.overflowWrap="anywhere";el.style.wordBreak="break-word";}
           el.textContent = item.text;
         }
 
@@ -4873,6 +4874,7 @@
           for (const [lineIndex, line] of lines.entries()) {
             if (!line) continue;
             const [viewX,viewY] = overlayPoint(item, 7, 4 + fontSize * 1.05 + lineIndex * lineHeight);
+            if(item.type==="Text" && !(item.rotation||0) && (viewX<0||viewY<0||viewY>viewport.height||viewX+textFont.widthOfTextAtSize(line,fontSize)>viewport.width+0.5))throw Error((item.pageIndex+1)+"쪽 텍스트가 페이지 바깥으로 넘어갑니다. 글자 크기·줄바꿈 너비·위치를 조절해 주세요.");
             const [x,y] = viewport.convertToPdfPoint(viewX, viewY);
             page.drawText(line, { x, y, font: textFont, size: fontSize, color,
               rotate: degrees((viewPage.rotate || 0) - (item.rotation || 0)), opacity: item.opacity ?? 1 });
@@ -6070,9 +6072,12 @@
         throw new Error('압축 후 양식 필드 종류·값·설정이 변경되었습니다.');
     }
 
+    function validateBatchOfficeFiles(files) {
+      if(!Array.isArray(files)||files.length<1||files.length>5||files.some(file=>!Number.isSafeInteger(file?.size)||file.size<1||file.size>50*1024*1024)||files.reduce((sum,file)=>sum+file.size,0)>100*1024*1024)throw Error("PDF는 1~5개, 파일당 50 MiB, 합계 100 MiB 이하로 선택해 주세요.");
+    }
+
     async function batchCompressPdfs(files, settings, handlers) {
-      if (!files.length || files.length>5 || files.some(file=>!Number.isSafeInteger(file.size)||file.size<0) || files.reduce((sum,file)=>sum+file.size,0)>100*1024*1024)
-        throw new Error('PDF는 최대 5개, 합계 100 MiB 이하로 선택해 주세요.');
+      validateBatchOfficeFiles(files);
       for(let index=0;index<files.length;index++){
         if(handlers.cancelled())break;
         const file=files[index]; handlers.progress(index,files.length,file.name);
@@ -6082,7 +6087,10 @@
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
           guardBatchSource(original);
           if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
-          const result=await compressPdfImages(bytes,settings);
+          const result=await compressPdfImages(bytes,settings,(image,totalImages)=>{
+            if(handlers.cancelled())throw Error("일괄 압축을 취소했습니다.");
+            handlers.progress(index,files.length,file.name,{image,totalImages});
+          });
           if(!ArrayBuffer.isView(result.bytes) || result.bytes.BYTES_PER_ELEMENT!==1 || result.bytes.byteLength>bytes.byteLength)
             throw new Error('압축 결과의 파일 크기가 유효하지 않습니다.');
           const check=await window.PDFLib.PDFDocument.load(result.bytes,{updateMetadata:false});
@@ -6098,9 +6106,7 @@
     // Unsupported rotated/signed/XFA documents fail individually rather than
     // producing a visually misplaced or structurally damaged document.
     async function batchMarkPdfs(files, settings, handlers) {
-      if(!files.length || files.length>5 || files.some(f=>!Number.isSafeInteger(f.size)||f.size<0) ||
-          files.reduce((sum,f)=>sum+f.size,0)>100*1024*1024)
-        throw new Error('PDF는 최대 5개, 합계 100 MiB 이하로 선택해 주세요.');
+      validateBatchOfficeFiles(files);
       if(!['watermark','page-number'].includes(settings.kind))
         throw new Error('일괄 작업 종류가 올바르지 않습니다.');
       const label=String(settings.text||'').trim().normalize('NFC');
@@ -6125,7 +6131,9 @@
             : await next.embedFont(StandardFonts.Helvetica);
           const pages=next.getPages(),total=pages.length;
           for(let pageIndex=0;pageIndex<total;pageIndex++){
+            if(pageIndex%8===0)await new Promise(resolve=>setTimeout(resolve,0));
             if(handlers.cancelled())break;
+            handlers.progress(index,files.length,file.name,{page:pageIndex+1,totalPages:total});
             const page=pages[pageIndex],box=page.getCropBox();
             if(![box.x,box.y,box.width,box.height].every(Number.isFinite)||box.width<100||box.height<100)
               throw new Error('표시할 수 없는 페이지 크기입니다.');
@@ -6186,12 +6194,13 @@
           start.addEventListener('click',async()=>{
             if(running)return;
             const files=Array.from(input.files||[]),settings={kind:kind.value,text:text.value};
+            try{validateBatchOfficeFiles(files)}catch(error){status.textContent=error.message;return;}
             running=true;cancelled=false;start.disabled=true;cancel.textContent='작업 취소';
             input.disabled=kind.disabled=text.disabled=true;results.replaceChildren();
             try{
               await batchMarkPdfs(files,settings,{
                 cancelled:()=>cancelled||!open(),
-                progress:(index,total,name)=>{status.textContent=`${index+1}/${total} 처리 중: ${name}`},
+                progress:(index,total,name,detail)=>{if(!open())return;status.textContent=`${index+1}/${total} 처리 중: ${name}`+(detail?.page?` · ${detail.page}/${detail.totalPages}쪽`:"")},
                 result:({name,bytes})=>{
                   const row=document.createElement('p'),button=document.createElement('button');
                   button.type='button';
@@ -6305,13 +6314,14 @@
           let running=false,cancelled=false;
           cancel.addEventListener('click',()=>{if(running){cancelled=true;cancel.disabled=true;status.textContent='현재 파일 처리 후 중단합니다.';}else closeModal()});
           start.addEventListener('click',async()=>{
+            if(running)return;
             const files=Array.from(get('batchPdfFiles').files||[]),strength=Number(get('batchStrength').value);
-            let settings;try{settings=pdfCompressionSettings(strength)}catch(error){status.textContent=error.message;return}
+            let settings;try{validateBatchOfficeFiles(files);settings=pdfCompressionSettings(strength)}catch(error){status.textContent=error.message;return}
             results.replaceChildren();running=true;cancelled=false;start.disabled=true;cancel.textContent='작업 취소';get('batchPdfFiles').disabled=true;get('batchStrength').disabled=true;
             const open=()=>get('modalBackdrop').classList.contains('open')&&get('batchStart')===start;
             try{
               await batchCompressPdfs(files,settings,{cancelled:()=>cancelled||!open(),
-                progress:(index,total,name)=>{status.textContent=`${index+1}/${total} 처리 중: ${name}`},
+                progress:(index,total,name,detail)=>{if(!open())return;status.textContent=`${index+1}/${total} 처리 중: ${name}`+(detail?.image?` · 이미지 ${detail.image}/${detail.totalImages}`:"")},
                 result:({name,bytes,originalSize})=>{const row=document.createElement('p'),button=document.createElement('button');button.type='button';button.textContent=`${name} 내려받기 (${(originalSize/1048576).toFixed(2)} → ${(bytes.byteLength/1048576).toFixed(2)} MiB)`;button.addEventListener('click',()=>downloadBytes(bytes,name.replace(/\.pdf$/i,'')+'_compressed.pdf'));row.append(button);results.append(row)},
                 error:({name,message})=>{const row=document.createElement('p');row.textContent=`${name}: ${message}`;results.append(row)}});
               if(open())status.textContent=cancelled?'작업을 중단했습니다. 완료된 파일은 내려받을 수 있습니다.':'처리가 끝났습니다. 결과를 확인하고 파일별로 내려받으세요.';
@@ -7786,7 +7796,8 @@
         bodyHtml: `
           <div class="dialog-form-grid">
             <label for="insTextInput">표시 문구:</label>
-            <input type="text" id="insTextInput" class="dialog-input" value="${escapeHtml(defaultText)}" />
+            ${type==="Text" ? `<textarea id="insTextInput" class="dialog-input" rows="4" maxlength="4000" style="width:100%;white-space:pre-wrap">${escapeHtml(defaultText)}</textarea>` : `<input type="text" id="insTextInput" class="dialog-input" maxlength="4000" value="${escapeHtml(defaultText)}" />`}
+            ${type==="Text" ? `<label for="insTextWidth">줄바꿈 너비 (pt):</label><input type="number" id="insTextWidth" class="dialog-input" min="40" max="800" value="300" />` : ""}
             <label for="insFontSizeInput">글자 크기 (pt):</label>
             <input type="number" id="insFontSizeInput" class="dialog-input" min="8" max="72" value="${defaults.size}" />
             <label for="insColorInput">글자/테두리 색상:</label>
@@ -7813,14 +7824,20 @@
         onMount: () => {
           document.getElementById("insCancelBtn").addEventListener("click", closeModal);
           document.getElementById("insConfirmBtn").addEventListener("click", () => {
-            const text = document.getElementById("insTextInput").value.trim() || defaultText;
-            const fontSize = Number(document.getElementById("insFontSizeInput").value) || defaults.size;
+            const text = document.getElementById("insTextInput").value.replace(/\r\n?/g,"\n").trim() || defaultText;
+            let fontSize,textWidth;
+            try {
+              if(text.length>4000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text))throw Error("문구는 4000자 이내이며 제어문자를 포함할 수 없습니다.");
+              fontSize=validateOverlayDimension(document.getElementById("insFontSizeInput").value,8,72,"글자 크기");
+              if(type==="Text")textWidth=validateOverlayDimension(document.getElementById("insTextWidth").value,40,800,"줄바꿈 너비");
+            }catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+            if(activeDoc()!==doc||doc.operationBusy){showToast("편집 대상 문서가 변경되었습니다.","fa-triangle-exclamation");return;}
             const color = document.getElementById("insColorInput").value || defaults.color;
             const scope = document.getElementById("insScopeSelect").value;
             const placement = document.getElementById("insPlacementSelect").value;
             if (placement === "click") {
               if (scope !== "current") { showToast("위치 직접 지정은 현재 페이지에만 적용됩니다.", "fa-triangle-exclamation"); return; }
-              state.pendingPlacement = {doc, type, title, text, fontSize, color, bg: defaults.bg};
+              state.pendingPlacement = {doc, type, title, text, fontSize, color, bg: defaults.bg, width:type==="Text"?textWidth:undefined};
               document.getElementById("placementHint").style.display = "block";
               document.getElementById("pageStage").classList.add("placement-mode");
               closeModal();
@@ -7844,6 +7861,7 @@
                 x: defaults.x,
                 y: defaults.y + (doc.overlays.filter((o) => o.pageIndex === pIdx).length % 5) * 28,
                 fontSize,
+                ...(type==="Text"?{width:Math.min(textWidth,Math.max(40,(doc.pageSizes[pIdx]?.width||595)-defaults.x-12))}:{}),
                 width: type === "VisualSignature" ? 310 : undefined,
                 height: type === "VisualSignature" ? 65 : undefined,
                 color,
@@ -8148,7 +8166,7 @@
         showToast("현재 페이지에서 수정할 항목을 클릭/터치하세요.","fa-hand-pointer");return;
       }
       state.selectedInsertId=item.id;
-      const isTable=item.type==="Table",isShape=item.type==="Shape";
+      const isTable=item.type==="Table",isShape=item.type==="Shape",isText=item.type==="Text";
       const isAnnotation=["Note","Highlight"].includes(item.type);
       const dimensions=isTable||isShape||isAnnotation;
       const safeColor=value=>/^#[0-9a-f]{6}$/i.test(value||"")?value:"#1F6F9F";
@@ -8172,7 +8190,8 @@
         contentFields=`<label for="editItemTextInput">문구 수정:</label>
           <textarea id="editItemTextInput" class="dialog-input" rows="${isAnnotation?4:2}" style="width:100%">${escapeHtml(item.text||"")}</textarea>
           <label for="editItemSizeInput">글자 크기 (pt):</label>
-          <input id="editItemSizeInput" type="number" class="dialog-input" min="8" max="72" value="${item.fontSize||13}">`;
+          <input id="editItemSizeInput" type="number" class="dialog-input" min="8" max="72" value="${item.fontSize||13}">
+          ${isText?`<label for="editTextWidthInput">줄바꿈 너비 (pt):</label><input id="editTextWidthInput" class="dialog-input" type="number" min="40" max="800" value="${item.width||300}">`:""}`;
       }
       const boxFields=dimensions?`
         <label for="editItemWidthInput">너비 (pt):</label>
@@ -8202,14 +8221,15 @@
             if(activeDoc()!==doc||doc.operationBusy||!doc.overlays.includes(item)) {
               showToast("수정 중 문서 상태가 변경되었습니다.","fa-triangle-exclamation");return;
             }
-            let cells,text,fontSize,width,height,strokeWidth,opacity;
+            let cells,text,fontSize,width,height,strokeWidth,opacity,textWidth;
             try {
               if(isTable) cells=parseEditableTableText(document.getElementById("editTableCellsInput").value);
               else if(isShape) strokeWidth=validateOverlayDimension(
                 document.getElementById("editStrokeWidthInput").value,1,15,"선 두께");
               else {
                 text=document.getElementById("editItemTextInput").value;
-                if(text.length>4000)throw new Error("문구는 4000자 이내로 입력해 주세요.");
+                if(text.length>4000||/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text))throw new Error("문구는 4000자 이내이며 제어문자를 포함할 수 없습니다.");
+                if(isText)textWidth=validateOverlayDimension(document.getElementById("editTextWidthInput").value,40,800,"줄바꿈 너비");
                 fontSize=validateOverlayDimension(
                   document.getElementById("editItemSizeInput").value,8,72,"글자 크기");
               }
@@ -8229,7 +8249,7 @@
                 const kind=document.getElementById("editShapeKindInput").value;
                 if(["rect","ellipse","line"].includes(kind))item.shapeKind=kind;
                 item.strokeWidth=strokeWidth;
-              }else{item.text=text;item.fontSize=fontSize;}
+              }else{item.text=text;item.fontSize=fontSize;if(isText)item.width=textWidth;}
               item.color=document.getElementById("editItemColorInput").value;
               if(dimensions){item.width=width;item.height=height;}
               if(isShape||isAnnotation){
@@ -9230,6 +9250,7 @@
       const id = `ov_${overlayIdCounter++}`;
       doc.overlays.push({id, pageIndex:doc.currentPage, type:pending.type, text:pending.text,
         x:Math.round(x), y:Math.round(y), fontSize:pending.fontSize, color:pending.color,
+        ...(pending.type==="Text"?{width:Math.min(pending.width||300,Math.max(40,size.width-x-8))}:{}),
         bgColor:pending.bg, opacity:pending.type === "Watermark" ? 0.35 : 0.96});
       state.selectedInsertId = id;
       cancelPlacement();
