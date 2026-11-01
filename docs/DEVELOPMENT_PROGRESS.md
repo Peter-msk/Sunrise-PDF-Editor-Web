@@ -9,7 +9,7 @@
 - 소스: PR #9 / PR #10 및 feat/admin-fast-development-20261101. 과거 검사는 신규 변경의 통과 증거가 아닙니다.
 - 관리자 소스 구현률: **100%**. 아래 종합 점수는 검증·운영 반영을 포함하며 소스 작성률과 다릅니다.
 
-- 관리자 소스 단계: 작성 마감 후보본. 최신 실행 검증은 ADMIN_VALIDATION_REPORT.md, 범위는 ADMIN_SOURCE_CLOSEOUT.md를 참조합니다. 관리자 Cloudflare 배포는 완료됐지만 인증 후 전 기능 운영 수용은 별도입니다.
+- 관리자 소스 단계: 작성 마감 후보본. 최신 실행 검증은 ADMIN_VALIDATION_REPORT.md, 범위는 ADMIN_SOURCE_CLOSEOUT.md를 참조합니다. 운영 수용은 별도입니다.
 
 ## 단계별
 
