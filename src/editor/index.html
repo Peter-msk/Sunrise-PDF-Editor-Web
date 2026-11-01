@@ -7366,6 +7366,95 @@
       });
     }
 
+
+    // USR-13: a fresh, SINGLE-PAGE raster PDF is made from masked visible pixels.
+    // No source content streams, annotations, metadata or attachments are copied.
+    function openMaskedPageExportModal(doc) {
+      if(!window.SunriseSpecialPdf?.exportMaskedPage){
+        showToast("마스킹 PDF 엔진을 불러오지 못했습니다.","fa-triangle-exclamation");return;
+      }
+      const reader=doc.pdfJsDoc,source=doc.bytes,index=doc.currentPage;
+      const dims=doc.pageSizes[index]||{width:595,height:842};
+      openModal({
+        title:"현재 페이지 마스킹 PDF (새 PDF)",icon:"fa-user-shield",width:"600px",
+        bodyHtml:`<div class="dialog-info-box">
+          <strong>현재 ${index+1}쪽 한 장만</strong> 검정색 영역으로 가린 다음 새로운 이미지 기반 PDF를 생성합니다.
+          새 PDF에는 원본 내용 스트림·텍스트·북마크·첨부파일·양식을 넣지 않습니다.
+          <strong>마스킹 영역 밖의 개인정보는 그대로 보이며 완전 삭제를 보장하지 않습니다.</strong>
+          원본 PDF는 수정하지 않습니다. 전자서명/양식이 있는 PDF는 차단합니다.
+        </div>
+        <p style="font-size:12px">좌표는 보이는 페이지의 왼쪽 위 기준 pt. 페이지 크기: ${Math.round(dims.width)} × ${Math.round(dims.height)}pt.</p>
+        <div class="dialog-form-grid">
+          <label for="maskX">왼쪽 X:</label><input id="maskX" class="dialog-input" type="number" value="70" min="0">
+          <label for="maskY">위쪽 Y:</label><input id="maskY" class="dialog-input" type="number" value="100" min="0">
+          <label for="maskW">마스크 너비:</label><input id="maskW" class="dialog-input" type="number" value="180" min="4">
+          <label for="maskH">마스크 높이:</label><input id="maskH" class="dialog-input" type="number" value="40" min="4">
+        </div>
+        <label style="display:flex;gap:8px;margin:10px 0">
+          <input id="maskConfirmed" type="checkbox"> 한 쪽만 새 이미지 기반 PDF로 출력되고
+          나머지 페이지와 원본 편집 내용은 제외됨을 이해했습니다.
+        </label>
+        <p id="maskExportStatus" role="status">마스킹 좌표를 확인하세요.</p>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" id="maskExportBtn" class="dialog-btn primary">마스킹 PDF 생성</button>
+          <button type="button" id="maskExportClose" class="dialog-btn">닫기</button>
+        </div>`,
+        onMount:()=>{
+          const submit=document.getElementById("maskExportBtn");
+          const status=document.getElementById("maskExportStatus");
+          let stopped=false,running=false;
+          const valid=()=>!stopped&&activeDoc()===doc&&doc.pdfJsDoc===reader&&
+            doc.bytes===source&&doc.currentPage===index&&status.isConnected;
+          document.getElementById("maskExportClose").addEventListener("click",()=>{
+            stopped=true;
+            if(running)status.textContent="변환 중단을 요청했습니다.";
+            else closeModal();
+          });
+          submit.addEventListener("click",async()=>{
+            if(!valid()||running||doc.operationBusy)return;
+            if(!document.getElementById("maskConfirmed").checked){
+              showToast("한 페이지 변환 범위와 원문 내용 제외를 확인해 주세요.","fa-triangle-exclamation");return;
+            }
+            if(doc.overlays.length){
+              showToast("현재 PDF에는 편집기 삽입 항목이 있습니다. 삽입 항목 없는 원본을 별도로 열어 변환해 주세요.","fa-triangle-exclamation");return;
+            }
+            let rectangle;
+            try{
+              rectangle=window.SunriseSpecialPdf.validateMaskRect({
+                x:document.getElementById("maskX").value,
+                y:document.getElementById("maskY").value,
+                width:document.getElementById("maskW").value,
+                height:document.getElementById("maskH").value
+              },dims.width,dims.height);
+              const srcPdf=await window.PDFLib.PDFDocument.load(source);
+              const n=window.PDFLib.PDFName.of;
+              if(srcPdf.catalog.has(n("Perms"))||srcPdf.catalog.has(n("AcroForm")))
+                throw Error("서명·양식이 있는 PDF는 마스킹 출력할 수 없습니다.");
+            }catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+            const finish=beginOperationMetric("page_extract");let outcome="failed";
+            running=true;submit.disabled=true;
+            try{
+              status.textContent="페이지를 이미지로 렌더링하고 검정색 마스크를 적용 중입니다…";
+              const output=await window.SunriseSpecialPdf.exportMaskedPage({
+                reader,pageNumber:index+1,rectangle,PDFLib:window.PDFLib,
+                cancelled:()=>!valid()
+              });
+              if(!valid())throw Error("변환 도중 문서가 변경되었습니다.");
+              const name=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"page";
+              downloadBytes(output.bytes,name+"_masked_page_"+(index+1)+".pdf","application/pdf");
+              status.textContent="한 페이지의 새 이미지 기반 PDF가 준비됐습니다. 영역 밖 내용은 남습니다.";
+              outcome="succeeded";
+            }catch(error){
+              if(status.isConnected)status.textContent="마스킹 PDF 생성 실패: "+(error?.message||error);
+            }finally{
+              running=false;if(status.isConnected)submit.disabled=false;
+              finish(outcome);
+            }
+          });
+        }
+      });
+    }
+
     function openStyledInsertModal(doc, type, title, defaultText) {
       const defaults = {
         Text: { color: "#1B2631", bg: "transparent", size: 14, x: 72, y: 120 },
