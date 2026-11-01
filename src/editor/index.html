@@ -1571,6 +1571,17 @@
       .dialog-input:not([type="checkbox"]), .dialog-select, .dialog-textarea { min-height: 42px; font-size: 16px; }
       #nativeAnnotationSelect { min-height: 116px; max-height: 28dvh !important; }
       #nativeAnnotationText { min-height: 92px; }
+      .download-fallback {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        max-width: min(94vw, 420px);
+        overflow-wrap: anywhere;
+        pointer-events: auto;
+      }
+      .download-fallback a { color: var(--primary); text-decoration: underline; font-weight: 700; }
+
       #modalBackdrop .modal-footer { padding: 8px; }
       #modalBackdrop .modal-footer-right { width: 100%; justify-content: flex-end; }
       #modalBackdrop .modal-footer-right > .dialog-btn { flex: 1 1 44%; }
@@ -2300,10 +2311,27 @@
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
-      document.body.appendChild(a);
+      a.textContent = "직접 다운로드: " + filename;
+      // Mobile browsers can reject synthetic clicks after async PDF processing.
+      // Keep a real, user-activated fallback link with a bounded lifetime.
+      let fallback;
+      if (isMobileViewport()) {
+        fallback = document.createElement("div");
+        fallback.className = "sunrise-toast download-fallback";
+        const hint = document.createElement("span");
+        hint.textContent = "저장이 시작되지 않으면 아래 파일 링크를 터치하세요.";
+        fallback.append(hint, a);
+        document.getElementById("toastContainer").appendChild(fallback);
+      } else {
+        document.body.appendChild(a);
+      }
       a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      if (!fallback) a.remove();
+      setTimeout(() => {
+        a.remove();
+        fallback?.remove();
+        URL.revokeObjectURL(url);
+      }, 60000);
     }
 
     // =========================================================================
