@@ -6840,23 +6840,112 @@
       });
     }
 
-    async function splitDocumentPages(doc) {
-      const finish=beginOperationMetric('split');let outcome='failed';
-      try {
-      const { PDFDocument } = window.PDFLib;
-      const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
-      if (!allowPageFormStructure(srcDoc)) { outcome='cancelled'; return; }
-      const stem = doc.name.replace(/\.pdf$/i, "");
-      for (let i = 0; i < doc.pageCount; i++) {
-        const single = await PDFDocument.create();
-        const [copied] = await single.copyPages(srcDoc, [i]);
-        single.addPage(copied);
-        const bytes = await single.save();
-        downloadBytes(bytes, `${stem}_page_${String(i + 1).padStart(2, "0")}.pdf`);
-      }
-      showToast(`전체 ${doc.pageCount}쪽을 개별 PDF 파일로 분할 다운로드했습니다.`, "fa-table-columns");
-      outcome='succeeded';
-      } finally { finish(outcome); }
+    // Build bounded groups before any document content or download is touched.
+    function planDocumentSplit(rangeStr,pageCount,pagesPerFile){
+      if(!Number.isSafeInteger(pagesPerFile)||pagesPerFile<1||pagesPerFile>100)
+        throw Error("파일당 페이지는 1~100쪽으로 지정해 주세요.");
+      const indices=parseRangeInput(rangeStr,pageCount);
+      if(!indices.length)throw Error("분할 페이지 범위를 확인해 주세요.");
+      const count=Math.ceil(indices.length/pagesPerFile);
+      if(count>50)throw Error("분할 파일이 50개를 초과합니다. 파일당 페이지 수를 늘려 주세요.");
+      const chunks=[];
+      for(let i=0;i<indices.length;i+=pagesPerFile)chunks.push(indices.slice(i,i+pagesPerFile));
+      return chunks;
+    }
+    async function splitDocumentPages(doc){
+      const source=doc.bytes;
+      const stem=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
+      openModal({
+        title:"PDF 페이지 분할",icon:"fa-table-columns",width:"600px",
+        bodyHtml:`
+          <div class="dialog-info-box">1~100쪽씩 분할하고, PDF 최대 50개·총 100 MiB까지 준비합니다.
+            결과 파일별 저장 버튼으로 필요한 PDF를 다운로드할 수 있습니다.
+            기존 PDF의 전역 북마크·양식 구조는 분할 파일로 자동 이식되지 않습니다.</div>
+          <div class="dialog-form-grid">
+            <label for="splitRangeInput">분할 페이지 범위:</label>
+            <input id="splitRangeInput" class="dialog-input" maxlength="4096" value="1-${doc.pageCount}">
+            <label for="splitSizeInput">파일당 페이지 수:</label>
+            <input id="splitSizeInput" class="dialog-input" type="number" min="1" max="100" value="1">
+          </div>
+          <p id="splitPlanStatus" role="status">페이지 범위를 지정하세요.</p>
+          <div id="splitReadyResults" style="max-height:35vh;overflow:auto;display:grid;gap:6px"></div>
+        `,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button class="dialog-btn primary" type="button" id="splitPrepareBtn">분할 준비</button>
+          <button class="dialog-btn" type="button" id="splitCloseBtn">닫기</button></div>`,
+        onMount:()=>{
+          const input=document.getElementById("splitRangeInput"),per=document.getElementById("splitSizeInput");
+          const start=document.getElementById("splitPrepareBtn"),status=document.getElementById("splitPlanStatus");
+          const results=document.getElementById("splitReadyResults");
+          const valid=()=>activeDoc()===doc&&doc.bytes===source&&results.isConnected;
+          let running=false;
+          document.getElementById("splitCloseBtn").addEventListener("click",()=>{
+            if(running){showToast("분할을 준비하고 있습니다.","fa-circle-info");return;}
+            closeModal();
+          });
+          const refresh=()=>{
+            if(running)return;
+            results.replaceChildren();
+            try {
+              const chunks=planDocumentSplit(input.value,doc.pageCount,Number(per.value));
+              status.textContent=chunks.length+"개 PDF 예정 · "+chunks.reduce((sum,c)=>sum+c.length,0)+"쪽";
+            }catch(error){status.textContent=error.message;}
+          };
+          input.addEventListener("input",refresh);
+          per.addEventListener("input",refresh);
+          refresh();
+          start.addEventListener("click",async()=>{
+            if(running||!valid()||doc.operationBusy)return;
+            let chunks;
+            try{chunks=planDocumentSplit(input.value,doc.pageCount,Number(per.value));}
+            catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+            const finish=beginOperationMetric("split");let outcome="failed";
+            running=true;doc.operationBusy=true;
+            start.disabled=true;input.disabled=true;per.disabled=true;results.replaceChildren();
+            const prepared=[];let bytesTotal=0;
+            try{
+              const {PDFDocument}=window.PDFLib;
+              status.textContent="PDF 분할 준비 중…";
+              const sourcePdf=await PDFDocument.load(await compileDocumentWithOverlays(doc));
+              if(!valid())throw Error("분할 준비 중 원본이 변경되었습니다.");
+              if(!allowPageFormStructure(sourcePdf)){outcome="cancelled";return;}
+              for(let i=0;i<chunks.length;i++){
+                if(!valid())throw Error("분할 준비가 중단되었습니다.");
+                const part=await PDFDocument.create();
+                const copied=await part.copyPages(sourcePdf,chunks[i]);
+                copied.forEach(p=>part.addPage(p));
+                part.setTitle(stem+" part "+(i+1));
+                const bytes=await part.save();
+                bytesTotal+=bytes.byteLength;
+                if(bytesTotal>100*1024*1024)throw Error("총 분할 PDF가 100 MiB를 초과했습니다.");
+                const first=chunks[i][0]+1,last=chunks[i][chunks[i].length-1]+1;
+                const name=stem+"_part_"+String(i+1).padStart(3,"0")+"_p"+first+"-"+last+".pdf";
+                prepared.push({name,bytes,pages:chunks[i].length});
+                status.textContent=(i+1)+"/"+chunks.length+"개 준비 · "+(bytesTotal/1048576).toFixed(2)+" MiB";
+              }
+              if(!valid())throw Error("원본이 변경되었습니다.");
+              for(const file of prepared){
+                const row=document.createElement("div");row.className="list-row-item";
+                const caption=document.createElement("span");caption.textContent=file.name+" ("+file.pages+"쪽)";
+                const button=document.createElement("button");button.type="button";
+                button.className="dialog-btn";button.textContent="PDF 저장";
+                button.addEventListener("click",()=>downloadBytes(file.bytes,file.name,"application/pdf"));
+                row.append(caption,button);results.appendChild(row);
+              }
+              status.textContent=prepared.length+"개 PDF 준비 완료 ("+(bytesTotal/1048576).toFixed(2)+
+                " MiB). 개별 PDF 저장을 눌러 다운로드하세요.";
+              outcome="succeeded";
+            }catch(error){
+              prepared.length=0;results.replaceChildren();
+              if(results.isConnected)status.textContent="분할 준비 실패: "+(error?.message||error);
+            }finally{
+              running=false;doc.operationBusy=false;
+              if(results.isConnected){start.disabled=false;input.disabled=false;per.disabled=false;}
+              finish(outcome);
+            }
+          });
+        }
+      });
     }
 
     async function deleteSelectedPagesFromDoc(doc) {
