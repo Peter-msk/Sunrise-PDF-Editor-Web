@@ -1,0 +1,31 @@
+name: USR-14 real AES-256 QPDF verification
+on:
+  push:
+    branches: [feat/secure-pdf-qpdf-local-20261101]
+  pull_request:
+    paths:
+      - 'scripts/protect-pdf-local.cjs'
+      - 'tests/pdf-encrypt-*.cjs'
+      - 'package.json'
+      - '.github/workflows/usr14-qpdf-real.yml'
+permissions:
+  contents: read
+jobs:
+  encrypt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install vetted qpdf from Ubuntu repositories
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qpdf
+          qpdf --version
+      - run: npm ci --ignore-scripts
+      - name: Encrypt and reopen actual AES-256 PDF using qpdf
+        run: npm run test:qpdf-real
