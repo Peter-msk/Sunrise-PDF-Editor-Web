@@ -117,9 +117,11 @@
    for(const key of ['AcroForm','Outlines','Names','Perms','Metadata','SunriseWebEdits'])
     if(document.catalog.get(name(key))!==undefined)
      throw Error('출력 PDF에 예상하지 못한 문서 객체가 포함되었습니다: '+key);
-   for(const page of document.getPages())
-    if(page.node.get(name('Annots'))!==undefined)
+   for(const page of document.getPages()){
+    const annotations=page.node.Annots();
+    if(annotations && annotations.size()>0)
      throw Error('출력 PDF에 주석 객체가 남아 있습니다.');
+   }
    return {pageCount:document.getPageCount(),sourceStreamsCopied:false};
   });
  }
