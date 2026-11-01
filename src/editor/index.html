@@ -2176,12 +2176,41 @@
       return { bytes: bytes.byteLength, pageCount: pages.length, orientation };
     }
 
-    async function verifySavedPdfBytes(originalBytes, outputBytes) {
+    async function verifySavedPdfBytes(originalBytes, outputBytes, options = {}) {
       if (!window.PDFLib) throw new Error('PDF 검사 엔진을 불러오지 못했습니다.');
       validatePdfByteLength(outputBytes?.byteLength);
       const original = await window.PDFLib.PDFDocument.load(originalBytes, {updateMetadata:false});
       const output = await window.PDFLib.PDFDocument.load(outputBytes, {updateMetadata:false});
       verifyPdfPageGeometry(original, output, '저장');
+
+      // Preserve document-level structures and existing annotation types.
+      // Newly inserted standard annotations may increase the counts.
+      const n=window.PDFLib.PDFName.of;
+      for(const key of ['AcroForm','Outlines','Names']){
+        if(original.catalog.has(n(key)) && !output.catalog.has(n(key)))
+          throw new Error('저장 결과에서 문서 구조 '+key+' 항목이 유실되었습니다.');
+      }
+      if(options.allowAnnotationChanges)return;
+      const countAnnotations=(pdf,pageIndex)=>{
+        const result=new Map(), annots=pdf.getPage(pageIndex).node.Annots();
+        if(!annots)return result;
+        if(annots.size()>100000)throw new Error('주석이 너무 많아 저장 검증을 완료할 수 없습니다.');
+        for(let i=0;i<annots.size();i++){
+          const object=pdf.context.lookup(annots.get(i));
+          const kind=object?.get?.(n('Subtype'))?.toString();
+          if(!kind)throw new Error('확인할 수 없는 PDF 주석이 있습니다.');
+          result.set(kind,(result.get(kind)||0)+1);
+        }
+        return result;
+      };
+      for(let page=0;page<original.getPageCount();page++){
+        const before=countAnnotations(original,page);
+        if(!before.size)continue;
+        const after=countAnnotations(output,page);
+        for(const [kind,count] of before)
+          if((after.get(kind)||0)<count)
+            throw new Error((page+1)+'쪽의 '+kind+' 원본 주석이 저장 결과에서 유실되었습니다.');
+      }
     }
 
     function openSavedPdfCheckModal() {
@@ -8794,7 +8823,7 @@
               if(!fresh)throw new Error("주석 참조가 변경되어 작업을 중단했습니다.");
               updateNativeAnnotation(pdf,originalBytes,item.pageIndex,item.index,action,textInput.value);
               const next=await pdf.save({updateFieldAppearances:false});
-              await verifySavedPdfBytes(originalBytes,next);
+              await verifySavedPdfBytes(originalBytes,next,{allowAnnotationChanges:true});
               info=await parsePageCountAndMeta(next);
               if(!modalIsCurrent()){
                 outcome="cancelled";
