@@ -18,7 +18,7 @@ const ctx=vm.createContext({window:{PDFLib:lib,SunriseKoreanFont:{embed:(pdf,tex
   if(acro&&pdf.context.lookup(acro).get(lib.PDFName.of('XFA')))throw Error('XFA 문서');
   return pdf.getForm();
  }});
-vm.runInContext(html.slice(a,b)+html.slice(c,d),ctx);
+vm.runInContext(html.slice(a,b)+html.slice(c,d),require('./helpers/editor-metrics.cjs')(ctx));
 const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r=>output.push(r),error:r=>errors.push(r)};
 (async()=>{
  const pdf=await lib.PDFDocument.create();const page=pdf.addPage([450,640]);pdf.setTitle('Business Form');

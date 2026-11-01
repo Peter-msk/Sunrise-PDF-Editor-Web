@@ -7,9 +7,9 @@ const source=fs.readFileSync('src/editor/index.html','utf8');
 const start=source.indexOf('    function editablePdfForm('),end=source.indexOf('    function openCreateFormFieldModal(',start);
 assert(start>=0&&end>start);
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseEditState:{},SunriseKoreanFont:{embed:(pdf,text)=>korean.embed(pdf,text,fontData)}},Date,Number,Error,Map,Set});
-vm.runInContext(source.slice(start,end),ctx);
+vm.runInContext(source.slice(start,end),require('./helpers/editor-metrics.cjs')(ctx));
 const saveStart=source.indexOf('    function appendPdfBookmarks('),saveEnd=source.indexOf('    async function openMergePdfModal(',saveStart);
-assert(saveStart>=0&&saveEnd>saveStart);vm.runInContext(source.slice(saveStart,saveEnd),ctx);
+assert(saveStart>=0&&saveEnd>saveStart);vm.runInContext(source.slice(saveStart,saveEnd),require('./helpers/editor-metrics.cjs')(ctx));
 (async()=>{
   const pdf=await lib.PDFDocument.create();pdf.addPage([400,600]);
   const original=await pdf.save();

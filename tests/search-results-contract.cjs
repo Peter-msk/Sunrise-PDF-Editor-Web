@@ -6,15 +6,15 @@ const reader={getPage:async()=>({getTextContent:async()=>({items:[{str:'Alpha Al
 const doc={id:'doc1',pdfJsDoc:reader,pageCount:1,pageTexts:['Alpha Alpha Beta'],currentPage:0,selectedPages:new Set([0]),overlays:[{id:'ov1',pageIndex:0,text:'Alpha note'}]};
 const state={searchResults:[],activeSearchHitIndex:-1,lastSearchTerm:''};
 const ctx=vm.createContext({Set,console,document:{getElementById:id=>elements[id]},activeDoc:()=>doc,state,ensurePageTexts:async()=>true,renderCurrentPageCanvas:()=>{},renderLeftPane:()=>{},ensureLeftPanelOpen:()=>{},showToast:()=>{}});
-vm.runInContext(src.slice(start,end),ctx);
+vm.runInContext(src.slice(start,end),require('./helpers/editor-metrics.cjs')(ctx));
 (async()=>{
- await vm.runInContext("runDocumentSearch('Alpha')",ctx);
+ await vm.runInContext("runDocumentSearch('Alpha')",require('./helpers/editor-metrics.cjs')(ctx));
  assert.equal(state.searchResults.length,3);assert.deepEqual(Array.from(state.searchResults,x=>x.kind),['text','text','overlay']);assert.deepEqual(Array.from(state.searchResults.slice(0,2),x=>x.start),[0,6]);
- vm.runInContext('stepSearchHit(1)',ctx);assert.equal(state.activeSearchHitIndex,1);
- await vm.runInContext("runDocumentSearch('Alpha Beta')",ctx);assert.equal(state.searchResults.length,1);assert.equal(state.searchResults[0].kind,'page');
+ vm.runInContext('stepSearchHit(1)',require('./helpers/editor-metrics.cjs')(ctx));assert.equal(state.activeSearchHitIndex,1);
+ await vm.runInContext("runDocumentSearch('Alpha Beta')",require('./helpers/editor-metrics.cjs')(ctx));assert.equal(state.searchResults.length,1);assert.equal(state.searchResults[0].kind,'page');
  let release; const gate=new Promise(r=>{release=r});ctx.ensurePageTexts=()=>gate;
- const old=vm.runInContext("runDocumentSearch('Alpha')",ctx),current=vm.runInContext("runDocumentSearch('Beta')",ctx);release(true);await Promise.all([old,current]);
+ const old=vm.runInContext("runDocumentSearch('Alpha')",require('./helpers/editor-metrics.cjs')(ctx)),current=vm.runInContext("runDocumentSearch('Beta')",require('./helpers/editor-metrics.cjs')(ctx));release(true);await Promise.all([old,current]);
  assert.equal(state.lastSearchTerm,'Beta');assert.equal(state.searchResults.length,1);assert.equal(state.searchResults[0].itemIndex,1);
- vm.runInContext('clearSearchResults()',ctx);assert.equal(state.searchResults.length,0);assert.equal(elements.inlineSearchCount.textContent,'-');
+ vm.runInContext('clearSearchResults()',require('./helpers/editor-metrics.cjs')(ctx));assert.equal(state.searchResults.length,0);assert.equal(elements.inlineSearchCount.textContent,'-');
  console.log('PASS: repeated search matches, overlay, multi-item fallback and stale searches');
 })().catch(e=>{console.error(e);process.exit(1)});
