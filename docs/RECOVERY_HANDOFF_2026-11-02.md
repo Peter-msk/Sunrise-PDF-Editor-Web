@@ -1,3 +1,14 @@
+# 최신 추가 개발 인수인계 (2026-11-02): USR-01~03
+
+- 브랜치 `dev/v12-continuous-development-20261102`; 이번 실제 수정: 독립 `sunrise-outline-transfer.js` + 병합/분할/추출 내 일반 북마크 이식 + 페이지 변경 저장 실패 시 Undo/클립보드 조기 변경 방지.
+- 병합 중복 실행과 파일 큐 변경을 감지하며 임의 결과 저장을 차단.
+- `tests/outline-transfer.cjs`, `tests/page-atomic-publish.cjs`는 최종 기능 묶음 검사용으로 **작성만** 하고 실행하지 않았음.
+- 상세 문서: `docs/USR01_03_OUTLINE_AND_PAGE_SAFETY.md`; 36개 ID 통합 추적: `docs/ALL_STAGE_CODE_COMPLETION.md`.
+- **수치 변동 없음:** 관리자 84%, 사무 62%, 편집 57%, 전문 PDF 40%, 성능 31%, 통합 51%, 배포 0%; 총 46%. 새로운 코드 미검증.
+- 다음: 남은 USR-03/04/11/18 기능 및 전문 PDF의 안전 범위, 코드 고도화. 구현 후 일괄 CI. 운영 main·Cloudflare/D1 미변경.
+
+---
+
 # 추가 인수인계 — USR-10 양식 다중 필드 편집 (2026-11-02)
 
 - 실제 코드 브랜치 `dev/v12-continuous-development-20261102`에 `updatePdfFormFields()`와 `openFillAllFormFieldsModal()` 구현. 기존 단일 양식 편집은 보존.

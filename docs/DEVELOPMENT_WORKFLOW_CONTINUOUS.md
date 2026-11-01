@@ -36,3 +36,13 @@
 - 원본 표준 AcroForm의 일반 텍스트·체크박스 여러 값을 한 번에 변경하는 UI·처리 함수 구현.
 - 한글 글꼴 한 번 임베딩, 읽기 전용/서명/XFA 필드 차단, 문서 저장 검사와 Undo 연계.
 - 테스트 파일은 준비하되 기능 묶음 종료 전 실행 금지. 기존 모든 단계 백분율은 검증 기준선 유지.
+
+## 2026-11-02 연속 개발 — USR-01/02/03 병합·분할·페이지 안전성 보강
+
+- `src/assets/sunrise-outline-transfer.js` 신규: 간단한 /Outlines의 Unicode 제목·직접 페이지 목적지와 /GoTo를 읽어 병합·분할·추출 결과의 페이지에 맞게 변환. 계층 최대 4레벨 및 건수 제한. 외부 URI·이름 목적지·파손/순환 링크는 fail-closed.
+- `src/editor/index.html`: PDF 병합·페이지 추출·분할에 북마크 이식 경로 연결. UI 안내를 변경. 병합 중 중복 실행·파일 큐 변경 차단 및 열기용 출력 크기 제한.
+- PDF 복제/삭제/잘라내기/순서 변경의 PDF.save() 성공을 확인한 후에만 Undo·클립보드·사용자 수정 상태를 기록하는 순서로 재배치.
+- `scripts/build-release.cjs`: 독립 모듈 웹 번들 등록. `package.json`: 기능 완료 이후 검사할 계약 테스트 2개 추가.
+- 새 검증 파일 `tests/outline-transfer.cjs`, `tests/page-atomic-publish.cjs`는 작성했으나 **실행하지 않음**. 기존 모든 실무 PDF/Chrome/Edge/Windows CI도 이 신규 변경에는 미실행.
+- `docs/USR01_03_OUTLINE_AND_PAGE_SAFETY.md`: 상세 지원 범위 및 미검증 사항.
+- **완료 선언 금지:** 북마크 고급 동작, 양식 결합, PDF 보존 범위, 실무 파일 수용 및 브라우저 UI 검증이 남아 있음. 점수 기존 전체 46%, 단계 84/62/57/40/31/51/0 유지.
