@@ -102,6 +102,21 @@ async function main(){
    await page.locator('#editItemBgInput').fill('#ffeecc');
    await page.locator('#editItemConfirmBtn').click();
 
+   // USR-15: a signature-like mark must visibly state it is not certificate signing.
+   await page.evaluate(()=>executeCommand('insertVisualSignature'));
+   await page.locator('#insTextInput').waitFor({state:'visible'});
+   await page.locator('#insTextInput').fill('Visual QA Signer');
+   await page.locator('#insConfirmBtn').click();
+   await page.locator('#annotationOverlay [data-overlay-id]',{hasText:'전자서명·인증서 서명 아님'})
+     .waitFor({state:'visible',timeout:30000});
+
+   // USR-05: restricted editable text layer, but original must remain extractable.
+   await page.evaluate(()=>executeCommand('visualTextCorrection'));
+   await page.waitForFunction(()=>Boolean(document.getElementById('correctTextConfirm') &&
+     !document.getElementById('correctTextConfirm').disabled),null,{timeout:30000});
+   await page.locator('#correctTextReplacement').fill('VISUAL CORRECTION ONLY');
+   await page.locator('#correctTextConfirm').click();
+
    // USR-17: actually extract the raster XObject from PDF.js, not a page capture.
    await page.evaluate(()=>executeCommand('extractEmbeddedImages'));
    await page.locator('#embeddedImageStart').waitFor({state:'visible'});
@@ -149,7 +164,7 @@ async function main(){
    assert.equal(reopened.getPageCount(),2);
    const restored=await editState.restore(new Uint8Array(actual),PDFLib);
    assert.equal(restored.warning,false,'saved PDF must preserve editable overlay state');
-   assert.deepEqual(restored.overlays.map(x=>x.type),['Shape','Table','Note']);
+   assert.deepEqual(restored.overlays.map(x=>x.type),['Shape','Table','Note','VisualSignature','Correction']);
    assert.equal(restored.overlays[0].shapeKind,'ellipse');
    assert.equal(restored.overlays[0].strokeWidth,4);
    assert.equal(restored.overlays[1].cells.length,3);
@@ -158,6 +173,22 @@ async function main(){
    assert.equal(restored.overlays[2].text,'검토 의견');
    assert.equal(restored.overlays[2].opacity,0.55);
    assert.equal(restored.overlays[2].bgColor,'#ffeecc');
+   assert.equal(restored.overlays[3].text,'Visual QA Signer');
+   assert.equal(restored.overlays[4].text,'VISUAL CORRECTION ONLY');
+
+   // The appearance correction must NOT be mistaken for true content removal.
+   const searchableOriginal=await page.evaluate(async base64=>{
+     const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+     const reader=await window.pdfjsLib.getDocument({data:bytes}).promise;
+     try{
+       const content=await (await reader.getPage(1)).getTextContent();
+       return content.items.map(x=>x.str).join(' ');
+     }finally{await reader.destroy()}
+   },actual.toString('base64'));
+   assert(searchableOriginal.includes('Document Save Reopen Validation'),
+     'appearance-only text correction must preserve the original searchable source text');
+
+
 
    assert.equal(reopened.getPage(1).getRotation().angle,90);
    assert.equal(reopened.getForm().getTextField('employee').getText(),'Sample Person');
@@ -219,8 +250,46 @@ async function main(){
    assert.equal(resultPart.getPageCount(),1);
    assert((part.suggestedFilename()||'').includes('_p4-4.pdf'));
    await page.locator('#splitCloseBtn').click();
+   // USR-13: the only exported material must be masked raster pixels.
+   const privacySource=await PDFLib.PDFDocument.create();
+   privacySource.addPage([400,600]).drawText('Sensitive Secret 123',{x:80,y:480,size:15});
+   await page.locator('#openPdfInput').setInputFiles({
+     name:'privacy-page.pdf',mimeType:'application/pdf',
+     buffer:Buffer.from(await privacySource.save())
+   });
+   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('privacy-page.pdf'),
+     null,{timeout:40000});
+   await page.evaluate(()=>executeCommand('maskedPageExport'));
+   await page.locator('#maskExportBtn').waitFor({state:'visible'});
+   await page.locator('#maskConfirmed').check();
+   const maskingDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#maskExportBtn').click();
+   const maskedEvent=await maskingDownload;
+   const maskedPath=path.join(downloadDir,'masked-page.pdf');
+   await maskedEvent.saveAs(maskedPath);
+   const maskedDisk=fs.readFileSync(maskedPath);
+   const maskedPdf=await PDFLib.PDFDocument.load(maskedDisk);
+   assert.equal(maskedPdf.getPageCount(),1);
+   assert.equal(maskedPdf.catalog.get(PDFLib.PDFName.of('SunriseWebEdits')),undefined);
+   const rasterEvidence=await page.evaluate(async b64=>{
+     const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+     const document=await window.pdfjsLib.getDocument({data:bytes}).promise;
+     try{
+       const pdfPage=await document.getPage(1);
+       const text=await pdfPage.getTextContent();
+       const view=pdfPage.getViewport({scale:1});
+       const canvas=globalThis.document.createElement('canvas');
+       canvas.width=Math.ceil(view.width);canvas.height=Math.ceil(view.height);
+       const ctx=canvas.getContext('2d');
+       await pdfPage.render({canvasContext:ctx,canvas,viewport:view}).promise;
+       return {text:text.items.map(x=>x.str).join(''),mask:[...ctx.getImageData(80,115,1,1).data]};
+     }finally{await document.destroy()}
+   },maskedDisk.toString('base64'));
+   assert.equal(rasterEvidence.text,'','raster export must not copy original searchable text');
+   assert(rasterEvidence.mask.slice(0,3).every(x=>x<10),'mask region must be black in actual PDF pixels');
+   await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: browser table/shape/note edits; embedded PNG, local quality JSON/CSV, range split, PDF Save As/form/rotation');
+   console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, masked raster export, embedded PNG, quality reports and range split');
    await context.close();
  }finally{
    if(browser)await browser.close();

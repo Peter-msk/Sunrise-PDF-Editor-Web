@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자·사용자 Node 계약과 릴리스 빌드, Linux Chromium 및 Windows Chrome/Edge PDF 저장/재열기 회귀 PASS(2026-11-01). PR #15 범위 분할 결과 PDF 실다운로드/재열기, PNG 내장 이미지 실제 다운로드, 품질검사 CSV·JSON Node 형식·주입 검증 완료. 운영 배포·실제 업무용 PDF 품질·OCR 미실시.",
+  "basis": "PR #16: USR-05 원문 보존 시각 교정·USR-13 현재 쪽 단일 마스킹 래스터 PDF·USR-15 인증서 없는 시각 서명, Node 계약 및 Linux Chromium/Windows Chrome·Edge 실제 PDF 저장·재열기 검사 수행. 개인정보 완전 삭제/진정한 원문 직접 수정/암호학적 전자서명은 미구현이며 점수는 제한된 기능의 개발 증거만 반영. 실무 문서 수동 수용·운영 배포/D1 변경·OCR 미실시.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -298,21 +298,21 @@
       "id": "USR-05",
       "name": "원문 직접 수정",
       "phase": 4,
-      "implementation": 10,
-      "automated": 0,
-      "practical": 0,
+      "implementation": 15,
+      "automated": 60,
+      "practical": 10,
       "deployment": 0,
-      "note": "정확한 제한 영역 기술 연구 미완"
+      "note": "PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완"
     },
     {
       "id": "USR-13",
       "name": "민감정보 완전 삭제",
       "phase": 4,
-      "implementation": 5,
-      "automated": 0,
-      "practical": 0,
+      "implementation": 25,
+      "automated": 70,
+      "practical": 15,
       "deployment": 0,
-      "note": "보안삭제 검증 전, 출시 금지"
+      "note": "현재 쪽 한 장에 불투명 검정 좌표 마스크→새 래스터 PDF 생성, 기존 텍스트·주석·첨부·양식·북마크 데이터 비이식 및 다운로드·화소 검사 PASS. 영역 밖 내용 노출, 전체 문서 완전 삭제는 미지원; 민감정보 완전 삭제 인증·출시 판정 불가"
     },
     {
       "id": "USR-14",
@@ -328,11 +328,11 @@
       "id": "USR-15",
       "name": "전자서명",
       "phase": 4,
-      "implementation": 10,
-      "automated": 0,
-      "practical": 0,
+      "implementation": 30,
+      "automated": 70,
+      "practical": 15,
       "deployment": 0,
-      "note": "시각적 서명·인증서 기반 서명 분리 설계 미완"
+      "note": "시각 서명 표시 삽입·편집·Undo·PDF 저장/복원, 원문에 전자서명·인증서 서명 아님 고정 문구 및 Chrome·Edge·Chromium 자동검사. 인증서 개인키/전자서명 유효성 검증 기능 없음; 법적 디지털 서명 완료 기능 아님"
     },
     {
       "id": "USR-16",
