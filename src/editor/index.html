@@ -1986,7 +1986,7 @@
               { id: "highlightText", label: "강조 상자 삽입", icon: "fa-highlighter", shortcut: "Ctrl+H", docReq: true },
               { id: "insertStamp", label: "스탬프", icon: "fa-stamp", shortcut: "Ctrl+Alt+T", docReq: true },
               { id: "insertVisualSignature", label: "시각 서명 (인증서 아님)", icon: "fa-signature", docReq: true },
-              { id: "maskedPageExport", label: "현재 쪽 마스킹 PDF", icon: "fa-user-shield", docReq: true },
+              { id: "maskedPageExport", label: "다중 페이지·영역 마스킹 PDF", icon: "fa-user-shield", docReq: true },
               { id: "insertWatermark", label: "워터마크", icon: "fa-droplet", shortcut: "Ctrl+Alt+W", docReq: true },
             ],
           },
@@ -7378,44 +7378,61 @@
     }
 
 
-    // USR-13: a fresh, SINGLE-PAGE raster PDF is made from masked visible pixels.
-    // No source content streams, annotations, metadata or attachments are copied.
+    // USR-13: only pages explicitly listed in the plan enter the NEW raster PDF.
+    // Original PDF text, attachments, forms and annotation streams are not copied.
     function openMaskedPageExportModal(doc) {
-      if(!window.SunriseSpecialPdf?.exportMaskedPage){
-        showToast("마스킹 PDF 엔진을 불러오지 못했습니다.","fa-triangle-exclamation");return;
+      if (!window.SunriseSpecialPdf?.exportMaskedPages) {
+        showToast("다중 마스킹 PDF 엔진을 불러오지 못했습니다.","fa-triangle-exclamation");return;
       }
       const reader=doc.pdfJsDoc,source=doc.bytes,index=doc.currentPage;
-      const dims=doc.pageSizes[index]||{width:595,height:842};
+      const dim=doc.pageSizes[index]||{width:595,height:842};
       openModal({
-        title:"현재 페이지 마스킹 PDF (새 PDF)",icon:"fa-user-shield",width:"600px",
+        title:"선택 페이지·다중 영역 마스킹 PDF",icon:"fa-user-shield",width:"660px",
         bodyHtml:`<div class="dialog-info-box">
-          <strong>현재 ${index+1}쪽 한 장만</strong> 검정색 영역으로 가린 다음 새로운 이미지 기반 PDF를 생성합니다.
-          새 PDF에는 원본 내용 스트림·텍스트·북마크·첨부파일·양식을 넣지 않습니다.
-          <strong>마스킹 영역 밖의 개인정보는 그대로 보이며 완전 삭제를 보장하지 않습니다.</strong>
-          원본 PDF는 수정하지 않습니다. 전자서명/양식이 있는 PDF는 차단합니다.
+          <strong>입력한 페이지의 지정 영역만 검정색으로 마스킹</strong>하여 새 이미지 기반 PDF로 출력합니다.
+          내보낼 쪽마다 마스크 좌표를 한 줄 이상 적으세요. <strong>기재되지 않은 페이지는 출력에서 완전히 제외됩니다.</strong>
+          새 PDF는 원본 텍스트·양식·첨부·북마크·편집 메타데이터를 복사하지 않지만,
+          <strong>마스킹하지 않은 이미지·글자는 보입니다. 모든 개인정보의 완전 삭제를 보장하지 않습니다.</strong>
+          원본 PDF는 변경하지 않습니다. 서명·양식이나 편집기 삽입 항목이 있는 문서는 출력하지 않습니다.
         </div>
-        <p style="font-size:12px">좌표는 보이는 페이지의 왼쪽 위 기준 pt. 페이지 크기: ${Math.round(dims.width)} × ${Math.round(dims.height)}pt.</p>
-        <div class="dialog-form-grid">
-          <label for="maskX">왼쪽 X:</label><input id="maskX" class="dialog-input" type="number" value="70" min="0">
-          <label for="maskY">위쪽 Y:</label><input id="maskY" class="dialog-input" type="number" value="100" min="0">
-          <label for="maskW">마스크 너비:</label><input id="maskW" class="dialog-input" type="number" value="180" min="4">
-          <label for="maskH">마스크 높이:</label><input id="maskH" class="dialog-input" type="number" value="40" min="4">
+        <p style="font-size:12px;margin:8px 0">한 줄에 <strong>페이지,X,Y,너비,높이</strong> (쉼표 구분, 왼쪽 위 pt).
+        각 페이지는 최대 12영역, 한 번에 10쪽·총 40영역 이내입니다. 현재 ${index+1}쪽 크기: ${Math.round(dim.width)}×${Math.round(dim.height)}pt.</p>
+        <label for="maskPlanLines">마스킹 영역 목록 (한 줄 = 한 영역)</label>
+        <textarea class="dialog-textarea" id="maskPlanLines" rows="5" maxlength="5000" style="width:100%;font-family:monospace" spellcheck="false">${index+1},70,100,180,40</textarea>
+        <div style="display:flex;gap:8px;margin:8px 0">
+          <button type="button" id="maskPlanCheck" class="dialog-btn">대상 페이지·영역 검증</button>
+          <span id="maskPlanPreview" style="font-size:12px;color:var(--muted)" role="status">아직 검증하지 않았습니다.</span>
         </div>
         <label style="display:flex;gap:8px;margin:10px 0">
-          <input id="maskConfirmed" type="checkbox"> 한 쪽만 새 이미지 기반 PDF로 출력되고
-          나머지 페이지와 원본 편집 내용은 제외됨을 이해했습니다.
+          <input id="maskConfirmed" type="checkbox"> 지정한 페이지만 이미지 기반 PDF로 생성하며,
+          기재하지 않은 페이지는 제외되고 영역 외 내용은 그대로 보임을 확인했습니다.
         </label>
-        <p id="maskExportStatus" role="status">마스킹 좌표를 확인하세요.</p>`,
+        <p id="maskExportStatus" role="status">좌표를 검증한 다음 새 PDF를 생성하세요.</p>`,
         footerHtml:`<div></div><div class="modal-footer-right">
-          <button type="button" id="maskExportBtn" class="dialog-btn primary">마스킹 PDF 생성</button>
+          <button type="button" id="maskExportBtn" class="dialog-btn primary">새 마스킹 PDF 생성</button>
           <button type="button" id="maskExportClose" class="dialog-btn">닫기</button>
         </div>`,
         onMount:()=>{
           const submit=document.getElementById("maskExportBtn");
           const status=document.getElementById("maskExportStatus");
-          let stopped=false,running=false;
+          const lines=document.getElementById("maskPlanLines");
+          const preview=document.getElementById("maskPlanPreview");
+          const check=document.getElementById("maskPlanCheck");
+          let stopped=false,running=false,validated=null;
           const valid=()=>!stopped&&activeDoc()===doc&&doc.pdfJsDoc===reader&&
             doc.bytes===source&&doc.currentPage===index&&status.isConnected;
+          const inspect=()=>{
+            if(!valid())throw Error("현재 문서가 변경되었습니다.");
+            const plan=window.SunriseSpecialPdf.parseMaskPlan(lines.value,doc.pageSizes);
+            validated={input:lines.value,plan};
+            preview.textContent=plan.length+"쪽 / "+plan.reduce((n,p)=>n+p.rectangles.length,0)+
+              "개 영역 검증 완료: "+plan.map(p=>p.pageNumber+"쪽").join(", ");
+            return plan;
+          };
+          lines.addEventListener("input",()=>{validated=null;preview.textContent="좌표가 변경되었습니다. 다시 검증하세요.";});
+          check.addEventListener("click",()=>{
+            try{inspect()}catch(error){validated=null;preview.textContent="검증 실패: "+(error?.message||error);}
+          });
           document.getElementById("maskExportClose").addEventListener("click",()=>{
             stopped=true;
             if(running)status.textContent="변환 중단을 요청했습니다.";
@@ -7424,41 +7441,40 @@
           submit.addEventListener("click",async()=>{
             if(!valid()||running||doc.operationBusy)return;
             if(!document.getElementById("maskConfirmed").checked){
-              showToast("한 페이지 변환 범위와 원문 내용 제외를 확인해 주세요.","fa-triangle-exclamation");return;
+              showToast("출력 페이지와 남는 정보에 대한 확인이 필요합니다.","fa-triangle-exclamation");return;
             }
             if(doc.overlays.length){
-              showToast("현재 PDF에는 편집기 삽입 항목이 있습니다. 삽입 항목 없는 원본을 별도로 열어 변환해 주세요.","fa-triangle-exclamation");return;
+              showToast("편집기 삽입 항목이 있는 문서는 원본 PDF를 별도 열어 작업해 주세요.","fa-triangle-exclamation");return;
             }
-            let rectangle;
+            let plan;
             try{
-              rectangle=window.SunriseSpecialPdf.validateMaskRect({
-                x:document.getElementById("maskX").value,
-                y:document.getElementById("maskY").value,
-                width:document.getElementById("maskW").value,
-                height:document.getElementById("maskH").value
-              },dims.width,dims.height);
+              plan=validated?.input===lines.value?validated.plan:inspect();
               const srcPdf=await window.PDFLib.PDFDocument.load(source);
-              const n=window.PDFLib.PDFName.of;
-              if(srcPdf.catalog.has(n("Perms"))||srcPdf.catalog.has(n("AcroForm")))
-                throw Error("서명·양식이 있는 PDF는 마스킹 출력할 수 없습니다.");
-            }catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+              const name=window.PDFLib.PDFName.of;
+              if(srcPdf.catalog.has(name("Perms"))||srcPdf.catalog.has(name("AcroForm")))
+                throw Error("전자서명·양식이 있는 PDF는 마스킹 출력할 수 없습니다.");
+            }catch(error){status.textContent="사전 검사 실패: "+(error?.message||error);return;}
             const finish=beginOperationMetric("page_extract");let outcome="failed";
-            running=true;submit.disabled=true;
+            running=true;submit.disabled=true;check.disabled=true;lines.disabled=true;
             try{
-              status.textContent="페이지를 이미지로 렌더링하고 검정색 마스크를 적용 중입니다…";
-              const output=await window.SunriseSpecialPdf.exportMaskedPage({
-                reader,pageNumber:index+1,rectangle,PDFLib:window.PDFLib,
-                cancelled:()=>!valid()
+              status.textContent="페이지를 차례대로 래스터화하고 마스크를 적용 중입니다…";
+              const output=await window.SunriseSpecialPdf.exportMaskedPages({
+                reader,plan,PDFLib:window.PDFLib,
+                cancelled:()=>!valid()||doc.overlays.length>0,
+                onProgress:p=>{if(valid())status.textContent=p.done+"/"+p.total+
+                  "쪽 처리 · 검정 영역 "+p.maskCount+"개 적용 중…";}
               });
-              if(!valid())throw Error("변환 도중 문서가 변경되었습니다.");
-              const name=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"page";
-              downloadBytes(output.bytes,name+"_masked_page_"+(index+1)+".pdf","application/pdf");
-              status.textContent="한 페이지의 새 이미지 기반 PDF가 준비됐습니다. 영역 밖 내용은 남습니다.";
+              if(!valid())throw Error("변환 중 문서가 변경되었습니다.");
+              const basename=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,65)||"document";
+              downloadBytes(output.bytes,basename+"_masked_"+output.pages+"pages.pdf","application/pdf");
+              status.textContent=output.pages+"쪽 / "+output.maskCount+
+                "개 영역 출력. 구조 검사 통과. 마스킹하지 않은 영역의 개인정보는 남을 수 있습니다.";
               outcome="succeeded";
             }catch(error){
               if(status.isConnected)status.textContent="마스킹 PDF 생성 실패: "+(error?.message||error);
+              if(stopped)outcome="cancelled";
             }finally{
-              running=false;if(status.isConnected)submit.disabled=false;
+              running=false;if(status.isConnected){submit.disabled=false;check.disabled=false;lines.disabled=false;}
               finish(outcome);
             }
           });
