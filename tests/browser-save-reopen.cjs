@@ -145,6 +145,29 @@ async function main(){
    await download.saveAs(disk);
    const actual=fs.readFileSync(disk);
    assert(actual.byteLength>100);
+   const reopened=await PDFLib.PDFDocument.load(actual);
+   assert.equal(reopened.getPageCount(),2);
+   const restored=await editState.restore(new Uint8Array(actual),PDFLib);
+   assert.equal(restored.warning,false,'saved PDF must preserve editable overlay state');
+   assert.deepEqual(restored.overlays.map(x=>x.type),['Shape','Table','Note']);
+   assert.equal(restored.overlays[0].shapeKind,'ellipse');
+   assert.equal(restored.overlays[0].strokeWidth,4);
+   assert.equal(restored.overlays[1].cells.length,3);
+   assert.equal(restored.overlays[1].cells[2][0],'대기');
+   assert.equal(restored.overlays[1].width,275);
+   assert.equal(restored.overlays[2].text,'검토 의견');
+   assert.equal(restored.overlays[2].opacity,0.55);
+   assert.equal(restored.overlays[2].bgColor,'#ffeecc');
+
+   assert.equal(reopened.getPage(1).getRotation().angle,90);
+   assert.equal(reopened.getForm().getTextField('employee').getText(),'Sample Person');
+   assert.equal(reopened.getForm().getCheckBox('approved').isChecked(),true);
+   await page.locator('#saveAsDownloadedBtn').click();
+   await page.locator('#openPdfInput').setInputFiles({name:'reloaded-output.pdf',mimeType:'application/pdf',buffer:actual});
+   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('reloaded-output.pdf'),
+     null,{timeout:40000});
+   const uploaded=await page.evaluate(()=>document.querySelector('#workspaceDocumentTitle')?.textContent);
+   assert(uploaded.includes('reloaded-output.pdf'));
    // USR-12: inspect the saved disk PDF and download the actual browser reports.
    await page.evaluate(()=>executeCommand('checkSavedPdf'));
    await page.locator('#savedPdfCheckInput').setInputFiles({
@@ -171,29 +194,6 @@ async function main(){
    assert(csv.startsWith('\ufeff')&&csv.includes('총 페이지')&&csv.includes('page'),
      'CSV must be UTF-8 BOM with summary');
    await page.locator('#modalCloseBtn').click();
-   const reopened=await PDFLib.PDFDocument.load(actual);
-   assert.equal(reopened.getPageCount(),2);
-   const restored=await editState.restore(new Uint8Array(actual),PDFLib);
-   assert.equal(restored.warning,false,'saved PDF must preserve editable overlay state');
-   assert.deepEqual(restored.overlays.map(x=>x.type),['Shape','Table','Note']);
-   assert.equal(restored.overlays[0].shapeKind,'ellipse');
-   assert.equal(restored.overlays[0].strokeWidth,4);
-   assert.equal(restored.overlays[1].cells.length,3);
-   assert.equal(restored.overlays[1].cells[2][0],'대기');
-   assert.equal(restored.overlays[1].width,275);
-   assert.equal(restored.overlays[2].text,'검토 의견');
-   assert.equal(restored.overlays[2].opacity,0.55);
-   assert.equal(restored.overlays[2].bgColor,'#ffeecc');
-
-   assert.equal(reopened.getPage(1).getRotation().angle,90);
-   assert.equal(reopened.getForm().getTextField('employee').getText(),'Sample Person');
-   assert.equal(reopened.getForm().getCheckBox('approved').isChecked(),true);
-   await page.locator('#saveAsDownloadedBtn').click();
-   await page.locator('#openPdfInput').setInputFiles({name:'reloaded-output.pdf',mimeType:'application/pdf',buffer:actual});
-   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('reloaded-output.pdf'),
-     null,{timeout:40000});
-   const uploaded=await page.evaluate(()=>document.querySelector('#workspaceDocumentTitle')?.textContent);
-   assert(uploaded.includes('reloaded-output.pdf'));
    // USR-02: range split into two outputs; output 2 must contain only page 4.
    const splitPdf=await PDFLib.PDFDocument.create();
    for(let i=0;i<4;i++)splitPdf.addPage([350,500]).drawText('Page '+(i+1));
