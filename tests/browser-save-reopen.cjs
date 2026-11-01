@@ -38,6 +38,8 @@ async function fixture(){
  pdf.setTitle('Chromium PDF Roundtrip');
  pdf.setAuthor('Sunrise Validation');
  const first=pdf.addPage([420,595]);
+ const embedded=await pdf.embedPng(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFUlEQVR4nAXBAQEAAACAEP9PF0JQGR7vBPykAXTzAAAAAElFTkSuQmCC','base64'));
+ first.drawImage(embedded,{x:340,y:520,width:24,height:24});
  first.drawText('Document Save Reopen Validation',{x:35,y:550,size:14});
  const second=pdf.addPage([600,420]);
  second.setRotation(PDFLib.degrees(90));
@@ -100,6 +102,21 @@ async function main(){
    await page.locator('#editItemBgInput').fill('#ffeecc');
    await page.locator('#editItemConfirmBtn').click();
 
+   // USR-17: actually extract the raster XObject from PDF.js, not a page capture.
+   await page.evaluate(()=>executeCommand('extractEmbeddedImages'));
+   await page.locator('#embeddedImageStart').waitFor({state:'visible'});
+   await page.locator('#embeddedImageStart').click();
+   const embeddedSave=page.locator('#embeddedImageResults button',{hasText:'PNG 저장'}).first();
+   await embeddedSave.waitFor({state:'visible',timeout:30000});
+   const pngEvent=page.waitForEvent('download',{timeout:30000});
+   await embeddedSave.click();
+   const png=await pngEvent;
+   const imagePath=path.join(downloadDir,'embedded.png');
+   await png.saveAs(imagePath);
+   assert(fs.readFileSync(imagePath).subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])),
+     'embedded extracted output must be a real PNG');
+   await page.locator('#embeddedImageClose').click();
+
    await page.locator('#quickSaveBtn').click();
    await page.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:20000});
    // Force one preparation error, then retry in the same dialog.
@@ -151,8 +168,33 @@ async function main(){
      null,{timeout:40000});
    const uploaded=await page.evaluate(()=>document.querySelector('#workspaceDocumentTitle')?.textContent);
    assert(uploaded.includes('reloaded-output.pdf'));
+   // USR-02: range split into two outputs; output 2 must contain only page 4.
+   const splitPdf=await PDFLib.PDFDocument.create();
+   for(let i=0;i<4;i++)splitPdf.addPage([350,500]).drawText('Page '+(i+1));
+   await page.locator('#openPdfInput').setInputFiles({
+     name:'split-four-pages.pdf',mimeType:'application/pdf',buffer:Buffer.from(await splitPdf.save())
+   });
+   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('split-four-pages.pdf'),
+     null,{timeout:40000});
+   await page.evaluate(()=>executeCommand('splitPages'));
+   await page.locator('#splitPrepareBtn').waitFor({state:'visible'});
+   await page.locator('#splitRangeInput').fill('1-2, 4');
+   await page.locator('#splitSizeInput').fill('2');
+   await page.locator('#splitPrepareBtn').click();
+   const splitButtons=page.locator('#splitReadyResults button');
+   await splitButtons.nth(1).waitFor({state:'visible',timeout:60000});
+   assert.equal(await splitButtons.count(),2);
+   const partEvent=page.waitForEvent('download',{timeout:30000});
+   await splitButtons.nth(1).click();
+   const part=await partEvent;
+   const partFile=path.join(downloadDir,'split-part.pdf');
+   await part.saveAs(partFile);
+   const resultPart=await PDFLib.PDFDocument.load(fs.readFileSync(partFile));
+   assert.equal(resultPart.getPageCount(),1);
+   assert((part.suggestedFilename()||'').includes('_p4-4.pdf'));
+   await page.locator('#splitCloseBtn').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: real browser shape, table, and note edits; PDF download, editable overlays restored, form/rotation preserved, browser reopen');
+   console.log('PASS: browser edit/table/shape/note roundtrip, embedded PNG extraction, bounded range-based PDF split, Save As/form/rotation');
    await context.close();
  }finally{
    if(browser)await browser.close();
