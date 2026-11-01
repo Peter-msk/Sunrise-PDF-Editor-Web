@@ -8,6 +8,10 @@ const elements={};
 function el(id){return elements[id] ||= {value:'',checked:false,addEventListener(type,fn){callbacks[id+':'+type]=fn}}}
 el('mergeOutputNameInput').value='merged.pdf';el('mergeOpenAfterCheck').checked=true;el('mergeDownloadCheck').checked=true;
 el('extractRangeInput').value='1';el('extractNameInput').value='extracted.pdf';el('pastePosSelect').value='after';
+el('splitRangeInput').value='1-2';
+el('splitSizeInput').value='1';
+el('splitReadyResults').isConnected=true;
+el('splitReadyResults').replaceChildren=()=>{};
 el('reorderInput').value='2, 1';el('blankPosSelect').value='after';el('blankSizeSelect').value='a4p';el('blankCountInput').value='1';
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseEditState:{},SunriseKoreanFont:{}},state,Set,Array,JSON,Uint8Array,
  console:{warn(){}},document:{getElementById:el},activeDoc:()=>active,showToast:s=>notices.push(s),
@@ -46,6 +50,7 @@ const doc=bytes=>({name:'test.pdf',bytes,pageCount:2,currentPage:0,selectedPages
  vm.runInContext('openReorderPagesModal(doc)',ctx);await callbacks['reorderConfirmBtn:click']();
  assert.equal(active.bytes,before);assert.equal(state.pageClipboard.sourceName,'unchanged');assert.equal(snapshots,0);
  await vm.runInContext('splitDocumentPages(doc)',ctx);
+ await callbacks['splitPrepareBtn:click']();
  vm.runInContext('openExtractPagesModal(doc)',ctx);await callbacks['extractConfirmBtn:click']();
  assert.equal(downloads,0);assert.equal(opens,0);assert.equal(closes,0);
  state.mergeQueue=[{name:'normal.pdf',bytes:plain},{name:'form.pdf',bytes:form}];
