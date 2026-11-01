@@ -176,6 +176,19 @@ async function main(){
    assert.equal(restored.overlays[3].text,'Visual QA Signer');
    assert.equal(restored.overlays[4].text,'VISUAL CORRECTION ONLY');
 
+   // The appearance correction must NOT be mistaken for true content removal.
+   const searchableOriginal=await page.evaluate(async base64=>{
+     const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+     const reader=await window.pdfjsLib.getDocument({data:bytes}).promise;
+     try{
+       const content=await (await reader.getPage(1)).getTextContent();
+       return content.items.map(x=>x.str).join(' ');
+     }finally{await reader.destroy()}
+   },actual.toString('base64'));
+   assert(searchableOriginal.includes('Document Save Reopen Validation'),
+     'appearance-only text correction must preserve the original searchable source text');
+
+
 
    assert.equal(reopened.getPage(1).getRotation().angle,90);
    assert.equal(reopened.getForm().getTextField('employee').getText(),'Sample Person');
