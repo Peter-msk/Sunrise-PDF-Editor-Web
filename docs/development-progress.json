@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "기존 관리자·사용자 전체 Node 계약 및 릴리스 빌드 통과, Linux Chromium·Windows Chrome·Edge PDF 열기/편집/다운로드/복원과 관리자 자동 브라우저 회귀 통과(2026-11-01). USR-06 표/도형, USR-07 메모/강조 테스트는 자동화된 합성 샘플이며 실사용 고객 PC·운영 Cloudflare 배포/D1 마이그레이션·OCR은 미실시.",
+  "basis": "관리자·사용자 Node 계약과 릴리스 빌드, Linux Chromium 및 Windows Chrome/Edge PDF 저장/재열기 회귀 PASS(2026-11-01). PR #15 범위 분할 결과 PDF 실다운로드/재열기, PNG 내장 이미지 실제 다운로드, 품질검사 CSV·JSON Node 형식·주입 검증 완료. 운영 배포·실제 업무용 PDF 품질·OCR 미실시.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -168,11 +168,11 @@
       "id": "USR-02",
       "name": "분할·추출",
       "phase": 2,
-      "implementation": 65,
-      "automated": 60,
-      "practical": 10,
+      "implementation": 78,
+      "automated": 82,
+      "practical": 20,
       "deployment": 35,
-      "note": "기본 기능 존재, 일괄 범위·재열기 확대 필요"
+      "note": "선택 범위 및 파일당 페이지 수(1~100) 기반 최대 50개·총 100MiB 분할, 결과별 PDF 저장 버튼, 원본 양식 보호, Chromium·Windows Chrome/Edge 다운로드/재열기 계약 통과. 원본 전역 북마크 자동 이식·실무 PDF 수용·운영 배포 미완"
     },
     {
       "id": "USR-03",
@@ -268,21 +268,21 @@
       "id": "USR-12",
       "name": "제출 전 품질 검사",
       "phase": 3,
-      "implementation": 70,
-      "automated": 80,
+      "implementation": 82,
+      "automated": 88,
       "practical": 0,
       "deployment": 0,
-      "note": "저장 PDF 제출 전 검사 모듈: 페이지·방향·크기, 글꼴 리소스, 필수 양식, XFA/서명, 내용 연산 기반 빈쪽 후보·부분 검사 경고, 49개 CI PASS; Chrome·Edge 실제 PDF 표시 검증 미완"
+      "note": "기존 저장 PDF 구조/필수양식/빈쪽 후보 검사에 CSV·JSON 로컬 리포트 다운로드 구현, 수식주입 방어·파일 변경 시 이전 검사결과 차단과 Node/빌드 검증 완료. 실제 브라우저 리포트 다운로드 사용성·실무 파일 수용은 별도"
     },
     {
       "id": "USR-17",
       "name": "이미지·텍스트 추출",
       "phase": 3,
-      "implementation": 75,
-      "automated": 45,
-      "practical": 0,
+      "implementation": 82,
+      "automated": 82,
+      "practical": 20,
       "deployment": 30,
-      "note": "텍스트/페이지 PNG 추출에 더해 PDF.js의 내장 RGB·RGBA·1비트 회색조 이미지 객체를 PNG로 내보내는 엔진·모달·다운로드 코드와 Node 계약 검사를 작성. 마스크·색공간·복합 도면 일부 미지원; 신규 코드의 CI 및 실제 브라우저 추출 검증은 아직 미실시"
+      "note": "텍스트/페이지 PNG/내장 RGB 래스터 PNG 추출. 실제 2x2 RGB 이미지 내장 PDF에서 Linux Chromium·Windows Chrome/Edge로 PNG 파일 다운로드 및 헤더 확인. 복잡한 색공간·마스크·원본 JPEG 바이트 미지원, 실무 PDF 품질 검증 미완"
     },
     {
       "id": "USR-19",
