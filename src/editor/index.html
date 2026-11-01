@@ -1984,6 +1984,7 @@
             actions: [
               { id: "insertNote", label: "주석 삽입", icon: "fa-comment-dots", shortcut: "Ctrl+Shift+T", docReq: true },
               { id: "highlightText", label: "강조 상자 삽입", icon: "fa-highlighter", shortcut: "Ctrl+H", docReq: true },
+              { id: "manageNativeAnnotations", label: "원본 PDF 주석 관리", icon: "fa-comments", docReq: true },
               { id: "insertStamp", label: "스탬프", icon: "fa-stamp", shortcut: "Ctrl+Alt+T", docReq: true },
               { id: "insertVisualSignature", label: "시각 서명 (인증서 아님)", icon: "fa-signature", docReq: true },
               { id: "maskedPageExport", label: "다중 페이지·영역 마스킹 PDF", icon: "fa-user-shield", docReq: true },
@@ -5442,6 +5443,11 @@
           openStyledInsertModal(doc, "Highlight", "하이라이트 표시 추가", "강조 표시할 문구");
           break;
 
+        case "manageNativeAnnotations":
+          if (!doc) return;
+          await openNativeAnnotationsModal(doc);
+          break;
+
         case "insertStamp":
           if (!doc) return;
           openStyledInsertModal(doc, "Stamp", "스탬프 삽입", "승인 / 검토완료 / 대외비");
@@ -8502,6 +8508,172 @@
             }
           </div>
         `,
+      });
+    }
+
+
+    // USR-07: bounded native /Text and /Highlight annotation management.
+    // This is ordinary annotation editing, NOT secure content erasure.
+    function nativeAnnotationHasMarker(bytes, marker) {
+      const needle = Array.from(marker, char => char.charCodeAt(0));
+      if (!bytes || !Number.isSafeInteger(bytes.byteLength)) throw new Error("원본 PDF 바이트를 확인할 수 없습니다.");
+      for (let i = 0; i <= bytes.length - needle.length; i++) {
+        if (bytes[i] !== needle[0]) continue;
+        let match = true;
+        for (let j = 1; j < needle.length; j++) if (bytes[i+j] !== needle[j]) {match = false; break;}
+        if (match) return true;
+      }
+      return false;
+    }
+
+    function nativeAnnotationGuard(pdf, originalBytes) {
+      const {PDFName} = window.PDFLib, n = PDFName.of;
+      // A conservative boundary: never rewrite possibly certified/signed documents
+      // or interactive form PDFs with embedded signature relationships.
+      if (pdf.catalog.has(n("Perms")) || pdf.catalog.has(n("AcroForm")) ||
+          nativeAnnotationHasMarker(originalBytes, "/ByteRange"))
+        throw new Error("전자서명 또는 양식이 포함될 수 있는 PDF의 원본 주석 변경은 지원하지 않습니다.");
+    }
+
+    function listNativeAnnotations(pdf, pageIndex) {
+      const {PDFName,PDFRef,PDFDict,PDFString,PDFHexString,PDFNumber} = window.PDFLib, n = PDFName.of;
+      if (!Number.isSafeInteger(pageIndex) || pageIndex < 0 || pageIndex >= pdf.getPageCount())
+        throw new Error("주석을 조회할 페이지 번호가 올바르지 않습니다.");
+      const annotations = pdf.getPage(pageIndex).node.Annots();
+      if (!annotations) return [];
+      if (annotations.size() > 200) throw new Error("현재 쪽에 주석이 너무 많아 안전한 일괄 조회를 지원하지 않습니다.");
+      const result = [];
+      for (let i = 0; i < annotations.size(); i++) {
+        const ref = annotations.get(i);
+        if (!(ref instanceof PDFRef)) continue;
+        const dict = pdf.context.lookup(ref);
+        if (!(dict instanceof PDFDict)) continue;
+        const subtype = dict.get(n("Subtype"))?.toString();
+        if (subtype !== "/Text" && subtype !== "/Highlight") continue;
+        // Unsupported threads, popup relationships or special semantics remain untouched.
+        if (["Popup","IRT","Parent","RC","A","AA","StructParent","OC"].some(key => dict.has(n(key)))) continue;
+        const flags = dict.get(n("F"));
+        if (flags && (!(flags instanceof PDFNumber) || (flags.asNumber() & (64|128|512)))) continue;
+        const contents = dict.get(n("Contents"));
+        if (contents && !(contents instanceof PDFString || contents instanceof PDFHexString)) continue;
+        const text = contents ? contents.decodeText() : "";
+        if (text.length > 2000) continue;
+        result.push({index:i,subtype:subtype.substring(1),text,ref:ref.toString()});
+      }
+      return result;
+    }
+
+    function updateNativeAnnotation(pdf, originalBytes, pageIndex, annotationIndex, action, newText) {
+      const {PDFName,PDFDict,PDFHexString} = window.PDFLib, n = PDFName.of;
+      if (action !== "edit" && action !== "delete") throw new Error("지원하지 않는 주석 작업입니다.");
+      nativeAnnotationGuard(pdf, originalBytes);
+      const candidate = listNativeAnnotations(pdf, pageIndex).find(item => item.index === annotationIndex);
+      if (!candidate) throw new Error("선택한 원본 주석을 안전하게 변경할 수 없습니다.");
+      const annots = pdf.getPage(pageIndex).node.Annots();
+      const ref = annots.get(annotationIndex);
+      if (ref.toString() !== candidate.ref) throw new Error("주석 참조가 변경되었습니다.");
+      // Refuse changes when another annotation depends on the target through
+      // a popup, reply or parent relationship, including on other pages.
+      let visited = 0;
+      for (const page of pdf.getPages()) {
+        const others = page.node.Annots();
+        if (!others) continue;
+        visited += others.size();
+        if (visited > 2000) throw new Error("주석 참조 관계가 너무 많아 변경할 수 없습니다.");
+        for (let i = 0; i < others.size(); i++) {
+          const otherRef = others.get(i), other = pdf.context.lookup(otherRef);
+          if (!(other instanceof PDFDict) || otherRef.toString() === candidate.ref) continue;
+          if (["IRT","Parent","Popup"].some(key => other.get(n(key))?.toString() === candidate.ref))
+            throw new Error("다른 주석과 연결된 원본 주석은 변경할 수 없습니다.");
+        }
+      }
+      if (action === "edit") {
+        if (typeof newText !== "string" || !newText.trim() || newText.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(newText))
+          throw new Error("주석 내용은 1~2000자이며 제어문자를 포함할 수 없습니다.");
+        const dict = pdf.context.lookup(ref);
+        dict.set(n("Contents"), PDFHexString.fromText(newText));
+      } else {
+        // Remove the page reference. This is not cryptographic sanitization.
+        annots.remove(annotationIndex);
+        if (!annots.size()) pdf.getPage(pageIndex).node.delete(n("Annots"));
+      }
+      return {subtype:candidate.subtype,action};
+    }
+
+    async function openNativeAnnotationsModal(doc) {
+      if (doc.operationBusy) return;
+      const originalBytes = doc.bytes, originalReader = doc.pdfJsDoc, pageIndex = doc.currentPage;
+      let annotations;
+      try {
+        const pdf = await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
+        nativeAnnotationGuard(pdf,originalBytes);
+        annotations = listNativeAnnotations(pdf,pageIndex);
+      } catch(error) {showToast("원본 주석 조회 실패: " + error.message,"fa-triangle-exclamation");return;}
+      if (activeDoc() !== doc || doc.bytes !== originalBytes || doc.pdfJsDoc !== originalReader ||
+          doc.currentPage !== pageIndex) return;
+      const options = annotations.map(a => '<option value="' + a.index + '">' +
+        (a.index+1) + '번 · ' + (a.subtype === "Highlight" ? "형광펜" : "메모") +
+        ' · ' + escapeHtml(a.text.slice(0,48)) + '</option>').join("");
+      openModal({
+        title:"원본 PDF 주석 관리 (현재 쪽)",icon:"fa-comments",width:"570px",
+        bodyHtml:'<p style="font-size:12px">현재 ' + (pageIndex+1) + '쪽의 단순 메모(Text)·형광펜(Highlight) 주석만 수정/삭제합니다. 원본 PDF는 유지되며 별도 저장이 필요합니다.</p>' +
+          (annotations.length ? '<label for="nativeAnnotationSelect">주석 선택</label><select id="nativeAnnotationSelect" class="dialog-select" style="width:100%">' + options + '</select>' +
+          '<label for="nativeAnnotationText" style="display:block;margin-top:10px">주석 문구 (강조 영역·색상은 변경하지 않음)</label>' +
+          '<textarea id="nativeAnnotationText" class="dialog-input" rows="4" maxlength="2000" style="width:100%"></textarea>' :
+          '<p>현재 쪽에서 지원되는 원본 PDF 주석이 없습니다. 연결 주석·서명·양식이 있는 문서는 안전을 위해 제외합니다.</p>') +
+          '<p id="nativeAnnotationStatus" role="status" aria-live="polite" style="font-size:12px">삭제는 화면의 주석 참조 제거이며 개인정보의 완전 삭제를 의미하지 않습니다.</p>',
+        footerHtml:'<div></div><div class="modal-footer-right">' +
+          (annotations.length ? '<button type="button" class="dialog-btn primary" id="nativeAnnotationEdit">문구 수정</button>' +
+            '<button type="button" class="dialog-btn" id="nativeAnnotationDelete">주석 삭제</button>' : '') +
+          '<button type="button" class="dialog-btn" id="nativeAnnotationClose">닫기</button></div>',
+        onMount:() => {
+          document.getElementById("nativeAnnotationClose").addEventListener("click",closeModal);
+          if (!annotations.length) return;
+          const select = document.getElementById("nativeAnnotationSelect");
+          const textInput = document.getElementById("nativeAnnotationText");
+          const status = document.getElementById("nativeAnnotationStatus");
+          const edit = document.getElementById("nativeAnnotationEdit");
+          const remove = document.getElementById("nativeAnnotationDelete");
+          const updateSelection = () => {
+            const item=annotations.find(a=>a.index===Number(select.value));
+            textInput.value=item?.text || "";
+          };
+          select.addEventListener("change",updateSelection);updateSelection();
+          const run = async action => {
+            if (doc.operationBusy || activeDoc() !== doc || doc.bytes !== originalBytes ||
+                doc.pdfJsDoc !== originalReader || doc.currentPage !== pageIndex) {
+              status.textContent="문서 또는 페이지가 변경되어 다시 열어야 합니다.";return;
+            }
+            if (action === "delete" &&
+                !window.confirm("선택한 원본 주석의 화면 참조를 삭제할까요? 개인정보 완전 삭제는 아닙니다.")) return;
+            doc.operationBusy=true;edit.disabled=true;remove.disabled=true;
+            const finish=beginOperationMetric("native_annotation_edit");let outcome="failed";
+            let info;
+            try {
+              const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
+              updateNativeAnnotation(pdf,originalBytes,pageIndex,Number(select.value),action,textInput.value);
+              const next=await pdf.save({updateFieldAppearances:false});
+              await verifySavedPdfBytes(originalBytes,next);
+              info=await parsePageCountAndMeta(next);
+              if (activeDoc() !== doc || doc.bytes !== originalBytes || doc.pdfJsDoc !== originalReader ||
+                  doc.currentPage !== pageIndex) {
+                await info.pdfJsDoc.destroy();info=null;outcome="cancelled";
+                throw new Error("편집 중 문서가 변경되어 작업을 취소했습니다.");
+              }
+              saveUndoSnapshot(doc,action === "edit" ? "원본 주석 문구 수정" : "원본 주석 삭제");
+              doc.bytes=next;
+              await reloadDocPdfJs(doc,{info,selection:[pageIndex]});info=null;
+              closeModal();await refreshAllViews();
+              showToast("원본 주석 변경을 적용했습니다. 다른 이름으로 PDF 저장하세요.","fa-comments");
+              outcome="succeeded";
+            } catch(error) {
+              status.textContent="주석 변경 실패: "+(error.message||error);
+              if(info) await info.pdfJsDoc.destroy();
+            } finally {finish(outcome);doc.operationBusy=false;edit.disabled=false;remove.disabled=false;}
+          };
+          edit.addEventListener("click",()=>run("edit"));
+          remove.addEventListener("click",()=>run("delete"));
+        }
       });
     }
 
