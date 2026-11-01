@@ -1561,6 +1561,20 @@
         gap: 5px;
       }
 
+      /* USR-19: keep document and annotation dialogs usable on touch screens. */
+      #modalBackdrop { padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom)); }
+      .sunrise-modal { max-height: min(96vh, 96dvh); }
+      .modal-header, .modal-footer { flex-shrink: 0; }
+      .modal-body { min-height: 0; overscroll-behavior: contain; }
+      .modal-footer-right { flex-wrap: wrap; max-width: 100%; }
+      .dialog-btn, .modal-close-btn { min-height: 44px; min-width: 44px; }
+      .dialog-input:not([type="checkbox"]), .dialog-select, .dialog-textarea { min-height: 42px; font-size: 16px; }
+      #nativeAnnotationSelect { min-height: 116px; max-height: 28dvh !important; }
+      #nativeAnnotationText { min-height: 92px; }
+      #modalBackdrop .modal-footer { padding: 8px; }
+      #modalBackdrop .modal-footer-right { width: 100%; justify-content: flex-end; }
+      #modalBackdrop .modal-footer-right > .dialog-btn { flex: 1 1 44%; }
+
       .merge-layout {
         grid-template-columns: 1fr;
       }
@@ -8483,20 +8497,21 @@
     // All comments, including original standard annotations, stay local.
     // This is a report export, not a PDF annotation redaction operation.
     async function exportOverlaysToCsv(doc) {
-      if (!doc || doc.operationBusy) return false;
+      if (!doc || doc.operationBusy || doc.commentReportBusy) return false;
+      doc.commentReportBusy=true;
       const originalBytes=doc.bytes, originalReader=doc.pdfJsDoc;
+      const captured=captureSaveState(doc);
       const overlayState=JSON.stringify(doc.overlays);
+      const isCurrent=()=>doc.bytes===originalBytes && doc.pdfJsDoc===originalReader &&
+        activeDoc()===doc && saveStateIsCurrent(doc,captured);
       try {
         if (!window.PDFLib || !window.SunriseCommentReport?.createCsv)
           throw new Error("검토 의견표 생성 구성요소가 없습니다.");
         const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
-        const native=await collectNativeAnnotations(pdf,()=>doc.bytes===originalBytes &&
-          doc.pdfJsDoc===originalReader && activeDoc()===doc &&
-          JSON.stringify(doc.overlays)===overlayState);
+        const native=await collectNativeAnnotations(pdf,isCurrent);
         const overlays=JSON.parse(overlayState);
         const csv=window.SunriseCommentReport.createCsv(overlays,native);
-        if(doc.bytes!==originalBytes || doc.pdfJsDoc!==originalReader || activeDoc()!==doc ||
-          JSON.stringify(doc.overlays)!==overlayState)
+        if(!isCurrent())
           throw new Error("문서가 변경되어 의견표 다운로드를 취소했습니다.");
         downloadBytes(new TextEncoder().encode(csv),
           doc.name.replace(/\.pdf$/i,"")+"_comments.csv","text/csv;charset=utf-8");
@@ -8505,6 +8520,8 @@
       } catch(error) {
         showToast("검토 의견표 생성 실패: "+(error.message||error),"fa-triangle-exclamation");
         return false;
+      } finally {
+        doc.commentReportBusy=false;
       }
     }
 
@@ -8596,7 +8613,7 @@
       if (ref.toString() !== candidate.ref) throw new Error("주석 참조가 변경되었습니다.");
       // Refuse changes when another annotation depends on the target through
       // a popup, reply or parent relationship, including on other pages.
-      let visited = 0;
+      let visited = 0, targetReferences = 0;
       for (const page of pdf.getPages()) {
         const others = page.node.Annots();
         if (!others) continue;
@@ -8604,11 +8621,16 @@
         if (visited > 2000) throw new Error("주석 참조 관계가 너무 많아 변경할 수 없습니다.");
         for (let i = 0; i < others.size(); i++) {
           const otherRef = others.get(i), other = pdf.context.lookup(otherRef);
-          if (!(other instanceof PDFDict) || otherRef.toString() === candidate.ref) continue;
+          if (!(other instanceof PDFDict)) continue;
+          if (otherRef.toString() === candidate.ref) {
+            if (++targetReferences > 1) throw new Error("여러 위치에서 공유하는 원본 주석은 변경할 수 없습니다.");
+            continue;
+          }
           if (["IRT","Parent","Popup"].some(key => other.get(n(key))?.toString() === candidate.ref))
             throw new Error("다른 주석과 연결된 원본 주석은 변경할 수 없습니다.");
         }
       }
+      if (targetReferences !== 1) throw new Error("원본 주석 참조를 확인할 수 없습니다.");
       if (action === "edit") {
         if (typeof newText !== "string" || !newText.trim() || newText.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(newText))
           throw new Error("주석 내용은 1~2000자이며 제어문자를 포함할 수 없습니다.");
