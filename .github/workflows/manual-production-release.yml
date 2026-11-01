@@ -7,8 +7,13 @@ on:
         required: true
         type: boolean
         default: false
+      validated_commit:
+        description: Exact main commit SHA whose full CI passed
+        required: true
+        type: string
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: sunrise-production-release
   cancel-in-progress: false
@@ -28,6 +33,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Verify exact release commit and successful full main CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VALIDATED_COMMIT: ${{ inputs.validated_commit }}
+        run: node scripts/check-release-ci-gate.cjs
       - name: Require production configuration
         shell: bash
         run: |
