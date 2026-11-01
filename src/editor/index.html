@@ -4149,7 +4149,7 @@
         }
         const cache = doc.outlineCache;
         let html = `
-          <div style="padding:6px;color:var(--text-muted);font-size:11px">북마크 이름·페이지 변경과 삭제는 PDF 저장 시 반영됩니다. 연쇄 동작은 페이지와 순번을 입력해 변경할 수 있습니다(예: 3,2). 다른 이동은 유지됩니다. 페이지는 전체 맞춤으로 엽니다. 상위 북마크를 삭제하면 하위 북마크도 함께 삭제됩니다.</div>
+          <div style="padding:6px;color:var(--text-muted);font-size:11px">북마크 이름·페이지·계층 변경과 삭제는 PDF 저장 시 반영됩니다. 새 북마크의 ←/→로 1~4단계를 조정할 수 있습니다. 연쇄 동작은 페이지와 순번을 입력해 변경할 수 있습니다(예: 3,2). 다른 이동은 유지됩니다. 페이지는 전체 맞춤으로 엽니다. 상위 북마크를 삭제하면 하위 북마크도 함께 삭제됩니다.</div>
           <div style="display:flex;gap:6px;margin-bottom:8px">
             <button type="button" class="compact-btn" id="bmAddNowBtn" style="flex:1"><i class="fa-solid fa-plus"></i> 현재 쪽 북마크</button>
             <button type="button" class="compact-btn" id="bmAutoGenBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> 전체 표시</button>
@@ -4164,9 +4164,12 @@
         if (cache.status === "ready" && !cache.rows.length && !doc.bookmarks.length)
           html += `<div style="padding:12px;color:var(--text-muted)">등록된 북마크가 없습니다.</div>`;
         doc.bookmarks.forEach((bm, idx) => {
-          html += `<div class="list-row-item" data-bm-idx="${idx}">
-            <span><i class="fa-solid fa-bookmark" style="color:var(--primary);margin-right:6px"></i>${escapeHtml(bm.title)} <small>${bm.page + 1}쪽</small></span>
-            <span><button type="button" class="compact-btn" data-bm-edit="${idx}" aria-label="북마크 이름 변경">이름</button>
+          const depth = Number.isInteger(bm.level) ? Math.max(0, Math.min(3, bm.level)) : 0;
+          html += `<div class="list-row-item" data-bm-idx="${idx}" style="padding-left:${depth * 12 + 8}px">
+            <span><i class="fa-solid fa-bookmark" style="color:var(--primary);margin-right:6px"></i>${escapeHtml(bm.title)} <small>${bm.page + 1}쪽 · ${depth + 1}단계</small></span>
+            <span><button type="button" class="compact-btn" data-bm-outdent="${idx}" aria-label="북마크 상위 단계로">←</button>
+            <button type="button" class="compact-btn" data-bm-indent="${idx}" aria-label="북마크 하위 단계로">→</button>
+            <button type="button" class="compact-btn" data-bm-edit="${idx}" aria-label="북마크 이름 변경">이름</button>
             <button type="button" class="compact-btn" data-bm-page="${idx}" aria-label="북마크 페이지 변경">쪽</button>
             <button type="button" class="compact-btn" data-bm-delete="${idx}" aria-label="북마크 삭제">삭제</button></span></div>`;
         });
@@ -4248,11 +4251,27 @@
           if (!title.trim()) { showToast("북마크 이름을 입력해 주세요.", "fa-circle-info"); return; }
           saveUndoSnapshot(doc, "북마크 이름 변경"); bm.title = title.trim(); renderLeftPane();
         }));
+        for (const [selector, direction] of [["[data-bm-outdent]", -1], ["[data-bm-indent]", 1]]) {
+          container.querySelectorAll(selector).forEach(button => button.addEventListener("click", event => {
+            event.stopPropagation();
+            const index = Number(direction < 0 ? button.dataset.bmOutdent : button.dataset.bmIndent);
+            if (!doc.bookmarks[index] || doc.operationBusy) return;
+            const changed = window.SunriseAutoBookmarks?.changeLevel(doc.bookmarks, index, direction);
+            if (!changed) {
+              showToast("이 위치에서는 더 이상 들여쓰거나 내어쓸 수 없습니다.", "fa-circle-info");
+              return;
+            }
+            saveUndoSnapshot(doc, "북마크 계층 변경");
+            doc.bookmarks = changed;
+            renderLeftPane();
+          }));
+        }
         container.querySelectorAll("[data-bm-delete]").forEach(button => button.addEventListener("click", event => {
           event.stopPropagation();
           const index = Number(button.dataset.bmDelete);
           if (!doc.bookmarks[index]) return;
-          saveUndoSnapshot(doc, "북마크 삭제"); doc.bookmarks.splice(index, 1); renderLeftPane();
+          saveUndoSnapshot(doc, "북마크 삭제"); doc.bookmarks.splice(index, 1);
+          doc.bookmarks = window.SunriseAutoBookmarks.normalizeLevels(doc.bookmarks); renderLeftPane();
         }));
         return;
       }
@@ -5546,7 +5565,7 @@
         });
       });
       doc.overlays = newOverlays;
-      doc.bookmarks = newBookmarks;
+      doc.bookmarks = window.SunriseAutoBookmarks?.normalizeLevels(newBookmarks) || newBookmarks;
     }
 
     function insertedPageMap(pageCount, insertAt, count) {
