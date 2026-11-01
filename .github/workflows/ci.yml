@@ -1,7 +1,10 @@
 name: Sunrise PDF Editor validation
 
 on:
+  workflow_dispatch:
   pull_request:
+    # Draft PRs are implementation checkpoints, not validation milestones.
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'src/**'
       - 'tests/**'
@@ -11,8 +14,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'wrangler.toml'
-      - 'docs/development-progress.json'
-      - 'docs/DEVELOPMENT_PROGRESS.md'
       - '.github/workflows/ci.yml'
   push:
     branches:
@@ -26,8 +27,6 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'wrangler.toml'
-      - 'docs/development-progress.json'
-      - 'docs/DEVELOPMENT_PROGRESS.md'
       - '.github/workflows/ci.yml'
 
 concurrency:
@@ -39,6 +38,7 @@ permissions:
 
 jobs:
   node-contracts:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Node contracts and production build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -63,6 +63,7 @@ jobs:
           test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"
 
   browser-chromium:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Real Chromium PDF save and reopen
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -99,6 +100,7 @@ jobs:
           test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"
 
   browser-windows:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     name: Windows administrator and PDF - ${{ matrix.browser }}
     runs-on: windows-2025
     timeout-minutes: 20
