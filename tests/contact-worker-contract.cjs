@@ -34,8 +34,15 @@ globalThis.crypto ||= webcrypto;
   res=await send(payload,{'origin':'https://attacker.example','content-type':'application/json'});assert.equal(res.status,403);
   res=await send(payload,{'origin':origin,'content-type':'text/plain'});assert.equal(res.status,415);
   res=await call('GET','/api/unlisted');assert.equal(res.status,404);
-  await worker.scheduled({},env);
-  assert(requests.some(x=>x.includes('DELETE FROM inquiries WHERE created_at')));
-  assert(requests.some(x=>x.includes('DELETE FROM inquiry_rate_limits WHERE day')));
+  const fixture=require('./helpers/d1-sqlite.cjs').createD1Fixture();
+  try{
+   const old='2020-01-01T00:00:00.000Z';
+   fixture.sqlite.prepare('INSERT INTO inquiries(category,email,message,created_at) VALUES(?,?,?,?)').run('기타','expired@example.test','만료 자료',old);
+   fixture.sqlite.prepare('INSERT INTO inquiry_rate_limits(key,last_sent_ms,daily_count,day) VALUES(?,0,1,?)').run('expired-key','2020-01-01');
+   await worker.scheduled({},{DB:fixture.db});
+   assert.equal(fixture.sqlite.prepare('SELECT COUNT(*) n FROM inquiries').get().n,0);
+   assert.equal(fixture.sqlite.prepare('SELECT COUNT(*) n FROM inquiry_rate_limits').get().n,0);
+   assert.equal(fixture.sqlite.prepare('SELECT state FROM admin_maintenance_status').get().state,'succeeded');
+  }finally{fixture.close()}
   console.log('PASS: public release feed, no inquiry listing, validated same-origin private D1 submissions, honeypot and retention cron');
 })().catch(error=>{console.error(error);process.exitCode=1});

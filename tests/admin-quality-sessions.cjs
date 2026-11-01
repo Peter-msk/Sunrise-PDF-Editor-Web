@@ -40,9 +40,9 @@ const {DatabaseSync}=require('node:sqlite');
  assert.equal(empty.sessions.total,0);assert.equal(empty.sessions.percent,null);
  assert.equal(empty.alerts.length,0);
  const html=fs.readFileSync('dist/admin/index.html','utf8');
+ require('./helpers/admin-alerts.cjs')(html);
  for(const name of ['qualityReload','qualitySessions','qualityAffected','qualityPercent','qualityOverdue','qualityTrend'])
   assert(html.includes('id="'+name+'"'));
- assert(html.includes("...new Set([...healthAlerts,...qualityAlerts,...operationAlerts])"),'duplicate alerts must be deduplicated');
  assert(html.includes('windowDays!==14'));
  assert(!html.includes('featureFailureRate'),'per-feature error rate without attempt denominator is forbidden');
  console.log('PASS: 14-day retained session quality, error warning, 48h inquiry alert, honest 0-session display and UI');

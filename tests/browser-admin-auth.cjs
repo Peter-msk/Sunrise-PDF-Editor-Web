@@ -12,7 +12,7 @@ const initial='synthetic-admin-password-very-long-2026',changed='completely-diff
 const mime={'.html':'text/html;charset=utf-8','.js':'text/javascript;charset=utf-8','.css':'text/css;charset=utf-8'};
 async function main(){
  const sqlite=new DatabaseSync(':memory:');
- for(const file of ['0001_inquiries_and_site_updates.sql','0002_admin_analytics.sql','0003_password_admin.sql','0004_publication_lifetime.sql'])
+ for(const file of fs.readdirSync(path.join(root,'migrations')).filter(name=>name.endsWith('.sql')).sort())
   sqlite.exec(fs.readFileSync(path.join(root,'migrations',file),'utf8'));
  const DB={prepare(sql){const stmt=sqlite.prepare(sql);
    return {args:[],bind(...items){this.args=items;return this},async first(){return stmt.get(...this.args)||null},
@@ -94,7 +94,7 @@ async function main(){
   await login(page,initial);
   sqlite.exec("INSERT INTO inquiries(id,category,email,message) VALUES(1,'기타','sample@local.invalid','synthetic')");
   const inquiryResult=await page.evaluate(async()=>{
-   const update=await fetch('/api/admin/inquiries/1',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'read',note:'검토'})});
+   const update=await fetch('/api/admin/inquiries/1',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:'read',note:'검토',revision:0})});
    const history=await fetch('/api/admin/inquiries/1/history');
    return {updated:update.status,history:history.status,items:(await history.json()).items};
   });
