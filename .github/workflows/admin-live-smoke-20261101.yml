@@ -1,0 +1,36 @@
+name: Cloudflare administrator live smoke
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/admin-live-smoke-20261101.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cloudflare-live:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify deployed public pages and administrator authorization barrier
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://sunrise-pdf-editor.ko-pg.workers.dev"
+          check() {
+            local path="$1" expected="$2"
+            local code
+            code="$(curl -sS --max-time 20 --retry 2 --retry-delay 1 -o /tmp/sunrise-response -w '%{http_code}' "$BASE$path")"
+            printf '%s %s expected=%s\n' "$path" "$code" "$expected"
+            printf '| %s | %s | %s |\n' "$path" "$code" "$expected" >> "$GITHUB_STEP_SUMMARY"
+            test "$code" = "$expected"
+          }
+          echo '| Path | HTTP | Expected |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|---|---|---|' >> "$GITHUB_STEP_SUMMARY"
+          check "/" 200
+          check "/editor/" 200
+          check "/admin/" 302
+          check "/admin/login/" 200
+          check "/admin/password/" 302
+          check "/api/admin/overview" 401
+          check "/api/site-updates" 200
+          check "/assets/sunrise-admin-password.js" 200
+          check "/api/unknown-admin-smoke" 404
