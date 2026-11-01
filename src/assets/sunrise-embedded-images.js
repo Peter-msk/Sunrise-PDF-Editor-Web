@@ -64,7 +64,7 @@
     return new Uint8Array(await blob.arrayBuffer());
   }
   async function extract(reader,options){
-    const opt=options||{},ops=opt.OPS,kind=opt.ImageKind;
+    const opt=options||{},ops=opt.OPS,kind=opt.ImageKind||{GRAYSCALE_1BPP:1,RGB_24BPP:2,RGBA_32BPP:3};
     if(!reader?.getPage||!Number.isInteger(reader.numPages)||reader.numPages<1||!ops||!kind||
       typeof opt.onImage!=='function')throw Error('PDF 이미지 추출 입력이 올바르지 않습니다.');
     const makeCanvas=opt.createCanvas||((w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;});
