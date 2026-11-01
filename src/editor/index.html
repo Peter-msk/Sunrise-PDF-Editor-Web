@@ -8557,11 +8557,11 @@
       if (!doc || doc.operationBusy || doc.commentReportBusy) return false;
       doc.commentReportBusy=true;
       const originalBytes=doc.bytes, originalReader=doc.pdfJsDoc;
-      const captured=captureSaveState(doc,false);
-      const overlayState=JSON.stringify(doc.overlays);
-      const isCurrent=()=>doc.bytes===originalBytes && doc.pdfJsDoc===originalReader &&
-        activeDoc()===doc && saveStateIsCurrent(doc,captured);
       try {
+        const captured=captureSaveState(doc,false);
+        const overlayState=JSON.stringify(doc.overlays);
+        const isCurrent=()=>doc.bytes===originalBytes && doc.pdfJsDoc===originalReader &&
+          activeDoc()===doc && saveStateIsCurrent(doc,captured);
         if (!window.PDFLib || !window.SunriseCommentReport?.createCsv)
           throw new Error("검토 의견표 생성 구성요소가 없습니다.");
         const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
