@@ -39,6 +39,21 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   await assert.rejects(protect.protectPdfFile({inputPath:original,outputPath:original,password,qpdf:mock}),/다른/);
   await assert.rejects(protect.protectPdfFile({inputPath:original,outputPath:target,password:'tiny',qpdf:mock}),/12~200/);
   await assert.rejects(protect.protectPdfFile({inputPath:original,outputPath:target,password,qpdf:async()=>({code:0,stdout:'qpdf version 10.9.0'})}),/11.7/);
+  const signedPath=path.join(tmp,'signed-source.pdf');
+  const signedPdf=await PDFLib.PDFDocument.create();
+  signedPdf.addPage([400,600]);
+  signedPdf.catalog.set(PDFLib.PDFName.of('Perms'),signedPdf.context.obj({DocMDP: signedPdf.context.obj({Type:'Sig'})}));
+  await fs.writeFile(signedPath,Buffer.from(await signedPdf.save()));
+  await assert.rejects(
+    protect.protectPdfFile({inputPath:signedPath,outputPath:target,password,qpdf:mock}),
+    /전자서명/,'Signed/certified input must not be rewritten'
+  );
+  const unknownPath=path.join(tmp,'unknown.pdf');
+  await fs.writeFile(unknownPath,Buffer.from('%PDF-1.7\n%%EOF\n'));
+  await assert.rejects(
+    protect.protectPdfFile({inputPath:unknownPath,outputPath:target,password,qpdf:mock}),
+    /확인할 수 없는|올바르지/,'Unreadable PDF must fail before output'
+  );
   state='failEncryption';
   await assert.rejects(protect.protectPdfFile({inputPath:original,outputPath:target,password,qpdf:mock}),/암호화 엔진/);
   await assert.rejects(fs.stat(target),{code:'ENOENT'});
@@ -60,6 +75,6 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   state='failCorrectPassword';
   await assert.rejects(protect.protectPdfFile({inputPath:original,outputPath:failedOutput,password,qpdf:mock}),/검증에 실패/);
   await assert.rejects(fs.stat(failedOutput),{code:'ENOENT'});
-  console.log('PASS: secure qpdf local password argument transport, atomic output, no overwrite, bounds and failure cleanup');
+  console.log('PASS: signed/unreadable PDF rejection, secure qpdf stdin password transport, atomic output, no overwrite and cleanup');
  }finally{await fs.rm(tmp,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1});
