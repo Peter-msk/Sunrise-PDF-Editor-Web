@@ -9,7 +9,7 @@
 - 소스: PR #9 / PR #10 및 feat/admin-fast-development-20261101. 과거 검사는 신규 변경의 통과 증거가 아닙니다.
 - 관리자 소스 구현률: **100%**. 아래 종합 점수는 검증·운영 반영을 포함하며 소스 작성률과 다릅니다.
 
-- 관리자 소스 단계: 작성 마감 후보본. 최신 실행 검증은 ADMIN_VALIDATION_REPORT.md, 범위는 ADMIN_SOURCE_CLOSEOUT.md를 참조합니다. 운영 수용은 별도입니다.
+- 관리자 소스 단계: 작성 마감 후보본. 최신 실행 검증은 ADMIN_VALIDATION_REPORT.md, 범위는 ADMIN_SOURCE_CLOSEOUT.md를 참조합니다. 관리자 Cloudflare 배포는 완료됐지만 인증 후 전 기능 운영 수용은 별도입니다.
 
 ## 단계별
 
@@ -18,7 +18,7 @@
 | 1. 관리자 운영 기능 | 100% | 84% | 14 |
 | 2. 사무 핵심 기능 | 80% | 62% | 7 |
 | 3. 편집 품질·자동화 | 73% | 56% | 7 |
-| 4. 전문 PDF 기능 | 23% | 28% | 5 |
+| 4. 전문 PDF 기능 | 30% | 33% | 5 |
 | 5. 코드·언어·성능 고도화 | 40% | 31% | 1 |
 | 6. 전체 통합 안정화 | 32% | 51% | 1 |
 | 7. 최종 배포·운영 인계 | 0% | 0% | 1 |
@@ -35,8 +35,8 @@
 | ADM-05 | 문의 관리 | 100% | 90% | SQLite 검색/페이지/이력/충돌과 Linux/Windows Chrome/Edge 문의 흐름 및 실제 인증 API 쓰기 통과. 실제 운영 D1 수용 미완 |
 | ADM-06 | 공지사항 관리 | 100% | 86% | SQLite 전체 검색/이전 기록/충돌/7일 수명 및 Linux/Windows Chrome/Edge 공지 흐름 통과. 운영 공개 피드 수용 미완 |
 | ADM-07 | 업데이트 관리 | 100% | 86% | SQLite 검색/이전 기록/수정 보호와 Linux/Windows Chrome/Edge 업데이트 흐름 통과. 실제 배포 내용 대조/운영 반영 미완 |
-| ADM-08 | 서비스 상태 | 100% | 86% | Linux/Windows 상태·버전·장애/복구 표시와 운영 D1 구조/Worker 바인딩 이름·종류 읽기 확인. 실제 운영 새 스키마/배포는 미적용 |
-| ADM-09 | 배포·버전 | 100% | 78% | 합성 서명 보고의 변조/시각/중복·역순/권한/DB 실패 검사 및 Linux/Windows 버전 표시 통과. 운영 배포 비밀값/버전 바인딩 미연결 확인 |
+| ADM-08 | 서비스 상태 | 100% | 91% | 관리자 운영 Cloudflare Worker/D1 배포(2026-11-01) 및 관리자 비로그인 상태 9개 HTTP 스모크 PASS. 관리자 인증 후 상태 대시보드 실제 업무 확인·CF_VERSION_METADATA 바인딩 미완 |
+| ADM-09 | 배포·버전 | 100% | 81% | 운영 Cloudflare 배포 버전 ID 확인, GitHub main 관리자 릴리스 및 외부 HTTP 스모크 PASS. GitHub production 배포 자격/DEPLOYMENT_EVENT_SECRET/CF_VERSION_METADATA 비밀값 미연결, 운영 배포 이력 자동 서명 보고 미검증 |
 | ADM-10 | 보존·백업 | 100% | 83% | Linux/Windows 합성 Wrangler 프로세스 및 실제 Python SQLite 백업/격리 복원 통과. 실제 D1 원격 백업·복원/새 스키마 적용은 미실시 |
 | ADM-11 | 계정 보안 | 100% | 92% | Linux/Windows Chrome/Edge HTTPS 등록·로그인·쿠키·비밀번호 변경·세션 폐기 통과. 실제 업무 PC/운영 도메인 수용 미완 |
 | ADM-12 | 이용 품질 | 100% | 80% | 결과/재시도/버전 API와 Linux/Windows 품질 화면 통과. 실제 PC 저장 완료 계측과 구분하며 운영 수용 미완 |
@@ -62,10 +62,10 @@
 | USR-17 | 이미지·텍스트 추출 | 82% | 64% | 텍스트/페이지 PNG/내장 RGB 래스터 PNG 추출. 실제 2x2 RGB 이미지 내장 PDF에서 Linux Chromium·Windows Chrome/Edge로 PNG 파일 다운로드 및 헤더 확인. 복잡한 색공간·마스크·원본 JPEG 바이트 미지원, 실무 PDF 품질 검증 미완 |
 | USR-19 | 모바일 UX | 50% | 33% | 일부 반응형 UI, 실제 모바일 파일/터치 검증 부족 |
 | USR-05 | 원문 직접 수정 | 15% | 26% | PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완 |
-| USR-13 | 민감정보 완전 삭제 | 25% | 34% | 현재 쪽 한 장에 불투명 검정 좌표 마스크→새 래스터 PDF 생성, 기존 텍스트·주석·첨부·양식·북마크 데이터 비이식 및 다운로드·화소 검사 PASS. 영역 밖 내용 노출, 전체 문서 완전 삭제는 미지원; 민감정보 완전 삭제 인증·출시 판정 불가 |
+| USR-13 | 민감정보 완전 삭제 | 50% | 51% | 최대 12쪽·36개 검정 영역 좌상단 좌표 입력→선택 페이지들만 새 래스터 PDF 생성. 페이지/좌표/총 48MP/50MiB 제한·취소·정렬, Node/Chromium/Windows Chrome·Edge 디스크 출력·본문 텍스트 미복사 검사 PASS. 영역 밖 개인정보 노출·전 문서 완전 비식별화/인증 보장 불가, 사용자 검토 및 출시 미완 |
 | USR-14 | PDF 암호 보호 | 5% | 2% | 암호 및 권한 호환 검증 미완 |
 | USR-15 | 전자서명 | 30% | 36% | 시각 서명 표시 삽입·편집·Undo·PDF 저장/복원, 원문에 전자서명·인증서 서명 아님 고정 문구 및 Chrome·Edge·Chromium 자동검사. 인증서 개인키/전자서명 유효성 검증 기능 없음; 법적 디지털 서명 완료 기능 아님 |
-| USR-16 | Word·Excel 변환 | 40% | 42% | PDF 텍스트 레이어에서 Word DOCX(단락·페이지 구분) 및 Excel XLSX(페이지/텍스트 2열) 변환 구현. OpenXML ZIP CRC32·Unicode 계약, Chromium·Windows Chrome/Edge 실제 다운로드 테스트 PASS. 원본의 표 구조·이미지·서식 재구성/스캔 OCR 미지원, 실무 Office 앱에서 수동 검증·운영 배포 미완 |
+| USR-16 | Word·Excel 변환 | 50% | 51% | PDF.js 실제 text item EOL/문자 기준선 변화를 반영해 DOCX 문단 및 XLSX 행 구분 개선, 32,767자 Excel 셀 초과 시 조용한 잘림 대신 중단. Node·Chromium·Windows Chrome/Edge 회귀 PASS. PDF 표 구조/레이아웃 완벽 재현·이미지 OCR·실제 Office 앱 수용·운영 배포 미완 |
 
 ## 공통 고도화·검증·배포
 
