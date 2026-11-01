@@ -3756,6 +3756,13 @@
           el.style.transform = `rotate(${itemRotation}deg) translate(50%, 50%) rotate(-24deg) translate(-50%, -50%)`;
           el.style.letterSpacing = "2px";
           el.textContent = item.text;
+        } else if (item.type === "VisualSignature") {
+          el.style.border = "2px solid " + (item.color || "#194C78");
+          el.style.borderRadius = "3px";
+          el.style.fontWeight = "600";
+          el.style.padding = "5px";
+          el.style.whiteSpace = "pre-wrap";
+          el.textContent = String(item.text || "") + "\n[전자서명·인증서 서명 아님]";
         } else if (item.type === "Stamp") {
           el.style.border = `2px solid ${item.color || "#1F6F9F"}`;
           el.style.fontWeight = "700";
@@ -4786,7 +4793,9 @@
         const offCanvas = document.createElement("canvas");
         const octx = offCanvas.getContext("2d");
         const fontSize = item.fontSize || 13;
-        const rawText = item.type === "Note" ? `💬 ${item.text || ""}` : String(item.text || "");
+        const rawText = item.type === "Note" ? `💬 ${item.text || ""}` :
+          item.type === "VisualSignature" ? String(item.text || "") + "\n[전자서명·인증서 서명 아님]" :
+          String(item.text || "");
         const lines = rawText.split(/\r?\n/);
 
         octx.font = `bold ${fontSize}px "Inter", "Noto Sans KR", "Malgun Gothic", sans-serif`;
@@ -4824,7 +4833,7 @@
           else {octx.moveTo(stroke/2,stroke/2);octx.lineTo(w-stroke/2,h-stroke/2);}
           if (kind !== "line") octx.fill();
           octx.stroke();
-        } else if (item.type === "Stamp") {
+        } else if (item.type === "VisualSignature" || item.type === "Stamp") {
           octx.strokeStyle = item.color || "#1F6F9F";
           octx.lineWidth = 2;
           octx.strokeRect(1.5, 1.5, w - 3, h - 3);
