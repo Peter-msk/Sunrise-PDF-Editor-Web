@@ -308,6 +308,56 @@ async function main(){
    assert.equal(rasterEvidence.text,'','raster export must not copy original searchable text');
    assert(rasterEvidence.mask.slice(0,3).every(x=>x<10),'mask region must be black in actual PDF pixels');
    await page.locator('#maskExportClose').click();
+
+   // USR-13: multi-rectangle, multi-page output must contain raster pixels only.
+   const multiSource=await PDFLib.PDFDocument.create();
+   multiSource.addPage([400,600]).drawText('Private One 123',{x:80,y:480,size:15});
+   multiSource.addPage([400,600]).drawText('Private Two 456',{x:80,y:480,size:15});
+   await page.locator('#openPdfInput').setInputFiles({
+     name:'privacy-multipage.pdf',mimeType:'application/pdf',
+     buffer:Buffer.from(await multiSource.save())
+   });
+   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('privacy-multipage.pdf'),
+     null,{timeout:40000});
+   await page.evaluate(()=>executeCommand('maskedMultiExport'));
+   await page.locator('#multiMaskRegions').waitFor({state:'visible'});
+   await page.locator('#multiMaskRegions').fill('1,70,100,180,40\n1,210,180,40,35\n2,70,100,180,40');
+   await page.locator('#multiMaskConfirm').check();
+   const multiDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#multiMaskGo').click();
+   const multiEvent=await multiDownload;
+   assert(multiEvent.suggestedFilename().endsWith('_masked_selected_pages.pdf'));
+   const multiPath=path.join(downloadDir,'privacy-multipage-masked.pdf');
+   await multiEvent.saveAs(multiPath);
+   const multiDisk=fs.readFileSync(multiPath);
+   const multiPdf=await PDFLib.PDFDocument.load(multiDisk);
+   assert.equal(multiPdf.getPageCount(),2);
+   for(const name of ['AcroForm','Outlines','Names','Perms','SunriseWebEdits'])
+     assert.equal(multiPdf.catalog.get(PDFLib.PDFName.of(name)),undefined);
+   const multiRaster=await page.evaluate(async b64=>{
+     const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+     const pdf=await window.pdfjsLib.getDocument({data:bytes}).promise;
+     const result=[];
+     try{
+       for(let i=1;i<=pdf.numPages;i++){
+         const pdfPage=await pdf.getPage(i),content=await pdfPage.getTextContent();
+         const viewport=pdfPage.getViewport({scale:1});
+         const canvas=globalThis.document.createElement('canvas');
+         canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+         const ctx=canvas.getContext('2d');
+         await pdfPage.render({canvas,canvasContext:ctx,viewport}).promise;
+         result.push({text:content.items.map(x=>x.str).join(''),
+           masked:[...ctx.getImageData(80,115,1,1).data]});
+       }
+       return result;
+     }finally{await pdf.destroy()}
+   },multiDisk.toString('base64'));
+   assert.equal(multiRaster.length,2);
+   assert(multiRaster.every(x=>x.text===''),'no hidden searchable source text');
+   assert(multiRaster.every(x=>x.masked.slice(0,3).every(value=>value<10)),
+     'every selected PDF page must contain black raster masks');
+   await page.locator('#multiMaskClose').click();
+
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
    console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, masked raster export, embedded PNG, quality reports and range split');
    await context.close();
