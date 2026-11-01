@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "PR #16: USR-05 원문 보존 시각 교정·USR-13 현재 쪽 단일 마스킹 래스터 PDF·USR-15 인증서 없는 시각 서명, Node 계약 및 Linux Chromium/Windows Chrome·Edge 실제 PDF 저장·재열기 검사 수행. 개인정보 완전 삭제/진정한 원문 직접 수정/암호학적 전자서명은 미구현이며 점수는 제한된 기능의 개발 증거만 반영. 실무 문서 수동 수용·운영 배포/D1 변경·OCR 미실시.",
+  "basis": "관리자 전용 PR #17은 운영 main에 반영됐으나 Cloudflare 운영 D1 스키마/배포 보고 비밀값 준비 미충족으로 실제 운영 배포는 보류. PDF 사용자 개발 PR #18의 DOCX/XLSX 텍스트 변환은 Node·Linux Chromium·Windows Chrome/Edge 실제 파일 다운로드 계약 통과. 원본 Word/Excel 레이아웃 복원/인증서서명/완전삭제 미구현, OCR 제외.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 5,
-      "automated": 0,
-      "practical": 0,
+      "implementation": 40,
+      "automated": 75,
+      "practical": 15,
       "deployment": 0,
-      "note": "서식·한글 변환 정확도 검증 미완"
+      "note": "PDF 텍스트 레이어에서 Word DOCX(단락·페이지 구분) 및 Excel XLSX(페이지/텍스트 2열) 변환 구현. OpenXML ZIP CRC32·Unicode 계약, Chromium·Windows Chrome/Edge 실제 다운로드 테스트 PASS. 원본의 표 구조·이미지·서식 재구성/스캔 OCR 미지원, 실무 Office 앱에서 수동 검증·운영 배포 미완"
     },
     {
       "id": "TECH-01",
