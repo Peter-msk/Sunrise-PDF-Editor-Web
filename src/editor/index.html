@@ -4362,11 +4362,12 @@
         let html = `
           <div style="display:flex;gap:6px;margin-bottom:8px">
             <button type="button" class="compact-btn" id="cmAddNoteBtn" style="flex:1"><i class="fa-solid fa-comment-medical"></i> 주석 추가</button>
+            <button type="button" class="compact-btn" id="cmNativeManageBtn" title="원본 PDF의 메모·형광펜 목록"><i class="fa-solid fa-comments"></i> 원본 주석</button>
             <button type="button" class="compact-btn" id="cmExportCsvBtn"><i class="fa-solid fa-file-csv"></i> CSV 저장</button>
           </div>
         `;
         if (doc.overlays.length === 0) {
-          html += `<div style="padding:12px;color:var(--text-muted)">현재 문서에 삽입된 주석·항목이 없습니다.</div>`;
+          html += `<div style="padding:12px;color:var(--text-muted)">Sunrise에서 삽입한 항목이 없습니다. 위 [원본 주석]에서 기존 PDF의 메모·형광펜을 확인하세요.</div>`;
         } else {
           doc.overlays.forEach((ov) => {
             html += `
@@ -4381,6 +4382,7 @@
         }
         container.innerHTML = html;
         document.getElementById("cmAddNoteBtn")?.addEventListener("click", () => executeCommand("insertNote"));
+        document.getElementById("cmNativeManageBtn")?.addEventListener("click", () => openNativeAnnotationsModal(doc));
         document.getElementById("cmExportCsvBtn")?.addEventListener("click", () => exportOverlaysToCsv(doc));
         container.querySelectorAll("[data-ov-edit]").forEach(button => {
           button.addEventListener("click", event => {
@@ -8488,18 +8490,9 @@
         if (!window.PDFLib || !window.SunriseCommentReport?.createCsv)
           throw new Error("검토 의견표 생성 구성요소가 없습니다.");
         const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
-        const native=[];
-        for(let pageIndex=0;pageIndex<pdf.getPageCount();pageIndex++) {
-          for(const item of listNativeAnnotations(pdf,pageIndex)) {
-            native.push({...item,pageIndex});
-            if(native.length>2000)throw new Error("원본 PDF 주석이 2000건을 초과하여 일괄 추출할 수 없습니다.");
-          }
-          // Yield periodically so the UI can still respond on large documents.
-          if(pageIndex%24===23)await new Promise(resolve=>setTimeout(resolve,0));
-          if(doc.bytes!==originalBytes || doc.pdfJsDoc!==originalReader || activeDoc()!==doc ||
-            JSON.stringify(doc.overlays)!==overlayState)
-            throw new Error("보고서 작성 중 문서가 변경되었습니다. 다시 생성해 주세요.");
-        }
+        const native=await collectNativeAnnotations(pdf,()=>doc.bytes===originalBytes &&
+          doc.pdfJsDoc===originalReader && activeDoc()===doc &&
+          JSON.stringify(doc.overlays)===overlayState);
         const overlays=JSON.parse(overlayState);
         const csv=window.SunriseCommentReport.createCsv(overlays,native);
         if(doc.bytes!==originalBytes || doc.pdfJsDoc!==originalReader || activeDoc()!==doc ||
@@ -8629,76 +8622,149 @@
       return {subtype:candidate.subtype,action};
     }
 
+    // Index the supported original annotations once for both management and CSV.
+    // Keep the scope bounded so malformed PDFs cannot stall the editor indefinitely.
+    async function collectNativeAnnotations(pdf, isCurrent=()=>true) {
+      if (!pdf || !Number.isSafeInteger(pdf.getPageCount()) ||
+          pdf.getPageCount() < 1 || pdf.getPageCount() > 2000)
+        throw new Error("전체 주석 조회는 1~2000쪽 PDF에서 지원합니다.");
+      const results = [];
+      for (let pageIndex=0;pageIndex<pdf.getPageCount();pageIndex++) {
+        for (const item of listNativeAnnotations(pdf,pageIndex)) {
+          results.push({...item,pageIndex});
+          if(results.length>2000)throw new Error("지원 가능한 원본 주석이 2000건을 초과했습니다.");
+        }
+        if(pageIndex%24===23) await new Promise(resolve=>setTimeout(resolve,0));
+        if(!isCurrent()) throw new Error("조회 중 문서가 변경되어 작업을 취소했습니다.");
+      }
+      return results;
+    }
+
     async function openNativeAnnotationsModal(doc) {
-      if (doc.operationBusy) return;
-      const originalBytes = doc.bytes, originalReader = doc.pdfJsDoc, pageIndex = doc.currentPage;
+      if (!doc || doc.operationBusy) return;
+      const originalBytes=doc.bytes, originalReader=doc.pdfJsDoc;
+      const captured=captureSaveState(doc);
+      const isCurrent=()=>activeDoc()===doc && doc.bytes===originalBytes &&
+        doc.pdfJsDoc===originalReader && saveStateIsCurrent(doc,captured);
       let annotations;
       try {
-        const pdf = await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
+        const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
         nativeAnnotationGuard(pdf,originalBytes);
-        annotations = listNativeAnnotations(pdf,pageIndex);
-      } catch(error) {showToast("원본 주석 조회 실패: " + error.message,"fa-triangle-exclamation");return;}
-      if (activeDoc() !== doc || doc.bytes !== originalBytes || doc.pdfJsDoc !== originalReader ||
-          doc.currentPage !== pageIndex) return;
-      const options = annotations.map(a => '<option value="' + a.index + '">' +
-        (a.index+1) + '번 · ' + (a.subtype === "Highlight" ? "형광펜" : "메모") +
-        ' · ' + escapeHtml(a.text.slice(0,48)) + '</option>').join("");
+        annotations=await collectNativeAnnotations(pdf,isCurrent);
+      }catch(error){
+        showToast("원본 주석 조회 실패: "+(error.message||error),"fa-triangle-exclamation");
+        return;
+      }
+      if(!isCurrent())return;
+      const total=annotations.length;
       openModal({
-        title:"원본 PDF 주석 관리 (현재 쪽)",icon:"fa-comments",width:"570px",
-        bodyHtml:'<p style="font-size:12px">현재 ' + (pageIndex+1) + '쪽의 단순 메모(Text)·형광펜(Highlight) 주석만 수정/삭제합니다. 원본 PDF는 유지되며 별도 저장이 필요합니다.</p>' +
-          (annotations.length ? '<label for="nativeAnnotationSelect">주석 선택</label><select id="nativeAnnotationSelect" class="dialog-select" style="width:100%">' + options + '</select>' +
-          '<label for="nativeAnnotationText" style="display:block;margin-top:10px">주석 문구 (강조 영역·색상은 변경하지 않음)</label>' +
-          '<textarea id="nativeAnnotationText" class="dialog-input" rows="4" maxlength="2000" style="width:100%"></textarea>' :
-          '<p>현재 쪽에서 지원되는 원본 PDF 주석이 없습니다. 연결 주석·서명·양식이 있는 문서는 안전을 위해 제외합니다.</p>') +
-          '<p id="nativeAnnotationStatus" role="status" aria-live="polite" style="font-size:12px">삭제는 화면의 주석 참조 제거이며 개인정보의 완전 삭제를 의미하지 않습니다.</p>',
+        title:"원본 PDF 주석 관리 (전체 문서)", icon:"fa-comments", width:"620px",
+        bodyHtml:'<p style="font-size:12px">PDF 전체 페이지의 표준 메모(Text)·형광펜(Highlight) 주석을 찾아 문구를 수정하거나 페이지 참조를 삭제합니다. 원본 파일은 유지되며 PDF를 별도 저장해야 합니다.</p>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">' +
+          '<input type="search" id="nativeAnnotationSearch" class="dialog-input" placeholder="내용 또는 페이지 번호 검색" maxlength="120" style="flex:1;min-width:150px" aria-label="원본 주석 검색">' +
+          '<select id="nativeAnnotationType" class="dialog-select" aria-label="원본 주석 종류">' +
+          '<option value="all">전체 유형</option><option value="Text">메모</option><option value="Highlight">형광펜</option></select></div>' +
+          '<div id="nativeAnnotationCount" role="status" aria-live="polite" style="font-size:12px;margin-bottom:6px"></div>' +
+          '<label for="nativeAnnotationSelect">원본 PDF 주석 선택</label>' +
+          '<select id="nativeAnnotationSelect" class="dialog-select" size="7" style="width:100%;max-height:190px;margin-top:5px" aria-label="원본 PDF 주석 목록"></select>' +
+          '<label for="nativeAnnotationText" style="display:block;margin-top:10px">선택 주석의 문구 (형광펜 영역·색상은 변경하지 않음)</label>' +
+          '<textarea id="nativeAnnotationText" class="dialog-input" rows="4" maxlength="2000" style="width:100%"></textarea>' +
+          '<p id="nativeAnnotationStatus" role="status" aria-live="polite" style="font-size:12px">총 '+total+'건 조회. 서명·양식·연결 주석은 안전상 제외하며, 주석 삭제는 민감정보 완전 삭제가 아닙니다.</p>',
         footerHtml:'<div></div><div class="modal-footer-right">' +
-          (annotations.length ? '<button type="button" class="dialog-btn primary" id="nativeAnnotationEdit">문구 수정</button>' +
-            '<button type="button" class="dialog-btn" id="nativeAnnotationDelete">주석 삭제</button>' : '') +
+          '<button type="button" class="dialog-btn" id="nativeAnnotationJump">선택 쪽으로 이동</button>' +
+          '<button type="button" class="dialog-btn primary" id="nativeAnnotationEdit">문구 수정</button>' +
+          '<button type="button" class="dialog-btn" id="nativeAnnotationDelete">주석 삭제</button>' +
           '<button type="button" class="dialog-btn" id="nativeAnnotationClose">닫기</button></div>',
-        onMount:() => {
-          document.getElementById("nativeAnnotationClose").addEventListener("click",closeModal);
-          if (!annotations.length) return;
-          const select = document.getElementById("nativeAnnotationSelect");
-          const textInput = document.getElementById("nativeAnnotationText");
-          const status = document.getElementById("nativeAnnotationStatus");
-          const edit = document.getElementById("nativeAnnotationEdit");
-          const remove = document.getElementById("nativeAnnotationDelete");
-          const updateSelection = () => {
-            const item=annotations.find(a=>a.index===Number(select.value));
-            textInput.value=item?.text || "";
+        onMount:()=>{
+          const get=id=>document.getElementById(id);
+          const select=get("nativeAnnotationSelect"), search=get("nativeAnnotationSearch"),
+            type=get("nativeAnnotationType"), textInput=get("nativeAnnotationText"),
+            count=get("nativeAnnotationCount"), status=get("nativeAnnotationStatus"),
+            edit=get("nativeAnnotationEdit"), remove=get("nativeAnnotationDelete"),
+            jump=get("nativeAnnotationJump");
+          get("nativeAnnotationClose").addEventListener("click",closeModal);
+          const current=()=>{
+            const key=select.value;
+            return annotations.find(item=>item.pageIndex+":"+item.index===key);
           };
-          select.addEventListener("change",updateSelection);updateSelection();
-          const run = async action => {
-            if (doc.operationBusy || activeDoc() !== doc || doc.bytes !== originalBytes ||
-                doc.pdfJsDoc !== originalReader || doc.currentPage !== pageIndex) {
-              status.textContent="문서 또는 페이지가 변경되어 다시 열어야 합니다.";return;
+          const refreshSelection=()=>{
+            const item=current();
+            textInput.value=item?.text||"";
+            textInput.disabled=!item;
+            edit.disabled=!item;remove.disabled=!item;jump.disabled=!item;
+          };
+          const refreshList=()=>{
+            const previous=select.value, query=search.value.trim().toLocaleLowerCase("ko-KR");
+            const kind=type.value;
+            const matching=annotations.filter(item=>(kind==="all"||item.subtype===kind) &&
+              (!query || item.text.toLocaleLowerCase("ko-KR").includes(query) ||
+                String(item.pageIndex+1).includes(query)));
+            select.innerHTML=matching.map(item=>'<option value="'+item.pageIndex+':'+item.index+'">' +
+              (item.pageIndex+1)+'쪽 · '+(item.subtype==="Text"?"메모":"형광펜")+
+              ' · '+escapeHtml(item.text.slice(0,100)||"(내용 없음)")+'</option>').join("");
+            const stillVisible=matching.some(item=>item.pageIndex+":"+item.index===previous);
+            if(stillVisible)select.value=previous;
+            else if(matching.length)select.selectedIndex=0;
+            count.textContent="전체 "+total+"건 · 검색 결과 "+matching.length+"건";
+            refreshSelection();
+          };
+          search.addEventListener("input",refreshList);
+          type.addEventListener("change",refreshList);
+          select.addEventListener("change",refreshSelection);
+          refreshList();
+          jump.addEventListener("click",async()=>{
+            const item=current();
+            if(!item||doc.operationBusy||!isCurrent()){
+              status.textContent="문서가 변경되었습니다. 주석 목록을 다시 열어주세요.";return;
             }
-            if (action === "delete" &&
-                !window.confirm("선택한 원본 주석의 화면 참조를 삭제할까요? 개인정보 완전 삭제는 아닙니다.")) return;
-            doc.operationBusy=true;edit.disabled=true;remove.disabled=true;
-            const finish=beginOperationMetric("native_annotation_edit");let outcome="failed";
-            let info;
-            try {
+            doc.currentPage=item.pageIndex;
+            doc.selectedPages=new Set([item.pageIndex]);
+            closeModal();
+            await refreshAllViews();
+            showToast((item.pageIndex+1)+"쪽 원본 주석으로 이동했습니다.","fa-location-dot");
+          });
+          const run=async action=>{
+            const item=current();
+            if(!item||doc.operationBusy||!isCurrent()){
+              status.textContent="문서 또는 주석이 변경되어 다시 열어야 합니다.";return;
+            }
+            if(action==="delete"&&!window.confirm(
+              (item.pageIndex+1)+"쪽 원본 주석을 화면에서 삭제할까요? 개인정보의 완전 삭제는 아닙니다."))return;
+            doc.operationBusy=true;
+            edit.disabled=true;remove.disabled=true;jump.disabled=true;
+            search.disabled=true;type.disabled=true;select.disabled=true;
+            const finish=beginOperationMetric("native_annotation_edit");
+            let outcome="failed",info;
+            try{
               const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
-              updateNativeAnnotation(pdf,originalBytes,pageIndex,Number(select.value),action,textInput.value);
+              const fresh=listNativeAnnotations(pdf,item.pageIndex).find(a=>a.index===item.index && a.ref===item.ref);
+              if(!fresh)throw new Error("주석 참조가 변경되어 작업을 중단했습니다.");
+              updateNativeAnnotation(pdf,originalBytes,item.pageIndex,item.index,action,textInput.value);
               const next=await pdf.save({updateFieldAppearances:false});
               await verifySavedPdfBytes(originalBytes,next);
               info=await parsePageCountAndMeta(next);
-              if (activeDoc() !== doc || doc.bytes !== originalBytes || doc.pdfJsDoc !== originalReader ||
-                  doc.currentPage !== pageIndex) {
-                await info.pdfJsDoc.destroy();info=null;outcome="cancelled";
-                throw new Error("편집 중 문서가 변경되어 작업을 취소했습니다.");
+              if(!isCurrent()){
+                outcome="cancelled";
+                throw new Error("수정 중 문서 상태가 변경되었습니다.");
               }
-              saveUndoSnapshot(doc,action === "edit" ? "원본 주석 문구 수정" : "원본 주석 삭제");
-              doc.bytes=next;
-              await reloadDocPdfJs(doc,{info,selection:[pageIndex]});info=null;
-              closeModal();await refreshAllViews();
-              showToast("원본 주석 변경을 적용했습니다. 다른 이름으로 PDF 저장하세요.","fa-comments");
+              saveUndoSnapshot(doc,action==="edit"?"원본 주석 문구 수정":"원본 주석 삭제");
+              doc.bytes=next;doc.currentPage=item.pageIndex;
+              await reloadDocPdfJs(doc,{info,selection:[item.pageIndex]});info=null;
+              closeModal();
+              await refreshAllViews();
+              showToast((item.pageIndex+1)+"쪽 원본 주석 변경 완료. PDF로 별도 저장하세요.","fa-comments");
               outcome="succeeded";
-            } catch(error) {
+            }catch(error){
               status.textContent="주석 변경 실패: "+(error.message||error);
-              if(info) await info.pdfJsDoc.destroy();
-            } finally {finish(outcome);doc.operationBusy=false;edit.disabled=false;remove.disabled=false;}
+              if(info)await info.pdfJsDoc.destroy();
+            }finally{
+              finish(outcome);
+              doc.operationBusy=false;
+              edit.disabled=false;remove.disabled=false;jump.disabled=false;
+              search.disabled=false;type.disabled=false;select.disabled=false;
+              updateCommandStates();
+              if(outcome!=="succeeded")refreshSelection();
+            }
           };
           edit.addEventListener("click",()=>run("edit"));
           remove.addEventListener("click",()=>run("delete"));
