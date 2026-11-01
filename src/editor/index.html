@@ -7281,6 +7281,91 @@
         }});
     }
 
+
+    // USR-05: appearance-only correction. Original text stays searchable.
+    async function openVisualTextCorrectionModal(doc) {
+      if (!window.SunriseSpecialPdf?.correctionCandidate) {
+        showToast("시각 교정 엔진을 불러오지 못했습니다.", "fa-triangle-exclamation");return;
+      }
+      const reader=doc.pdfJsDoc,pageIndex=doc.currentPage,source=doc.bytes;
+      openModal({
+        title:"원문 텍스트 시각 교정 (원문은 유지)",
+        icon:"fa-pen-to-square",width:"620px",
+        bodyHtml:`<div class="dialog-info-box">
+          <strong>주의: 원본 PDF의 글자는 삭제되거나 수정되지 않습니다.</strong>
+          기존 글자 위에 흰 배경과 새로운 문구를 겹치는 시각적 교정입니다.
+          원문은 검색·복사·추출할 수 있으므로 개인정보 삭제에 사용하면 안 됩니다.
+        </div>
+        <p id="correctTextStatus" role="status">텍스트 레이어를 확인 중입니다…</p>
+        <div class="dialog-form-grid">
+          <label for="correctTextSource">현재 쪽 텍스트 조각:</label>
+          <select id="correctTextSource" class="dialog-select" disabled><option>분석 중…</option></select>
+          <label for="correctTextReplacement">새로 표시할 내용:</label>
+          <textarea id="correctTextReplacement" class="dialog-input" maxlength="300" rows="3" style="width:100%"></textarea>
+        </div>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="correctTextConfirm" disabled>시각적 교정 삽입</button>
+          <button type="button" class="dialog-btn" id="correctTextClose">취소</button>
+        </div>`,
+        onMount:async()=>{
+          const select=document.getElementById("correctTextSource");
+          const field=document.getElementById("correctTextReplacement");
+          const confirm=document.getElementById("correctTextConfirm");
+          const status=document.getElementById("correctTextStatus");
+          const valid=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===source&&
+            doc.currentPage===pageIndex&&select.isConnected;
+          let candidates=[];
+          document.getElementById("correctTextClose").addEventListener("click",closeModal);
+          confirm.addEventListener("click",()=>{
+            if(!valid()||doc.operationBusy)return;
+            const selected=candidates[Number(select.value)],text=field.value.trim();
+            if(!selected||!text||text.length>300){showToast("표시할 문구를 확인해 주세요.","fa-circle-info");return;}
+            const done=beginOperationMetric("overlay_insert");let result="failed";
+            try{
+              saveUndoSnapshot(doc,"원문 시각 교정 (실제 원문 유지)");
+              const id="ov_"+overlayIdCounter++;
+              doc.overlays.push({id,pageIndex,type:"Correction",text,
+                x:selected.x,y:selected.y,width:selected.width,height:selected.height,
+                fontSize:selected.fontSize,color:"#1B2631",bgColor:"#FFFFFF",opacity:1});
+              state.selectedInsertId=id;
+              closeModal();renderCurrentPageCanvas();renderLeftPane();
+              showToast("시각 교정 표시가 추가되었습니다. 원문 텍스트는 그대로 남아 있습니다.","fa-triangle-exclamation");
+              result="succeeded";
+            }finally{done(result);}
+          });
+          try{
+            const page=await reader.getPage(pageIndex+1);
+            const layer=await page.getTextContent();
+            if(!valid())return;
+            if(page.rotate!==0){
+              status.textContent="회전된 PDF 페이지는 시각 교정 자동 위치 계산에서 제외됩니다.";return;
+            }
+            const viewport=page.getViewport({scale:1});
+            candidates=layer.items.map(x=>window.SunriseSpecialPdf.correctionCandidate(x,viewport))
+              .filter(Boolean).slice(0,100);
+            select.replaceChildren();
+            if(!candidates.length){
+              status.textContent="교정할 수 있는 가로쓰기 텍스트 레이어가 없습니다. OCR은 지원하지 않습니다.";return;
+            }
+            candidates.forEach((x,index)=>{
+              const option=document.createElement("option");
+              option.value=String(index);option.textContent=(index+1)+". "+x.original.slice(0,85);
+              select.appendChild(option);
+            });
+            select.disabled=false;confirm.disabled=false;
+            field.value=candidates[0].original;
+            select.addEventListener("change",()=>{
+              const x=candidates[Number(select.value)];
+              if(x)field.value=x.original;
+            });
+            status.textContent=candidates.length+"개 텍스트 조각 발견. 원래 텍스트는 변경되지 않습니다.";
+          }catch(error){
+            if(valid())status.textContent="텍스트 레이어 판독 실패: "+(error?.message||error);
+          }
+        }
+      });
+    }
+
     function openStyledInsertModal(doc, type, title, defaultText) {
       const defaults = {
         Text: { color: "#1B2631", bg: "transparent", size: 14, x: 72, y: 120 },
