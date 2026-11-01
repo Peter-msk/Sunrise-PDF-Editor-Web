@@ -5240,6 +5240,7 @@
     }
 
     async function executePdfMergeFromModal() {
+      if(state.mergeBusy)return;
       if (state.mergeQueue.length < 2) {
         showToast("병합할 PDF를 2개 이상 목록에 추가하세요.", "fa-triangle-exclamation");
         return;
@@ -5250,6 +5251,12 @@
 
       const openAfter = Boolean(document.getElementById("mergeOpenAfterCheck")?.checked);
       const downloadNow = Boolean(document.getElementById("mergeDownloadCheck")?.checked);
+      const queue=state.mergeQueue.slice();
+      const sameQueue=()=>queue.length===state.mergeQueue.length &&
+        queue.every((item,i)=>item===state.mergeQueue[i] &&
+          item.bytes===state.mergeQueue[i]?.bytes);
+      const mergeButton=document.getElementById("mergeExecuteBtn");
+      state.mergeBusy=true;if(mergeButton)mergeButton.disabled=true;
 
       const finish=beginOperationMetric('merge');let outcome='cancelled';
       try {
@@ -5258,7 +5265,8 @@
         let totalMergedPages = 0;
         const mergedBookmarks=[];
 
-        for (const item of state.mergeQueue) {
+        for (const item of queue) {
+          if(!sameQueue())throw Error("병합 목록이 변경되어 작업을 중단했습니다.");
           const srcPdf = await PDFDocument.load(item.bytes);
           if (!allowPageFormStructure(srcPdf)) return;
           const indices = srcPdf.getPageIndices();
@@ -5272,6 +5280,8 @@
 
         if(mergedBookmarks.length)appendPdfBookmarks(mergedPdf,mergedBookmarks);
         const mergedBytes = await mergedPdf.save();
+        if(!sameQueue())throw Error("병합 목록이 변경되어 결과를 저장하지 않았습니다.");
+        if(openAfter)validatePdfByteLength(mergedBytes.byteLength);
         closeModal();
 
         if (openAfter) {
@@ -5280,12 +5290,16 @@
         if (downloadNow) {
           downloadBytes(mergedBytes, outName);
         }
-        showToast(`PDF 병합 완료: ${outName} (${state.mergeQueue.length}개 문서, 총 ${totalMergedPages}쪽)`, "fa-object-group");
+        showToast(`PDF 병합 완료: ${outName} (${queue.length}개 문서, 총 ${totalMergedPages}쪽)`, "fa-object-group");
         outcome='succeeded';
       } catch (err) {
         outcome='failed';
         showToast(`PDF 병합 중 오류 발생: ${err.message || err}`, "fa-circle-exclamation");
-      } finally { finish(outcome); }
+      } finally {
+        state.mergeBusy=false;
+        if(mergeButton)mergeButton.disabled=false;
+        finish(outcome);
+      }
     }
 
     // =========================================================================
