@@ -3015,25 +3015,26 @@
           }
         }
         const existing = new Set(doc.bookmarks.map(item => item.page));
-        const proposed = window.SunriseAutoBookmarks.suggestBookmarks(pages, 80)
-          .filter(item => !existing.has(item.page));
+        const proposed = window.SunriseAutoBookmarks.normalizeLevels(
+          window.SunriseAutoBookmarks.suggestBookmarks(pages, 80)
+            .filter(item => !existing.has(item.page)));
         if (!proposed.length) {
           outcome='succeeded';
           showToast("확인 가능한 텍스트 제목을 찾지 못했습니다. 스캔 이미지에는 OCR을 적용하지 않습니다.", "fa-circle-info");
           return;
         }
-        const samples = proposed.slice(0, 6).map(item => (item.page + 1) + "쪽: " + item.title).join("\n");
+        const samples = proposed.slice(0, 6).map(item => "  ".repeat(item.level) + (item.page + 1) + "쪽: " + item.title).join("\n");
         const warning = doc.pageCount > limit ? "\n(처음 " + limit + "쪽만 분석했습니다.)" : "";
         if (!window.confirm("기존 PDF 텍스트를 바탕으로 북마크 " + proposed.length +
           "개를 제안합니다. 제목 인식 결과를 확인해 주세요.\n\n" + samples + warning +
-          "\n\n실제 목차의 페이지 번호를 추정하지 않고 해당 텍스트가 있는 쪽을 연결합니다. 추가할까요?")) return;
+          "\n\n장·절 번호에 따라 들여쓰기를 제안합니다. 실제 목차의 인쇄된 페이지 번호는 추정하지 않습니다. 추가할까요?")) return;
         if (!valid()) {
           showToast("문서가 변경되어 북마크 생성을 취소했습니다.", "fa-circle-exclamation"); return;
         }
         saveUndoSnapshot(doc, "기존 텍스트 제목 북마크 생성");
         const nonce = Date.now();
         doc.bookmarks.push(...proposed.map((item, index) => ({
-          id: "bm_heading_" + nonce + "_" + index, title: item.title, page: item.page
+          id: "bm_heading_" + nonce + "_" + index, title: item.title, page: item.page, level: item.level
         })));
         ensureLeftPanelOpen("bookmarks");
         showToast("텍스트 제목 북마크 " + proposed.length + "개를 추가했습니다. PDF 저장 후 재열어 확인해 주세요.", "fa-bookmark");
@@ -4552,48 +4553,80 @@
     // =========================================================================
     // PDF Binary Manipulation Helpers (pdf-lib + Canvas Bake)
     // =========================================================================
-    // Append new top-level destinations without rewriting the original outline tree.
+    // Append a nested outline subtree without reparenting existing PDF bookmarks.
     function appendPdfBookmarks(pdfDoc, bookmarks) {
       if (!bookmarks?.length) return;
       const { PDFName, PDFDict, PDFNumber, PDFHexString, PDFRef } = window.PDFLib;
       const name = PDFName.of, ctx = pdfDoc.context, pages = pdfDoc.getPages();
-      for (const bm of bookmarks) {
-        if (!Number.isInteger(bm.page) || bm.page < 0 || bm.page >= pages.length || !String(bm.title || '').trim())
+      const normalized = [];
+      let lastDepth = 0;
+      for (let i=0; i<bookmarks.length; i++) {
+        const bm=bookmarks[i];
+        if (!Number.isInteger(bm.page) || bm.page<0 || bm.page>=pages.length || !String(bm.title || '').trim())
           throw new Error("북마크 제목 또는 페이지가 올바르지 않습니다.");
+        const requested = bm.level === undefined ? 0 : bm.level;
+        if (!Number.isInteger(requested) || requested<0 || requested>3)
+          throw new Error("북마크 단계는 1~4단계 안에서 지정해 주세요.");
+        const level=Math.min(requested,i?lastDepth+1:0);
+        normalized.push({...bm,level});
+        lastDepth=level;
       }
-      let rootRef = pdfDoc.catalog.get(name('Outlines')), root, priorRef;
+      let rootRef=pdfDoc.catalog.get(name('Outlines')),root,priorRef;
       if (rootRef) {
         if (!(rootRef instanceof PDFRef)) throw new Error("기존 PDF 북마크 구조를 안전하게 수정할 수 없습니다.");
-        root = ctx.lookup(rootRef);
+        root=ctx.lookup(rootRef);
         if (!(root instanceof PDFDict)) throw new Error("기존 PDF 북마크를 안전하게 보존할 수 없습니다.");
-        priorRef = root.get(name('Last'));
-        const first = root.get(name('First'));
-        if (Boolean(first) !== Boolean(priorRef)) throw new Error("기존 PDF 북마크 구조가 올바르지 않습니다.");
+        priorRef=root.get(name('Last'));
+        const first=root.get(name('First'));
+        if (Boolean(first)!==Boolean(priorRef)) throw new Error("기존 PDF 북마크 구조가 올바르지 않습니다.");
         if (priorRef && (!(priorRef instanceof PDFRef) || !(first instanceof PDFRef) ||
             !(ctx.lookup(priorRef) instanceof PDFDict) || ctx.lookup(priorRef).get(name('Next'))))
           throw new Error("기존 PDF 북마크 구조가 올바르지 않습니다.");
       } else {
-        root = ctx.obj({Type:'Outlines'}); rootRef = ctx.register(root);
-        pdfDoc.catalog.set(name('Outlines'), rootRef);
+        root=ctx.obj({Type:'Outlines'});rootRef=ctx.register(root);
+        pdfDoc.catalog.set(name('Outlines'),rootRef);
       }
-      const countObject = root.lookupMaybe(name('Count'), PDFNumber);
+      const countObject=root.lookupMaybe(name('Count'),PDFNumber);
       if (priorRef && !countObject) throw new Error("기존 PDF 북마크 개수를 확인할 수 없습니다.");
-      const oldCount = countObject?.asNumber() || 0;
-      if (oldCount < 0 || !Number.isSafeInteger(oldCount)) throw new Error("기존 PDF 북마크 개수를 확인할 수 없습니다.");
-      const entries = bookmarks.map(bm => {
-        const item = ctx.obj({Title: PDFHexString.fromText(String(bm.title)), Parent:rootRef,
-          Dest:[pages[bm.page].ref, name('Fit')]});
-        return {item, ref:ctx.register(item)};
-      });
-      entries.forEach((entry, i) => {
-        const prev = i ? entries[i-1].ref : priorRef;
-        if (prev) entry.item.set(name('Prev'), prev);
-        if (i+1 < entries.length) entry.item.set(name('Next'), entries[i+1].ref);
-      });
-      if (priorRef) ctx.lookup(priorRef).set(name('Next'), entries[0].ref);
-      else root.set(name('First'), entries[0].ref);
-      root.set(name('Last'), entries[entries.length-1].ref);
-      root.set(name('Count'), PDFNumber.of(oldCount + entries.length));
+      const oldCount=countObject?.asNumber() || 0;
+      if (oldCount<0 || !Number.isSafeInteger(oldCount) || oldCount+normalized.length>100000)
+        throw new Error("기존 PDF 북마크 개수를 확인할 수 없습니다.");
+      const entries=normalized.map(bm=>({
+        level:bm.level,children:[],item:ctx.obj({
+          Title:PDFHexString.fromText(String(bm.title)),
+          Dest:[pages[bm.page].ref,name('Fit')]
+        })
+      }));
+      for (const entry of entries) entry.ref=ctx.register(entry.item);
+      const top=[],stack=[];
+      for (const entry of entries) {
+        const parent=entry.level?stack[entry.level-1]:{ref:rootRef,children:top};
+        if (!parent) throw new Error("북마크 단계 연결이 올바르지 않습니다.");
+        entry.item.set(name('Parent'),parent.ref);
+        const siblings=parent.children,previous=siblings[siblings.length-1];
+        if (previous) {
+          previous.item.set(name('Next'),entry.ref);
+          entry.item.set(name('Prev'),previous.ref);
+        }
+        siblings.push(entry);
+        stack[entry.level]=entry;stack.length=entry.level+1;
+      }
+      // All newly created nodes are open. Count is their visible descendants.
+      for (let i=entries.length-1;i>=0;i--) {
+        const entry=entries[i];
+        entry.visibleDescendants=entry.children.reduce((sum,child)=>sum+1+child.visibleDescendants,0);
+        if (entry.children.length) {
+          entry.item.set(name('First'),entry.children[0].ref);
+          entry.item.set(name('Last'),entry.children[entry.children.length-1].ref);
+          entry.item.set(name('Count'),PDFNumber.of(entry.visibleDescendants));
+        }
+      }
+      if (priorRef) {
+        top[0].item.set(name('Prev'),priorRef);
+        ctx.lookup(priorRef).set(name('Next'),top[0].ref);
+      } else root.set(name('First'),top[0].ref);
+      root.set(name('Last'),top[top.length-1].ref);
+      root.set(name('Count'),PDFNumber.of(oldCount+entries.length));
     }
 
     async function compileDocumentWithOverlays(doc) {
