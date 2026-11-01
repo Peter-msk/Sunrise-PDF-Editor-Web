@@ -12,6 +12,7 @@
   <script src="/assets/korean-font.js"></script>
   <script src="/assets/sunrise-edit-state.js"></script>
   <script src="/assets/sunrise-auto-bookmarks.js"></script>
+  <script src="/assets/sunrise-outline-transfer.js"></script>
   <script src="/assets/sunrise-batch-pages.js"></script>
   <script src="/assets/sunrise-pdf-quality.js"></script>
   <script src="/assets/sunrise-pdf-quality-report.js"></script>
@@ -5018,7 +5019,7 @@
         width: "720px",
         bodyHtml: `
           <div class="dialog-info-box">
-            병합할 PDF를 2개 이상 추가하거나 이 창으로 파일을 드래그하세요. 페이지와 삽입한 표시가 합쳐집니다. 원본의 문서 수준 북마크와 첨부파일은 병합 결과에 포함되지 않습니다.
+            병합할 PDF를 2개 이상 추가하거나 이 창으로 파일을 드래그하세요. 페이지와 삽입한 표시가 합쳐집니다. 일반 페이지 목적지 북마크는 병합 결과의 페이지에 맞춰 이식합니다. 외부 링크·특수 목적지는 손실 방지를 위해 병합을 차단합니다. 원본의 문서 첨부파일은 포함되지 않습니다.
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px">
             <strong id="mergeSummaryLabel" style="color:var(--primary);font-size:13px">병합 대상: 0개 파일 (총 0쪽)</strong>
@@ -5255,16 +5256,21 @@
         const { PDFDocument } = window.PDFLib;
         const mergedPdf = await PDFDocument.create();
         let totalMergedPages = 0;
+        const mergedBookmarks=[];
 
         for (const item of state.mergeQueue) {
           const srcPdf = await PDFDocument.load(item.bytes);
           if (!allowPageFormStructure(srcPdf)) return;
           const indices = srcPdf.getPageIndices();
+          const sourceBookmarks=window.SunriseOutlineTransfer.read(srcPdf,window.PDFLib);
+          mergedBookmarks.push(...window.SunriseOutlineTransfer.subset(sourceBookmarks,indices,totalMergedPages)
+            .map(bookmark=>({...bookmark,level:bookmark.level})));
           const copiedPages = await mergedPdf.copyPages(srcPdf, indices);
           copiedPages.forEach((p) => mergedPdf.addPage(p));
           totalMergedPages += copiedPages.length;
         }
 
+        if(mergedBookmarks.length)appendPdfBookmarks(mergedPdf,mergedBookmarks);
         const mergedBytes = await mergedPdf.save();
         closeModal();
 
@@ -6904,8 +6910,11 @@
             const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
             if (!allowPageFormStructure(srcDoc)) return;
             const outDoc = await PDFDocument.create();
+            const sourceBookmarks=window.SunriseOutlineTransfer.read(srcDoc,window.PDFLib);
             const copied = await outDoc.copyPages(srcDoc, indices);
             copied.forEach((p) => outDoc.addPage(p));
+            const transferred=window.SunriseOutlineTransfer.subset(sourceBookmarks,indices);
+            if(transferred.length)appendPdfBookmarks(outDoc,transferred);
             const outBytes = await outDoc.save();
             closeModal();
             await openPdfFromBytes(outName, outBytes, { switchActive: true });
@@ -7006,7 +7015,7 @@
         bodyHtml:`
           <div class="dialog-info-box">1~100쪽씩 분할하고, PDF 최대 50개·총 100 MiB까지 준비합니다.
             결과 파일별 저장 버튼으로 필요한 PDF를 다운로드할 수 있습니다.
-            기존 PDF의 전역 북마크·양식 구조는 분할 파일로 자동 이식되지 않습니다.</div>
+            일반 페이지 목적지 북마크는 분할 결과의 해당 페이지에 이식합니다. 외부 링크·특수 목적지는 안전을 위해 분할을 중단합니다. 양식이 포함된 문서는 지원하지 않습니다.</div>
           <div class="dialog-form-grid">
             <label for="splitRangeInput">분할 페이지 범위:</label>
             <input id="splitRangeInput" class="dialog-input" maxlength="4096" value="1-${doc.pageCount}">
@@ -7055,11 +7064,14 @@
               const sourcePdf=await PDFDocument.load(await compileDocumentWithOverlays(doc));
               if(!valid())throw Error("분할 준비 중 원본이 변경되었습니다.");
               if(!allowPageFormStructure(sourcePdf)){outcome="cancelled";return;}
+              const sourceBookmarks=window.SunriseOutlineTransfer.read(sourcePdf,window.PDFLib);
               for(let i=0;i<chunks.length;i++){
                 if(!valid())throw Error("분할 준비가 중단되었습니다.");
                 const part=await PDFDocument.create();
                 const copied=await part.copyPages(sourcePdf,chunks[i]);
                 copied.forEach(p=>part.addPage(p));
+                const transferred=window.SunriseOutlineTransfer.subset(sourceBookmarks,chunks[i]);
+                if(transferred.length)appendPdfBookmarks(part,transferred);
                 part.setTitle(stem+" part "+(i+1));
                 const bytes=await part.save();
                 bytesTotal+=bytes.byteLength;
