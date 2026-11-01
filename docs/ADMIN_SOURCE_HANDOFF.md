@@ -48,3 +48,5 @@ ADM-01~14 소스 작성 마감 후보본이다. 범위와 근거는 `ADMIN_SOURC
 0015는 문의·공지·업데이트의 수정 충돌 보호 revision을 추가한다. 서버 전체 게시물 검색과 이전 기록 조회·활성시간 구간 보완·관리/인증 입력 바이트 제한·조회 실패 판정도 소스에 반영했다. 기존 검사 fixture와 신규 회귀 소스는 작성/갱신했으며 실행은 다음 기능 검증 단계에 남긴다.
 
 2026-11-01 후속 검증: 관리자 Node/SQLite 26개, 전체 Node 64개, 릴리스 빌드와 GitHub Linux Chromium 관리자 3개/PDF 저장 1개가 통과했다. 상세 증거와 Windows·운영 D1 등 남은 수용 범위는 `ADMIN_VALIDATION_REPORT.md`를 따른다.
+
+2026-11-01 후속: 전체 Node 67개/관리자 28개와 Linux Chromium·Windows Chrome·Windows Edge 검증을 통과했다. 운영 D1/Worker 설정은 읽기만 수행해 실제 적용 차이를 확인했다. `ADMIN_VALIDATION_REPORT.md`, `PRODUCTION_SCHEMA_REVIEW.md`를 따른다.

@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 Node/SQLite 26개·전체 Node 64개·릴리스 빌드 및 GitHub Chromium 관리자 3개/PDF 저장 1개 실행 증거. 운영/Windows 미확인은 별도로 남긴 잠정 관리 점수",
+  "basis": "관리자 Node/SQLite 28개·전체 Node 67개·릴리스 빌드, Linux Chromium/Windows Chrome/Edge 각 관리자 3개+PDF 저장 1개 및 운영 구조/바인딩 읽기 증거. 실제 운영 반영/사용자 PC는 미확인인 잠정 관리 점수",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -20,9 +20,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 95,
-      "practical": 50,
+      "practical": 70,
       "deployment": 35,
-      "note": "기간/전기 비교 SQL 및 Chromium 대체 API 대시보드 통과. 실제 운영 원천 대조와 Windows 미검증"
+      "note": "기간/전기 비교 SQL와 Linux/Windows Chrome/Edge 대시보드 통과. 실제 운영 원천 수치 대조·업무 PC 확인 미완"
     },
     {
       "id": "ADM-02",
@@ -30,9 +30,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 95,
-      "practical": 30,
+      "practical": 50,
       "deployment": 35,
-      "note": "실제 SQLite 중복 방문·KST 자정 검사 및 Chromium 방문 표시 통과. 사람 수가 아닌 익명 탭 추정이며 운영 수치 대조 미완"
+      "note": "SQLite 중복 방문·KST 자정 및 Linux/Windows 방문 표시 통과. 익명 탭 추정이며 운영 수치/사람 재방문율과 구분"
     },
     {
       "id": "ADM-03",
@@ -60,9 +60,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 100,
-      "practical": 60,
+      "practical": 80,
       "deployment": 35,
-      "note": "실제 SQLite 검색/페이지/이력/수정 충돌과 Chromium 문의 흐름 및 실제 인증 API 쓰기 통과. 운영 D1·Windows 미검증"
+      "note": "SQLite 검색/페이지/이력/충돌과 Linux/Windows Chrome/Edge 문의 흐름 및 실제 인증 API 쓰기 통과. 실제 운영 D1 수용 미완"
     },
     {
       "id": "ADM-06",
@@ -70,9 +70,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 100,
-      "practical": 60,
+      "practical": 80,
       "deployment": 0,
-      "note": "실제 SQLite 전체 검색/이전 기록/수정 충돌/7일 수명 및 Chromium 공지 수정 흐름 통과. 운영 공개 피드·Windows 미검증"
+      "note": "SQLite 전체 검색/이전 기록/충돌/7일 수명 및 Linux/Windows Chrome/Edge 공지 흐름 통과. 운영 공개 피드 수용 미완"
     },
     {
       "id": "ADM-07",
@@ -80,9 +80,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 100,
-      "practical": 60,
+      "practical": 80,
       "deployment": 0,
-      "note": "실제 SQLite 업데이트 검색/이전 기록/수정 보호 및 Chromium 신규/수정 흐름 통과. 실제 배포 내용 대조·운영 반영 미완"
+      "note": "SQLite 검색/이전 기록/수정 보호와 Linux/Windows Chrome/Edge 업데이트 흐름 통과. 실제 배포 내용 대조/운영 반영 미완"
     },
     {
       "id": "ADM-08",
@@ -90,29 +90,29 @@
       "phase": 1,
       "implementation": 100,
       "automated": 100,
-      "practical": 60,
+      "practical": 80,
       "deployment": 0,
-      "note": "상태·버전·현재 스키마/누락 열 API와 Chromium D1 장애/복구 표시 통과. 실제 운영 장애/Cloudflare 런타임 수용 미완"
+      "note": "Linux/Windows 상태·버전·장애/복구 표시와 운영 D1 구조/Worker 바인딩 이름·종류 읽기 확인. 실제 운영 새 스키마/배포는 미적용"
     },
     {
       "id": "ADM-09",
       "name": "배포·버전",
       "phase": 1,
       "implementation": 100,
-      "automated": 85,
-      "practical": 20,
+      "automated": 100,
+      "practical": 40,
       "deployment": 0,
-      "note": "버전 API·Chromium 표시 통과. 서명 배포 보고/수동 워크플로우는 실제 production 연결·배포 미검증"
+      "note": "합성 서명 보고의 변조/시각/중복·역순/권한/DB 실패 검사 및 Linux/Windows 버전 표시 통과. 운영 배포 비밀값/버전 바인딩 미연결 확인"
     },
     {
       "id": "ADM-10",
       "name": "보존·백업",
       "phase": 1,
       "implementation": 100,
-      "automated": 95,
-      "practical": 25,
+      "automated": 100,
+      "practical": 50,
       "deployment": 25,
-      "note": "현재 스키마 예약 정리·실패/임대·마지막 성공과 로컬 SQLite 복원 검사 통과. D1 원격 백업/격리 복원은 미실시"
+      "note": "Linux/Windows 합성 Wrangler 프로세스 및 실제 Python SQLite 백업/격리 복원 통과. 실제 D1 원격 백업·복원/새 스키마 적용은 미실시"
     },
     {
       "id": "ADM-11",
@@ -120,9 +120,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 100,
-      "practical": 70,
+      "practical": 85,
       "deployment": 45,
-      "note": "실제 SQLite 세션 만료/폐기·보안 이력과 Chromium HTTPS 등록/로그인/쿠키/비밀번호 변경/전체 폐기 통과. Windows·운영 도메인 미검증"
+      "note": "Linux/Windows Chrome/Edge HTTPS 등록·로그인·쿠키·비밀번호 변경·세션 폐기 통과. 실제 업무 PC/운영 도메인 수용 미완"
     },
     {
       "id": "ADM-12",
@@ -130,9 +130,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 95,
-      "practical": 30,
+      "practical": 55,
       "deployment": 0,
-      "note": "결과/재시도/버전 API와 Chromium 품질 화면 통과. 실제 디스크 저장 완료를 이 계측으로 주장하지 않으며 운영 수용 미완"
+      "note": "결과/재시도/버전 API와 Linux/Windows 품질 화면 통과. 실제 PC 저장 완료 계측과 구분하며 운영 수용 미완"
     },
     {
       "id": "ADM-13",
@@ -140,9 +140,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 100,
-      "practical": 60,
+      "practical": 80,
       "deployment": 0,
-      "note": "기간·버전 CSV API와 Chromium 실제 CSV 다운로드 통과. 실제 Excel·운영 자료·Windows 검증 미완"
+      "note": "기간·버전 CSV API와 Linux/Windows Chrome/Edge 실제 다운로드 통과. 실제 Excel·운영 자료 수용 미완"
     },
     {
       "id": "ADM-14",
@@ -150,9 +150,9 @@
       "phase": 1,
       "implementation": 100,
       "automated": 95,
-      "practical": 50,
+      "practical": 70,
       "deployment": 0,
-      "note": "실제 알림 렌더 중복 제거/텍스트 출력과 Chromium 상태 장애·복구 통과. 운영 배포/보존 알림 오탐·장시간 자동 조회 검증 미완"
+      "note": "렌더 중복 제거/텍스트 출력 및 Linux/Windows 장애·복구 통과. 운영 배포/보존 알림·장시간 자동 조회 수용 미완"
     },
     {
       "id": "USR-01",
@@ -220,9 +220,9 @@
       "phase": 2,
       "implementation": 80,
       "automated": 92,
-      "practical": 25,
+      "practical": 65,
       "deployment": 30,
-      "note": "실제 Linux Chromium에서 PDF 업로드→Save As→Blob 다운로드→디스크 PDF 재열기→편집기 재업로드 성공. 양식·회전 보존 확인, Windows Chrome·Edge와 복잡한 실무 PDF 미검증"
+      "note": "Linux Chromium 및 Windows Chrome/Edge 실제 PDF 입력→저장 준비→디스크 다운로드→양식/회전 재열기·편집기 재업로드 통과. 실제 업무 PC와 복잡한 실무 PDF 미검증"
     },
     {
       "id": "USR-06",
@@ -352,17 +352,17 @@
       "automated": 50,
       "practical": 0,
       "deployment": 0,
-      "note": "관리자·PDF 일괄·편집 선택 검사용 명령 및 PR 중복 CI 취소·Chromium 캐시 도입, 6개 파일 1회 커밋. 타입·모듈/병렬 성능 검증 미완"
+      "note": "관리자·PDF 일괄·편집 선택 검사용 명령 및 PR 중복 CI 취소·Chromium 캐시 도입, 6개 파일 1회 커밋. 타입·모듈/병렬 성능 검증 미완; Windows CRLF 릴리스 빌드 결함 수정 및 LF/CRLF/CR 회귀·Windows 빌드 통과"
     },
     {
       "id": "QA-01",
       "name": "전체 통합 안정화",
       "phase": 6,
       "implementation": 32,
-      "automated": 80,
-      "practical": 35,
+      "automated": 90,
+      "practical": 55,
       "deployment": 0,
-      "note": "전체 Node 64개 및 릴리스 빌드 통과, GitHub Linux Chromium PDF 저장/재열기·관리자 UI/업무/실제 인증 4개 통과. Windows·모바일·실제 업무 자료·운영 D1 미검증"
+      "note": "전체 Node 67개·빌드, Linux Chromium/Windows Chrome/Edge 각 PDF 저장 및 관리자 3개 흐름 통과. 업무 PC·모바일·실무 자료·실제 운영 D1 수용 미완"
     },
     {
       "id": "REL-01",
@@ -378,10 +378,11 @@
   "adminSourceStatus": {
     "state": "implementation-complete-candidate",
     "scope": "ADM-01~14",
-    "functionalValidation": "node-26-passed",
-    "browserValidation": "github-linux-chromium-admin-3-passed",
+    "functionalValidation": "node-28-passed",
+    "browserValidation": "linux-chromium-windows-chrome-edge-admin-flows-passed",
     "productionRollout": "pending",
     "evidence": "docs/ADMIN_SOURCE_CLOSEOUT.md",
-    "validationEvidence": "docs/ADMIN_VALIDATION_REPORT.md"
+    "validationEvidence": "docs/ADMIN_VALIDATION_REPORT.md",
+    "productionSchemaReview": "read-only-gaps-confirmed"
   }
 }

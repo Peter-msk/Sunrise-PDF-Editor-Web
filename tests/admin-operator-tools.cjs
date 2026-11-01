@@ -11,7 +11,7 @@ try{
  fs.writeFileSync(source,privateSQL);
  // Node executes the local file "d1" as the synthetic Wrangler binary. This
  // keeps argv and process behavior real on Windows and POSIX, without network.
- fs.writeFileSync(path.join(temp,'d1'),`const fs=require('node:fs');const args=process.argv.slice(2),mode=process.env.FIXTURE_MODE;fs.appendFileSync(process.env.FIXTURE_LOG,JSON.stringify(args)+'\\n');if(mode==='fail'){console.error('SYNTHETIC_PRIVATE_VALUE');process.exit(2)}if(args[0]==='export'){fs.writeFileSync(args[args.indexOf('--output')+1],process.env.FIXTURE_EXPORT);console.log('SYNTHETIC_PRIVATE_VALUE');process.exit(0)}if(args.includes('--file')){console.log('SYNTHETIC_PRIVATE_VALUE');process.exit(0)}const q=args[args.indexOf('--command')+1],empty=q.includes('sqlite_master');let value=empty?0:3;if(empty&&mode==='nonempty')value=1;if(empty&&mode==='null-count')value=null;if(empty&&mode==='string-count')value='';console.log(JSON.stringify([{success:mode!=='failed-result',results:[empty?{tables_count:value}:{row_count:value}]}]));`);
+ fs.writeFileSync(path.join(temp,'d1'),`const fs=require('node:fs');const args=process.argv.slice(2),mode=process.env.FIXTURE_MODE;fs.appendFileSync(process.env.FIXTURE_LOG,JSON.stringify(args)+'\\n');if(mode==='fail'){console.error('SYNTHETIC_PRIVATE_VALUE');process.exit(2)}if(mode==='malformed-json'){console.log('SYNTHETIC_PRIVATE_VALUE');process.exit(0)}if(args[0]==='export'){fs.writeFileSync(args[args.indexOf('--output')+1],process.env.FIXTURE_EXPORT);console.log('SYNTHETIC_PRIVATE_VALUE');process.exit(0)}if(args.includes('--file')){console.log('SYNTHETIC_PRIVATE_VALUE');process.exit(0)}const q=args[args.indexOf('--command')+1],empty=q.includes('sqlite_master');let value=empty?0:3;if(empty&&mode==='nonempty')value=1;if(empty&&mode==='null-count')value=null;if(empty&&mode==='string-count')value='';console.log(JSON.stringify([{success:mode==='missing-success'?undefined:mode!=='failed-result',results:[empty?{tables_count:value}:{row_count:value}]}]));`);
  const output=path.join(temp,'private export.sql');
  let result=run('d1_backup.cjs',['fixture_database',output]);assert.equal(result.status,0,result.stderr);noPrivateOutput(result);
  assert.equal(fs.readFileSync(output,'utf8'),privateSQL);
@@ -22,7 +22,7 @@ try{
  alias=path.join(temp,'repo-alias');fs.symlinkSync(repo,alias,process.platform==='win32'?'junction':'dir');
  const basename='sunrise-fixture-'+randomUUID()+'.sql';accidental=path.join(repo,basename);
  reset();result=run('d1_backup.cjs',['fixture_database',path.join(alias,basename)]);assert.notEqual(result.status,0);assert.equal(calls().length,0,'canonical repository destination must be rejected before export');assert(!fs.existsSync(accidental));
- for(const mode of ['nonempty','null-count','string-count','failed-result']){
+ for(const mode of ['nonempty','null-count','string-count','failed-result','missing-success','malformed-json']){
   reset();result=run('d1_restore_rehearsal.cjs',[source,'sunrise-pdf-restore-test'],mode);assert.notEqual(result.status,0,mode);noPrivateOutput(result);assert(!calls().some(x=>x.includes('--file')),mode+' must not import');
  }
  reset();result=run('d1_restore_rehearsal.cjs',[source,'production-database']);assert.notEqual(result.status,0);assert.equal(calls().length,0);

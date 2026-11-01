@@ -9,8 +9,9 @@ function execute(args){
 }
 function query(sql){
  const raw=execute(['d1','execute',target,'--remote','--command',sql,'--json']);
- const parsed=JSON.parse(raw),entries=Array.isArray(parsed)?parsed:[parsed];
- if(entries.length!==1||!entries[0]||typeof entries[0]!=='object'||entries[0].success===false||!Array.isArray(entries[0].results)||entries[0].results.length!==1)throw Error('Could not read the test database query result');
+ let parsed;try{parsed=JSON.parse(raw)}catch{throw Error('Could not read the test database query result')}
+ const entries=Array.isArray(parsed)?parsed:[parsed];
+ if(entries.length!==1||!entries[0]||typeof entries[0]!=='object'||entries[0].success!==true||!Array.isArray(entries[0].results)||entries[0].results.length!==1)throw Error('Could not read the test database query result');
  return entries[0].results;
 }
 try{

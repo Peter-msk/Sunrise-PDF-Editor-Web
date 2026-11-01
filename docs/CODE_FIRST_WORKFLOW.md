@@ -29,3 +29,5 @@
 2026-11-01 관리자 ADM-01~14 소스 작성 단계를 마감했다. 기준 범위·코드 연결·남은 검증은 `ADMIN_SOURCE_CLOSEOUT.md`를 따른다. 소스 작성 완료와 검증/운영 완료는 별개이며 다음 단계는 관리자 기능 검증이다.
 
 2026-11-01 후속 검증: 관리자 Node/SQLite 26개, 전체 Node 64개, 릴리스 빌드와 GitHub Linux Chromium 관리자 3개/PDF 저장 1개가 통과했다. 상세 증거와 Windows·운영 D1 등 남은 수용 범위는 `ADMIN_VALIDATION_REPORT.md`를 따른다.
+
+2026-11-01 후속: 전체 Node 67개/관리자 28개와 Linux Chromium·Windows Chrome·Windows Edge 검증을 통과했다. 운영 D1/Worker 설정은 읽기만 수행해 실제 적용 차이를 확인했다. `ADMIN_VALIDATION_REPORT.md`, `PRODUCTION_SCHEMA_REVIEW.md`를 따른다.
