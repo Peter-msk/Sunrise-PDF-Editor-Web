@@ -8230,32 +8230,46 @@
 
     async function exportOfficeText(doc,format) {
       if(!["docx","xlsx"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
-      if(!window.SunriseOfficeExport) {
+      if(!window.SunriseOfficeExport?.pageTextFromItems) {
         showToast("Office 텍스트 변환 모듈을 불러오지 못했습니다.","fa-triangle-exclamation");return;
       }
+      if(doc.officeExportBusy)return;
       const reader=doc.pdfJsDoc,original=doc.bytes;
+      const unchanged=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===original;
       const finish=beginOperationMetric("extract_text");let outcome="failed";
+      doc.officeExportBusy=true;
       try {
         if(doc.pageCount>120)throw Error("Office 텍스트 변환은 최대 120쪽까지 지원합니다.");
-        showToast("PDF 텍스트 레이어를 판독하고 있습니다. OCR은 사용하지 않습니다.","fa-file-lines");
-        if(!await ensurePageTexts(doc) || activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original){
-          outcome="cancelled";return;
+        showToast("페이지별 줄바꿈을 판독합니다. 스캔 이미지 OCR은 지원하지 않습니다.","fa-file-lines");
+        const pages=[];
+        for(let i=0;i<doc.pageCount;i++){
+          if(!unchanged()){outcome="cancelled";return;}
+          let content;
+          try{
+            const page=await reader.getPage(i+1);
+            content=await page.getTextContent();
+          }catch(error){
+            throw Error((i+1)+"쪽 텍스트 판독에 실패하여 불완전한 Office 파일을 생성하지 않았습니다: "+
+              String(error?.message||error));
+          }
+          if(!unchanged()){outcome="cancelled";return;}
+          pages.push(window.SunriseOfficeExport.pageTextFromItems(content?.items));
         }
-        const pages=Array.from({length:doc.pageCount},(_,i)=>doc.pageTexts[i]||"");
         if(!pages.some(text=>text.trim()))throw Error("PDF 텍스트 레이어가 없습니다. 이미지 기반 문서의 OCR은 지원하지 않습니다.");
         const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):window.SunriseOfficeExport.xlsx(pages);
+        if(!unchanged()){outcome="cancelled";return;}
         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
         downloadBytes(bytes,stem+"_text_only."+format,
           format==="docx"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         showToast(format==="docx"?
-          "텍스트 전용 Word 문서를 저장합니다. 원래 PDF의 서식·이미지는 변환되지 않습니다.":
-          "페이지 번호·텍스트 열의 Excel 파일을 저장합니다. PDF의 표 구조는 복원하지 않습니다.",
+          "줄 구분을 유지한 텍스트 Word를 저장합니다. 원래 PDF의 서식·이미지는 변환되지 않습니다.":
+          "줄 구분을 유지한 Excel을 저장합니다. 원래 PDF의 표 구조는 복원하지 않습니다.",
           format==="docx"?"fa-file-word":"fa-file-excel");
         outcome="succeeded";
       }catch(error){
         showToast("Office 텍스트 변환 실패: "+String(error?.message||error),"fa-triangle-exclamation");
-      }finally{finish(outcome);}
+      }finally{doc.officeExportBusy=false;finish(outcome);}
     }
 
     async function openExtractTextModal(doc) {

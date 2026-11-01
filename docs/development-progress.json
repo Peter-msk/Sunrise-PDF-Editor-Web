@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 40,
-      "automated": 75,
-      "practical": 15,
+      "implementation": 55,
+      "automated": 87,
+      "practical": 20,
       "deployment": 0,
-      "note": "PDF 텍스트 레이어에서 Word DOCX(단락·페이지 구분) 및 Excel XLSX(페이지/텍스트 2열) 변환 구현. OpenXML ZIP CRC32·Unicode 계약, Chromium·Windows Chrome/Edge 실제 다운로드 테스트 PASS. 원본의 표 구조·이미지·서식 재구성/스캔 OCR 미지원, 실무 Office 앱에서 수동 검증·운영 배포 미완"
+      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외."
     },
     {
       "id": "TECH-01",
