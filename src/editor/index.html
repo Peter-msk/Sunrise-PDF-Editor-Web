@@ -17,6 +17,7 @@
   <script src="/assets/sunrise-pdf-quality-report.js"></script>
   <script src="/assets/sunrise-embedded-images.js"></script>
   <script src="/assets/sunrise-special-pdf.js"></script>
+  <script src="/assets/sunrise-office-export.js"></script>
   <script type="module">
     try {
       window.pdfjsLib = await import("/assets/pdfjs/pdf.min.mjs");
@@ -2014,6 +2015,8 @@
             actions: [
               { id: "imageToPdf", label: "이미지로 PDF 만들기", icon: "fa-file-image" },
               { id: "extractText", label: "텍스트 추출", icon: "fa-file-lines", shortcut: "Ctrl+Shift+X", docReq: true },
+              { id: "exportWordText", label: "Word 문서 (텍스트 전용)", icon: "fa-file-word", docReq: true },
+              { id: "exportExcelText", label: "Excel 표 (페이지/텍스트)", icon: "fa-file-excel", docReq: true },
               { id: "exportCurrentImage", label: "현재 페이지 이미지 저장", icon: "fa-image", shortcut: "Ctrl+I", docReq: true },
               { id: "exportAllImages", label: "페이지 이미지 일괄 변환", icon: "fa-images", shortcut: "Ctrl+Shift+I", docReq: true },
               { id: "extractEmbeddedImages", label: "내장 이미지 추출", icon: "fa-photo-film", docReq: true },
