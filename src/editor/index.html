@@ -7261,7 +7261,7 @@
       const n = Number(value);
       if (!Number.isFinite(n) || n < min || n > max)
         throw new Error(name + "은(는) " + min + "~" + max + " 범위여야 합니다.");
-      return Math.round(n * 10) / 10;
+      return Math.round(n * 100) / 100;
     }
     function openInsertShapeModal(doc) {
       const size = doc.pageSizes[doc.currentPage] || {width:595,height:842};
