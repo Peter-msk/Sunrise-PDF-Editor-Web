@@ -1,8 +1,9 @@
 name: USR-14 real AES-256 QPDF verification
 on:
-  push:
-    branches: [feat/secure-pdf-qpdf-local-20261101]
+  workflow_dispatch:
   pull_request:
+    # Encryption validation joins the batch-complete review gate.
+    types: [opened, reopened, synchronize, ready_for_review]
     paths:
       - 'scripts/protect-pdf-local.cjs'
       - 'tests/pdf-encrypt-*.cjs'
@@ -12,6 +13,7 @@ permissions:
   contents: read
 jobs:
   encrypt:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
