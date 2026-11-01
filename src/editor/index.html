@@ -14,6 +14,7 @@
   <script src="/assets/sunrise-auto-bookmarks.js"></script>
   <script src="/assets/sunrise-batch-pages.js"></script>
   <script src="/assets/sunrise-pdf-quality.js"></script>
+  <script src="/assets/sunrise-pdf-quality-report.js"></script>
   <script src="/assets/sunrise-embedded-images.js"></script>
   <script type="module">
     try {
@@ -2148,17 +2149,37 @@
           <input type="file" id="savedPdfCheckInput" accept="application/pdf,.pdf">
           <p id="savedPdfCheckStatus" role="status" aria-live="polite">검사할 파일을 선택하세요.</p>
           <div id="savedPdfQualityResults" role="region" aria-live="polite" style="max-height:38vh;overflow:auto"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+            <button type="button" class="dialog-btn" id="savedQualityCsvBtn" disabled>검사 결과 CSV 저장</button>
+            <button type="button" class="dialog-btn" id="savedQualityJsonBtn" disabled>검사 결과 JSON 저장</button>
+          </div>
           <p style="font-size:12px">검사 결과는 참고용입니다. OCR, 내용의 정확성, 실제 글꼴 표시, 전자서명 유효성, PDF/A 준수 여부는 확인하지 못합니다.
           빈 페이지는 확정이 아닌 후보이며 제출 전 원본을 직접 점검하세요.</p>`,
         onMount: () => {
           const input = document.getElementById("savedPdfCheckInput");
           const status = document.getElementById("savedPdfCheckStatus");
           const results = document.getElementById("savedPdfQualityResults");
-          let request = 0;
+          const csvBtn = document.getElementById("savedQualityCsvBtn");
+          const jsonBtn = document.getElementById("savedQualityJsonBtn");
+          let request = 0, latest = null, reportStem = "pdf_quality";
+          const exportReport = format => {
+            if (!latest || !input.isConnected || !window.SunrisePdfQualityReport) return;
+            try {
+              const output = format === "csv"
+                ? window.SunrisePdfQualityReport.createCsv(latest)
+                : window.SunrisePdfQualityReport.createJson(latest);
+              downloadBytes(new TextEncoder().encode(output), reportStem + "_quality." + format,
+                format === "csv" ? "text/csv;charset=utf-8" : "application/json;charset=utf-8");
+            } catch(error) { showToast("검사 결과 내보내기 실패: " + error.message, "fa-triangle-exclamation"); }
+          };
+          csvBtn.addEventListener("click", () => exportReport("csv"));
+          jsonBtn.addEventListener("click", () => exportReport("json"));
           input.addEventListener("change", async () => {
             const current = ++request, file = input.files?.[0];
             results.replaceChildren();
+            latest = null;csvBtn.disabled = true;jsonBtn.disabled = true;
             if (!file) { status.textContent = "검사할 파일을 선택하세요."; return; }
+            reportStem = file.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,72) || "pdf";
             status.textContent = "구조·페이지 내용을 검사 중입니다…";
             try {
               if (!window.SunrisePdfQuality?.inspect) throw Error("품질 검사 구성 요소를 불러오지 못했습니다.");
@@ -2172,6 +2193,7 @@
                 }
               });
               if (current !== request || !input.isConnected) return;
+              latest = result;csvBtn.disabled = false;jsonBtn.disabled = false;
               const o = result.orientation;
               status.textContent = `검사 완료(판독 가능한 범위): ${(result.bytes / 1048576).toFixed(2)} MiB, ${result.pageCount}쪽.
                 세로 ${o.portrait}·가로 ${o.landscape}·정사각형 ${o.square}쪽,
