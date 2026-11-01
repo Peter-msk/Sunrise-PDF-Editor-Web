@@ -136,7 +136,7 @@
    try{
     canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
     const ctx=canvas.getContext('2d',{alpha:false});
-    if(!ctx||typeof canvas.toBlob!=='function)throw Error('PDF 래스터 렌더러를 사용할 수 없습니다.');
+    if(!ctx||typeof canvas.toBlob!=='function')throw Error('PDF 래스터 렌더러를 사용할 수 없습니다.');
     ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,canvas.width,canvas.height);
     await page.render({canvasContext:ctx,canvas,viewport}).promise;
     if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
