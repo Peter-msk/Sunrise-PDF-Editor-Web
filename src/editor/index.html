@@ -7502,52 +7502,108 @@
     }
 
     function openEditInsertItemModal() {
-      const doc = activeDoc();
-      if (!doc) return;
-      const item = doc.overlays.find((o) => o.id === state.selectedInsertId) || doc.overlays.find((o) => o.pageIndex === doc.currentPage);
+      const doc=activeDoc();
+      if (!doc || doc.operationBusy) return;
+      const item=doc.overlays.find(o=>o.id===state.selectedInsertId) ||
+        doc.overlays.find(o=>o.pageIndex===doc.currentPage);
       if (!item) {
-        showToast("현재 페이지에서 수정할 삽입 항목을 먼저 클릭/터치하세요.", "fa-hand-pointer");
-        return;
+        showToast("현재 페이지에서 수정할 항목을 클릭/터치하세요.","fa-hand-pointer");return;
       }
-      state.selectedInsertId = item.id;
+      state.selectedInsertId=item.id;
+      const isTable=item.type==="Table",isShape=item.type==="Shape";
+      const isAnnotation=["Note","Highlight"].includes(item.type);
+      const dimensions=isTable||isShape||isAnnotation;
+      const safeColor=value=>/^#[0-9a-f]{6}$/i.test(value||"")?value:"#1F6F9F";
+      const fillColor=/^#[0-9a-f]{6}$/i.test(item.bgColor||"")?item.bgColor:
+        (item.type==="Highlight"?"#FFEB3B":item.type==="Note"?"#FFF6D6":"#FFFFFF");
+      let contentFields="";
+      if(isTable) {
+        const grid=Array.isArray(item.cells)?item.cells.map(row=>row.join("\t")).join("\n"):"";
+        contentFields=`<label for="editTableCellsInput">표 셀 편집 (탭으로 열 분리, 줄바꿈으로 행 분리):</label>
+          <textarea id="editTableCellsInput" class="dialog-input" rows="6" style="min-height:110px;width:100%">${escapeHtml(grid)}</textarea>`;
+      } else if(isShape) {
+        contentFields=`<label for="editShapeKindInput">도형 종류:</label>
+          <select id="editShapeKindInput" class="dialog-select">
+            <option value="rect" ${item.shapeKind==="rect"?"selected":""}>사각형</option>
+            <option value="ellipse" ${item.shapeKind==="ellipse"?"selected":""}>타원</option>
+            <option value="line" ${item.shapeKind==="line"?"selected":""}>대각선</option>
+          </select>
+          <label for="editStrokeWidthInput">선 두께 (pt):</label>
+          <input id="editStrokeWidthInput" class="dialog-input" type="number" min="1" max="15" value="${item.strokeWidth||2}">`;
+      } else {
+        contentFields=`<label for="editItemTextInput">문구 수정:</label>
+          <textarea id="editItemTextInput" class="dialog-input" rows="${isAnnotation?4:2}" style="width:100%">${escapeHtml(item.text||"")}</textarea>
+          <label for="editItemSizeInput">글자 크기 (pt):</label>
+          <input id="editItemSizeInput" type="number" class="dialog-input" min="8" max="72" value="${item.fontSize||13}">`;
+      }
+      const boxFields=dimensions?`
+        <label for="editItemWidthInput">너비 (pt):</label>
+        <input id="editItemWidthInput" type="number" class="dialog-input" min="20" max="800" value="${item.width||(isTable?240:isShape?180:220)}">
+        <label for="editItemHeightInput">높이 (pt):</label>
+        <input id="editItemHeightInput" type="number" class="dialog-input" min="20" max="800" value="${item.height||(isTable?64:isShape?90:64)}">`:"";
+      const paintFields=(isShape||isAnnotation)?`
+        <label for="editItemBgInput">배경/채움 색상:</label>
+        <input id="editItemBgInput" type="color" class="dialog-input" value="${fillColor}">
+        <label for="editItemOpacityInput">투명도 (0.1~1):</label>
+        <input id="editItemOpacityInput" type="number" class="dialog-input" step="0.05" min="0.1" max="1" value="${item.opacity??1}">`:"";
       openModal({
-        title: `삽입 항목 수정 (${item.type})`,
-        icon: "fa-pen-to-square",
-        width: "460px",
-        bodyHtml: `
-          <div class="dialog-form-grid">
-            <label for="editItemTextInput">문구 수정:</label>
-            <input type="text" id="editItemTextInput" class="dialog-input" value="${escapeHtml(item.text || "")}" />
-            <label for="editItemSizeInput">글자 크기:</label>
-            <input type="number" id="editItemSizeInput" class="dialog-input" min="8" max="72" value="${item.fontSize || 13}" />
-            <label for="editItemColorInput">색상:</label>
-            <input type="color" id="editItemColorInput" class="dialog-input" value="${item.color && item.color.startsWith("#") ? item.color : "#1F6F9F"}" style="height:34px;padding:2px" />
-          </div>
-        `,
-        footerHtml: `
-          <div></div>
-          <div class="modal-footer-right">
-            <button type="button" class="dialog-btn primary" id="editItemConfirmBtn">수정 저장</button>
-            <button type="button" class="dialog-btn" id="editItemCancelBtn">취소</button>
-          </div>
-        `,
-        onMount: () => {
-          document.getElementById("editItemCancelBtn").addEventListener("click", closeModal);
-          document.getElementById("editItemConfirmBtn").addEventListener("click", () => {
-            const metricFinish=beginOperationMetric('overlay_edit');let metricOutcome='cancelled';
+        title:`삽입 항목 수정 (${item.type})`,icon:"fa-pen-to-square",width:"500px",
+        bodyHtml:`<div class="dialog-form-grid">
+          ${contentFields}
+          <label for="editItemColorInput">글자/선 색상:</label>
+          <input id="editItemColorInput" type="color" class="dialog-input" value="${safeColor(item.color)}">
+          ${boxFields}
+          ${paintFields}
+        </div>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="editItemConfirmBtn">수정 저장</button>
+          <button type="button" class="dialog-btn" id="editItemCancelBtn">취소</button></div>`,
+        onMount:()=>{
+          document.getElementById("editItemCancelBtn").addEventListener("click",closeModal);
+          document.getElementById("editItemConfirmBtn").addEventListener("click",()=>{
+            if(activeDoc()!==doc||doc.operationBusy||!doc.overlays.includes(item)) {
+              showToast("수정 중 문서 상태가 변경되었습니다.","fa-triangle-exclamation");return;
+            }
+            let cells,text,fontSize,width,height,strokeWidth,opacity;
             try {
-            saveUndoSnapshot(doc, `항목 수정 (${item.type})`);
-            item.text = document.getElementById("editItemTextInput").value;
-            item.fontSize = Number(document.getElementById("editItemSizeInput").value) || 13;
-            item.color = document.getElementById("editItemColorInput").value;
-            closeModal();
-            renderCurrentPageCanvas();
-            renderLeftPane();
-            showToast("선택 항목을 수정했습니다.", "fa-pen-to-square");
-            metricOutcome='succeeded';
-            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
+              if(isTable) cells=parseEditableTableText(document.getElementById("editTableCellsInput").value);
+              else if(isShape) strokeWidth=validateOverlayDimension(
+                document.getElementById("editStrokeWidthInput").value,1,15,"선 두께");
+              else {
+                text=document.getElementById("editItemTextInput").value;
+                if(text.length>4000)throw new Error("문구는 4000자 이내로 입력해 주세요.");
+                fontSize=validateOverlayDimension(
+                  document.getElementById("editItemSizeInput").value,8,72,"글자 크기");
+              }
+              if(dimensions) {
+                width=validateOverlayDimension(document.getElementById("editItemWidthInput").value,20,800,"너비");
+                height=validateOverlayDimension(document.getElementById("editItemHeightInput").value,20,800,"높이");
+              }
+              if(isShape||isAnnotation)
+                opacity=validateOverlayDimension(document.getElementById("editItemOpacityInput").value,.1,1,"투명도");
+            } catch(error) {showToast(error.message,"fa-triangle-exclamation");return;}
+            const metricFinish=beginOperationMetric('overlay_edit');let outcome='failed';
+            try {
+              saveUndoSnapshot(doc,`항목 수정 (${item.type})`);
+              if(isTable){
+                item.cells=cells;item.text="표 ("+cells[0].join("/")+")";
+              }else if(isShape){
+                const kind=document.getElementById("editShapeKindInput").value;
+                if(["rect","ellipse","line"].includes(kind))item.shapeKind=kind;
+                item.strokeWidth=strokeWidth;
+              }else{item.text=text;item.fontSize=fontSize;}
+              item.color=document.getElementById("editItemColorInput").value;
+              if(dimensions){item.width=width;item.height=height;}
+              if(isShape||isAnnotation){
+                item.bgColor=document.getElementById("editItemBgInput").value;
+                item.opacity=opacity;
+              }
+              closeModal();renderCurrentPageCanvas();renderLeftPane();renderRightPane();
+              showToast("선택 항목을 수정했습니다. PDF 저장 후에도 편집 상태가 보존됩니다.","fa-pen-to-square");
+              outcome='succeeded';
+            }finally{metricFinish(outcome);}
           });
-        },
+        }
       });
     }
 
