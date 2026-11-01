@@ -135,7 +135,7 @@ async function protectPdfFile({inputPath,outputPath,password,qpdf=invokeQpdf}){
   // before publishing the staged result, without exposing the password in argv.
   const pageProbe=await qpdf(['@-'],argsOnStdin(['--password='+password,'--show-npages',stage]));
   const pageText=pageProbe.stdout?.trim()||'';
-  if(pageProbe.code!==0||!^(?:0|[1-9]\\d*)$/.test(pageText)||
+  if(pageProbe.code!==0||!/^(?:0|[1-9][0-9]*)$/.test(pageText)||
      Number(pageText)!==sourcePageCount)
    throw Error('암호 보호 출력의 페이지 수가 원본과 일치하지 않습니다.');
   const originalAgain=await fs.lstat(source);
