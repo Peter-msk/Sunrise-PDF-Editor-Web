@@ -13,7 +13,7 @@ const json=x=>JSON.parse(JSON.stringify(x));
 assert.deepEqual(json(call('parseEditableTableText("담당\\t검토\\t승인\\n김\\t박\\t이")')),[
  ['담당','검토','승인'],['김','박','이']]);
 assert.equal(call('validateOverlayDimension("0.55",.1,1,"opacity")'),.55,'decimal opacity support');
-for(const input of ['한열\n한열','a\tb\nc','a\tb\nc\td',
+for(const input of ['한열\n한열','a\tb\nc',
  'a\tb\nc\td\tvery-long-extra','a\tb\nc\t'+('x'.repeat(81))]){
  assert.throws(()=>{ctx.input=input;vm.runInContext('parseEditableTableText(input)',ctx);},/셀|행|열|표/);
 }
