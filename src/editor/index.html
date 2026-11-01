@@ -16,6 +16,7 @@
   <script src="/assets/sunrise-pdf-quality.js"></script>
   <script src="/assets/sunrise-pdf-quality-report.js"></script>
   <script src="/assets/sunrise-embedded-images.js"></script>
+  <script src="/assets/sunrise-special-pdf.js"></script>
   <script type="module">
     try {
       window.pdfjsLib = await import("/assets/pdfjs/pdf.min.mjs");
@@ -1968,6 +1969,7 @@
             title: "콘텐츠 삽입",
             actions: [
               { id: "insertText", label: "텍스트 삽입", icon: "fa-font", shortcut: "Ctrl+T", docReq: true },
+              { id: "visualTextCorrection", label: "텍스트 시각 교정 (원문 유지)", icon: "fa-pen", docReq: true },
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
               { id: "insertTable", label: "표 삽입", icon: "fa-table", shortcut: "Ctrl+Alt+B", docReq: true },
@@ -1982,6 +1984,8 @@
               { id: "insertNote", label: "주석 삽입", icon: "fa-comment-dots", shortcut: "Ctrl+Shift+T", docReq: true },
               { id: "highlightText", label: "강조 상자 삽입", icon: "fa-highlighter", shortcut: "Ctrl+H", docReq: true },
               { id: "insertStamp", label: "스탬프", icon: "fa-stamp", shortcut: "Ctrl+Alt+T", docReq: true },
+              { id: "insertVisualSignature", label: "시각 서명 (인증서 아님)", icon: "fa-signature", docReq: true },
+              { id: "maskedPageExport", label: "현재 쪽 마스킹 PDF", icon: "fa-user-shield", docReq: true },
               { id: "insertWatermark", label: "워터마크", icon: "fa-droplet", shortcut: "Ctrl+Alt+W", docReq: true },
             ],
           },
@@ -5383,6 +5387,10 @@
           if (!doc) return;
           openStyledInsertModal(doc, "Text", "텍스트 삽입", "삽입할 텍스트를 입력하세요");
           break;
+        case "visualTextCorrection":
+          if (!doc) return;
+          await openVisualTextCorrectionModal(doc);
+          break;
 
         case "insertTable":
           if (!doc) return;
@@ -5417,6 +5425,14 @@
         case "insertStamp":
           if (!doc) return;
           openStyledInsertModal(doc, "Stamp", "스탬프 삽입", "승인 / 검토완료 / 대외비");
+          break;
+        case "insertVisualSignature":
+          if (!doc) return;
+          openStyledInsertModal(doc, "VisualSignature", "시각적 서명 표시 (인증서·암호학적 서명 아님)", "서명자 이름");
+          break;
+        case "maskedPageExport":
+          if (!doc) return;
+          openMaskedPageExportModal(doc);
           break;
 
         case "insertWatermark":
@@ -7262,6 +7278,7 @@
         Note: { color: "#5C3B09", bg: "#FFF6D6", size: 12, x: 90, y: 150 },
         Highlight: { color: "#1B2631", bg: "rgba(255, 235, 59, 0.65)", size: 13, x: 80, y: 190 },
         Stamp: { color: "#1F6F9F", bg: "rgba(220, 234, 245, 0.90)", size: 14, x: 370, y: 105 },
+        VisualSignature: { color: "#194C78", bg: "#FFFFFF", size: 14, x: 80, y: 650 },
         Watermark: { color: "#1F6F9F", bg: "transparent", size: 28, x: 140, y: 360 },
       }[type] || { color: "#1B2631", bg: "transparent", size: 14, x: 80, y: 120 };
 
@@ -7330,6 +7347,8 @@
                 x: defaults.x,
                 y: defaults.y + (doc.overlays.filter((o) => o.pageIndex === pIdx).length % 5) * 28,
                 fontSize,
+                width: type === "VisualSignature" ? 310 : undefined,
+                height: type === "VisualSignature" ? 65 : undefined,
                 color,
                 bgColor: defaults.bg,
                 opacity: type === "Watermark" ? 0.35 : 0.96,
