@@ -5753,15 +5753,15 @@
       return original;
     }
     // Capture the editable state so an asynchronous save cannot mix document versions.
-    function captureSaveState(doc) {
+    function captureSaveState(doc, includeSnapshot = true) {
       return {
         originalBytes: doc.bytes, reader: doc.pdfJsDoc,
         data: JSON.stringify({overlays:doc.overlays, bookmarks:doc.bookmarks, metadata:doc.metadata,
           attachments:doc.attachments.map(({bytes, ...item}) => ({...item, size:bytes.byteLength}))}),
         attachmentBytes: doc.attachments.map(item => item.bytes),
-        snapshot: {...doc, bytes:doc.bytes.slice(), overlays:JSON.parse(JSON.stringify(doc.overlays)),
+        snapshot: includeSnapshot ? {...doc, bytes:doc.bytes.slice(), overlays:JSON.parse(JSON.stringify(doc.overlays)),
           bookmarks:JSON.parse(JSON.stringify(doc.bookmarks)), metadata:JSON.parse(JSON.stringify(doc.metadata)),
-          attachments:doc.attachments.map(item => ({...item, bytes:item.bytes.slice()}))},
+          attachments:doc.attachments.map(item => ({...item, bytes:item.bytes.slice()}))} : null,
       };
     }
 
@@ -8528,7 +8528,7 @@
       if (!doc || doc.operationBusy || doc.commentReportBusy) return false;
       doc.commentReportBusy=true;
       const originalBytes=doc.bytes, originalReader=doc.pdfJsDoc;
-      const captured=captureSaveState(doc);
+      const captured=captureSaveState(doc,false);
       const overlayState=JSON.stringify(doc.overlays);
       const isCurrent=()=>doc.bytes===originalBytes && doc.pdfJsDoc===originalReader &&
         activeDoc()===doc && saveStateIsCurrent(doc,captured);
@@ -8693,7 +8693,7 @@
     async function openNativeAnnotationsModal(doc) {
       if (!doc || doc.operationBusy) return;
       const originalBytes=doc.bytes, originalReader=doc.pdfJsDoc;
-      const captured=captureSaveState(doc);
+      const captured=captureSaveState(doc,false);
       const isCurrent=()=>activeDoc()===doc && doc.bytes===originalBytes &&
         doc.pdfJsDoc===originalReader && saveStateIsCurrent(doc,captured);
       let annotations;
