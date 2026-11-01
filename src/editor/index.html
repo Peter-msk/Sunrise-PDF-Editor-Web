@@ -2149,27 +2149,6 @@
       return { bytes: bytes.byteLength, pageCount: pages.length, orientation };
     }
 
-    // In an ordinary save, editing overlays must not silently remove pages or
-    // change their rotation/page boxes. Shared with batch compression validation.
-    function verifyPdfPageGeometry(original, output, operation) {
-      const before = original.getPages(), after = output.getPages();
-      if (!before.length || before.length !== after.length)
-        throw new Error(operation + ' 후 페이지 수가 일치하지 않습니다.');
-      const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.01;
-      for (let i = 0; i < before.length; i++) {
-        const a = before[i], b = after[i];
-        const rotationA = a.getRotation().angle, rotationB = b.getRotation().angle;
-        if (![0, 90, 180, 270].includes(((rotationA % 360) + 360) % 360) ||
-            rotationA !== rotationB)
-          throw new Error((i + 1) + '쪽 회전 정보가 변경되었습니다.');
-        for (const method of ['getMediaBox', 'getCropBox', 'getBleedBox', 'getTrimBox', 'getArtBox']) {
-          const first = a[method](), last = b[method]();
-          if (!['x', 'y', 'width', 'height'].every(key => near(first[key], last[key])))
-            throw new Error((i + 1) + '쪽 페이지 크기·좌표가 변경되었습니다: ' + method);
-        }
-      }
-    }
-
     async function verifySavedPdfBytes(originalBytes, outputBytes) {
       if (!window.PDFLib) throw new Error('PDF 검사 엔진을 불러오지 못했습니다.');
       validatePdfByteLength(outputBytes?.byteLength);
@@ -5934,6 +5913,27 @@
       const {PDFName}=window.PDFLib;
       if(pdf.catalog.get(PDFName.of('Perms')) || pdf.catalog.get(PDFName.of('AcroForm')))
         editablePdfForm(pdf);
+    }
+
+    // In an ordinary save, editing overlays must not silently remove pages or
+    // change their rotation/page boxes. Shared with batch compression validation.
+    function verifyPdfPageGeometry(original, output, operation) {
+      const before = original.getPages(), after = output.getPages();
+      if (!before.length || before.length !== after.length)
+        throw new Error(operation + ' 후 페이지 수가 일치하지 않습니다.');
+      const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.01;
+      for (let i = 0; i < before.length; i++) {
+        const a = before[i], b = after[i];
+        const rotationA = a.getRotation().angle, rotationB = b.getRotation().angle;
+        if (![0, 90, 180, 270].includes(((rotationA % 360) + 360) % 360) ||
+            rotationA !== rotationB)
+          throw new Error((i + 1) + '쪽 회전 정보가 변경되었습니다.');
+        for (const method of ['getMediaBox', 'getCropBox', 'getBleedBox', 'getTrimBox', 'getArtBox']) {
+          const first = a[method](), last = b[method]();
+          if (!['x', 'y', 'width', 'height'].every(key => near(first[key], last[key])))
+            throw new Error((i + 1) + '쪽 페이지 크기·좌표가 변경되었습니다: ' + method);
+        }
+      }
     }
 
     // Batch output must preserve structural and form invariants. This is
