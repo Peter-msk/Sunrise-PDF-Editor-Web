@@ -7674,7 +7674,7 @@
 
 
     function openEmbeddedImagesModal(doc) {
-      if (!window.SunriseEmbeddedImages || !window.pdfjsLib?.OPS || !window.pdfjsLib?.ImageKind) {
+      if (!window.SunriseEmbeddedImages || !window.pdfjsLib?.OPS) {
         showToast("내장 이미지 추출 엔진을 불러오지 못했습니다.", "fa-circle-exclamation");
         return;
       }
