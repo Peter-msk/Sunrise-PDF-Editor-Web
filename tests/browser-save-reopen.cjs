@@ -273,6 +273,7 @@ async function main(){
    // USR-13: the only exported material must be masked raster pixels.
    const privacySource=await PDFLib.PDFDocument.create();
    privacySource.addPage([400,600]).drawText('Sensitive Secret 123',{x:80,y:480,size:15});
+   privacySource.addPage([400,600]).drawText('Second Sensitive Page 456',{x:40,y:540,size:15});
    await page.locator('#openPdfInput').setInputFiles({
      name:'privacy-page.pdf',mimeType:'application/pdf',
      buffer:Buffer.from(await privacySource.save())
@@ -308,8 +309,53 @@ async function main(){
    assert.equal(rasterEvidence.text,'','raster export must not copy original searchable text');
    assert(rasterEvidence.mask.slice(0,3).every(x=>x<10),'mask region must be black in actual PDF pixels');
    await page.locator('#maskExportClose').click();
+   // A new two-page PDF must contain only rendered pixels, with all explicit
+   // black masks visible and no PDF text layer, even on unmasked regions.
+   await page.evaluate(()=>executeCommand('maskedDocumentExport'));
+   await page.locator('#documentMasksExportBtn').waitFor({state:'visible'});
+   await page.locator('#documentMasksInput').fill('1,70,100,180,40\n1,50,200,40,20\n2,30,40,80,30');
+   await page.locator('#documentMasksConfirmed').check();
+   const wholeDownload=page.waitForEvent('download',{timeout:60000});
+   await page.locator('#documentMasksExportBtn').click();
+   const wholeEvent=await wholeDownload;
+   assert(wholeEvent.suggestedFilename().endsWith('_masked_full_document.pdf'));
+   const wholePath=path.join(downloadDir,'masked-complete.pdf');
+   await wholeEvent.saveAs(wholePath);
+   const wholeDisk=fs.readFileSync(wholePath);
+   const wholePdf=await PDFLib.PDFDocument.load(wholeDisk);
+   assert.equal(wholePdf.getPageCount(),2);
+   for(const field of ['AcroForm','Outlines','Names','Perms','SunriseWebEdits']){
+     assert.equal(wholePdf.catalog.get(PDFLib.PDFName.of(field)),undefined,'must not copy '+field);
+   }
+   const wholeEvidence=await page.evaluate(async b64=>{
+     const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+     const pdf=await window.pdfjsLib.getDocument({data:bytes}).promise;
+     try{
+       const rows=[];
+       for(let n=1;n<=pdf.numPages;n++){
+         const p=await pdf.getPage(n),text=await p.getTextContent();
+         const viewport=p.getViewport({scale:1}),canvas=document.createElement('canvas');
+         canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+         const ctx=canvas.getContext('2d');
+         await p.render({canvasContext:ctx,canvas,viewport}).promise;
+         const coords=n===1?[[80,115],[65,210]]:[[45,55]];
+         rows.push({text:text.items.map(item=>item.str).join(''),
+           pixels:coords.map(([x,y])=>[...ctx.getImageData(x,y,1,1).data])});
+         canvas.width=0;canvas.height=0;
+       }
+       return rows;
+     }finally{await pdf.destroy()}
+   },wholeDisk.toString('base64'));
+   assert.equal(wholeEvidence.length,2);
+   for(const record of wholeEvidence){
+     assert.equal(record.text,'','full-document raster export cannot retain PDF text layer');
+     for(const pixel of record.pixels)
+       assert(pixel.slice(0,3).every(channel=>channel<10),'masked rectangle must be black');
+   }
+   await page.locator('#documentMasksCloseBtn').click();
+
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, masked raster export, embedded PNG, quality reports and range split');
+   console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, single- and full-document multi-region masked raster export, embedded PNG, quality reports and range split');
    await context.close();
  }finally{
    if(browser)await browser.close();

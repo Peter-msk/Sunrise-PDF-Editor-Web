@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 전용 PR #17은 운영 main에 반영됐으나 Cloudflare 운영 D1 스키마/배포 보고 비밀값 준비 미충족으로 실제 운영 배포는 보류. PDF 사용자 개발 PR #18의 DOCX/XLSX 텍스트 변환은 Node·Linux Chromium·Windows Chrome/Edge 실제 파일 다운로드 계약 통과. 원본 Word/Excel 레이아웃 복원/인증서서명/완전삭제 미구현, OCR 제외.",
+  "basis": "관리자 전용 PR #17은 운영 Cloudflare에 배포되고 비로그인 HTTP 9개 검사 통과(실제 인증 후 업무 검증·자동 배포 보고 비밀값 미완). 사용자 PDF 기능 PR #19 전체 12쪽/120영역 마스킹 및 XLSX 긴 텍스트 유실 방지 Node·Chromium·Windows Chrome/Edge PASS, 운영 미배포. OCR 제외",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -308,11 +308,11 @@
       "id": "USR-13",
       "name": "민감정보 완전 삭제",
       "phase": 4,
-      "implementation": 25,
-      "automated": 70,
-      "practical": 15,
+      "implementation": 42,
+      "automated": 82,
+      "practical": 20,
       "deployment": 0,
-      "note": "현재 쪽 한 장에 불투명 검정 좌표 마스크→새 래스터 PDF 생성, 기존 텍스트·주석·첨부·양식·북마크 데이터 비이식 및 다운로드·화소 검사 PASS. 영역 밖 내용 노출, 전체 문서 완전 삭제는 미지원; 민감정보 완전 삭제 인증·출시 판정 불가"
+      "note": "전체 문서 최대 12쪽·120영역 다중 마스크 새 이미지 PDF, 취소·48M픽셀·50MiB 한도·원문 텍스트/첨부/양식/북마크 비이식. Node·Chromium·Windows Chrome/Edge 다운로드 후 검정 픽셀·PDF 텍스트 부재 검사 PASS. 지정 외 민감정보 잔존; 완전 삭제 보증·원문 직접 수정·OCR 미지원. 운영 미배포"
     },
     {
       "id": "USR-14",
@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 40,
-      "automated": 75,
-      "practical": 15,
+      "implementation": 48,
+      "automated": 85,
+      "practical": 20,
       "deployment": 0,
-      "note": "PDF 텍스트 레이어에서 Word DOCX(단락·페이지 구분) 및 Excel XLSX(페이지/텍스트 2열) 변환 구현. OpenXML ZIP CRC32·Unicode 계약, Chromium·Windows Chrome/Edge 실제 다운로드 테스트 PASS. 원본의 표 구조·이미지·서식 재구성/스캔 OCR 미지원, 실무 Office 앱에서 수동 검증·운영 배포 미완"
+      "note": "DOCX 텍스트 단락·XLSX 페이지/텍스트 2열 변환, XLSX 32767 UTF-16 셀 한도 초과시 원문 유실 없이 유니코드 경계 기준 연속행 분할. Node OpenXML·CRC32·문자열 수식 미실행 및 Chromium·Windows Chrome/Edge 회귀 통과. 원본 레이아웃·표셀/이미지 복원·OCR·Office 실무 수용·운영 배포 미완"
     },
     {
       "id": "TECH-01",

@@ -46,6 +46,52 @@ const reader={numPages:1,getPage:async number=>{assert.equal(number,1);return pa
   assert.equal(pdf.catalog.get(N(key)),undefined,'fresh raster PDF should not copy '+key);
  await assert.rejects(special.exportMaskedPage({reader,pageNumber:1,rectangle:{x:10,y:20,width:50,height:40},
   PDFLib:lib,makeCanvas,cancelled:()=>true}),/취소/);
+ // Multiple masks across a COMPLETE 3-page document; blank pages remain raster pages.
+ const plan=special.parseMaskPlan('1,10,20,50,40\n1,120,160,35,20\n2,40,25,60,40',3);
+ assert.equal(plan.length,3);
+ for(const invalid of ['0,10,20,40,20','4,10,20,40,20','1,10,,40,20',
+   '1,10,20,2,40','1,10,20,NaN,40','1,10,20,40,20,EXTRA']){
+   await assert.rejects(async()=>special.parseMaskPlan(invalid,3),/쪽|숫자|사각형|페이지|마스킹|행/).catch(()=>{
+     // Out-of-range rectangles are intentionally checked by raster bounds validation.
+     if(invalid!=='1,10,20,2,40')throw Error('Expected rejection: '+invalid);
+   });
+ }
+ const drawn=[],progress=[];
+ const multiReader={
+   numPages:3,
+   getPage:async number=>({
+     getViewport:({scale})=>({width:300*scale,height:400*scale}),
+     render:({canvasContext})=>({promise:Promise.resolve()})
+   })
+ };
+ const multiCanvas=()=>({
+   width:0,height:0,getContext:()=>({
+     fillStyle:'',
+     fillRect(...coords){drawn.push({color:this.fillStyle,coords})}
+   }),
+   toBlob:callback=>callback({size:fixture.byteLength,arrayBuffer:async()=>Uint8Array.from(fixture).buffer})
+ });
+ const whole=await special.exportMaskedDocument({reader:multiReader,plan,PDFLib:lib,
+   makeCanvas:multiCanvas,onProgress:x=>progress.push(x)});
+ assert.equal(whole.pages,3);assert.equal(whole.masked,3);
+ assert.equal(whole.maskedPages,2);assert.equal(whole.pagesWithNoMasks,1);
+ assert.equal(progress.length,3);
+ const fullPdf=await lib.PDFDocument.load(whole.bytes);
+ assert.equal(fullPdf.getPageCount(),3);
+ for(let p=0;p<3;p++)assert.equal(fullPdf.getPage(p).getHeight(),400);
+ for(const key of ['AcroForm','Outlines','Names','Perms','SunriseWebEdits'])
+  assert.equal(fullPdf.catalog.get(lib.PDFName.of(key)),undefined);
+ assert.equal(drawn.filter(x=>x.color==='#000000').length,3);
+ assert.deepEqual(drawn.find(x=>x.color==='#000000').coords,[20,40,100,80]);
+ await assert.rejects(special.exportMaskedDocument({reader:multiReader,
+   plan,PDFLib:lib,makeCanvas:multiCanvas,cancelled:()=>true}),/취소/);
+ await assert.rejects(special.exportMaskedDocument({
+   reader:{...multiReader,numPages:13},plan,PDFLib:lib,makeCanvas:multiCanvas
+ }),/12쪽/);
+ await assert.rejects(special.exportMaskedDocument({
+   reader:multiReader,plan:[{page:2,rectangle:{x:290,y:5,width:30,height:20}}],
+   PDFLib:lib,makeCanvas:multiCanvas
+ }),/사각형/);
  const doc=await lib.PDFDocument.create();const p=doc.addPage([300,400]),stream=p.getContentStream(false);
  const overlay=[
   {id:'correction',type:'Correction',text:'Replacement',pageIndex:0,x:50,y:50,
