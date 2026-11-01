@@ -71,6 +71,7 @@ const annotation=(pdf,page,subtype,contents,additional={})=>{
  signed.catalog.set(n('Perms'),signed.context.obj({}));
  assert.throws(()=>ctx.updateNativeAnnotation(signed,raw,0,0,'edit','blocked'),/전자서명 또는 양식/);
  const markerBytes=Uint8Array.from([...raw,...Buffer.from('\n/ByteRange [0 1 2 3]\n')]);
- assert.throws(()=>ctx.updateNativeAnnotation(await fresh(raw),markerBytes,0,0,'edit','blocked'),/전자서명 또는 양식/);
+ const markerDoc=await fresh(raw);
+ assert.throws(()=>ctx.updateNativeAnnotation(markerDoc,markerBytes,0,0,'edit','blocked'),/전자서명 또는 양식/);
  console.log('PASS: native Text/Highlight Unicode edit+delete, PDF disk-byte roundtrip, unmodified source, foreign annotation preservation, signature/form/reply/locked guards and UI wiring');
 })().catch(e=>{console.error(e);process.exitCode=1;});
