@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 Node/SQLite 28개·전체 Node 67개·릴리스 빌드, Linux Chromium/Windows Chrome/Edge 각 관리자 3개+PDF 저장 1개 및 운영 구조/바인딩 읽기 증거. 실제 운영 반영/사용자 PC는 미확인인 잠정 관리 점수; USR-17 내장 이미지 추출 소스/계약 검사 코드 신규 작성(실행 결과 미확인).",
+  "basis": "관리자 Node/SQLite 28개·전체 Node 67개·릴리스 빌드, Linux Chromium/Windows Chrome/Edge 각 관리자 3개+PDF 저장 1개 및 운영 구조/바인딩 읽기 증거. 실제 운영 반영/사용자 PC는 미확인인 잠정 관리 점수; USR-17 내장 이미지 추출 소스/계약 검사 코드 신규 작성(실행 결과 미확인).; USR-08 계층형 PDF 북마크 및 Node 계층 재열기 계약 통과",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -248,11 +248,11 @@
       "id": "USR-08",
       "name": "북마크·목차",
       "phase": 3,
-      "implementation": 70,
-      "automated": 75,
+      "implementation": 85,
+      "automated": 85,
       "practical": 0,
       "deployment": 30,
-      "note": "텍스트 기반 제목 후보 Draft, 계층·실무 PDF 검증 필요"
+      "note": "기존 텍스트 레이어의 장·절·항·목 및 1.1 등에서 최대 4단계 북마크 생성, 화면 들여쓰기/내어쓰기와 Undo, PDF 실제 계층 Outlines/Count·기존 북마크 보존 계약 추가. 전체 Node 검사/빌드 통과; 실무 PDF 제목 정확도·브라우저 직접 조작 검증은 별도"
     },
     {
       "id": "USR-09",

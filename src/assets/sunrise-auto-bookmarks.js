@@ -44,6 +44,52 @@
   }
   return matches;
  }
+
+ // Only explicit numbering establishes a hierarchy. Ambiguous/unnumbered titles
+ // remain top-level; never infer a destination from a printed TOC page number.
+ function inferLevel(title){
+  const text=tidy(title);
+  if(/^제\s*\d+\s*(?:편|장)(?:\s|$)/.test(text))return 0;
+  if(/^제\s*\d+\s*절(?:\s|$)/.test(text))return 1;
+  if(/^제\s*\d+\s*항(?:\s|$)/.test(text))return 2;
+  if(/^제\s*\d+\s*목(?:\s|$)/.test(text))return 3;
+  const numberedPath=text.match(/^(\d+(?:\.\d+){0,3})(?:\.\s+|\s+|\)\s*)\S/);
+  if(numberedPath)return Math.min(3,numberedPath[1].split('.').length-1);
+  return 0;
+ }
+ // An outline cannot start with a child, skip a parent level, or exceed level 3.
+ // Normalize copied/reordered/deleted pending items deterministically.
+ function normalizeLevels(bookmarks){
+  if(!Array.isArray(bookmarks))throw Error('북마크 목록 형식이 올바르지 않습니다.');
+  let previous=0;
+  return bookmarks.map((item,index)=>{
+   const requested=Number.isInteger(item?.level)?item.level:0;
+   const level=Math.min(3,Math.max(0,Math.min(requested,index?previous+1:0)));
+   previous=level;
+   return {...item,level};
+  });
+ }
+ function removeSubtree(bookmarks,index){
+  const entries=normalizeLevels(bookmarks);
+  if(!Number.isInteger(index)||index<0||index>=entries.length)
+   throw Error('삭제할 북마크 위치가 올바르지 않습니다.');
+  const level=entries[index].level;
+  let end=index+1;
+  while(end<entries.length&&entries[end].level>level)end++;
+  const next=entries.slice(0,index).concat(entries.slice(end));
+  return {bookmarks:normalizeLevels(next),removedCount:end-index};
+ }
+ function changeLevel(bookmarks,index,direction){
+  if(!Number.isInteger(index)||index<0||index>=bookmarks.length||![-1,1].includes(direction))
+   throw Error('북마크 들여쓰기 대상이 올바르지 않습니다.');
+  const next=normalizeLevels(bookmarks);
+  const old=next[index].level;
+  const max=index?Math.min(3,next[index-1].level+1):0;
+  const desired=old+direction;
+  if(desired<0||desired>max)return null;
+  next[index].level=desired;
+  return normalizeLevels(next);
+ }
  function chooseHeading(items){return headingCandidates(items)[0]||null;}
  function suggestBookmarks(pageRecords,maxItems=100){
   if(!Array.isArray(pageRecords))throw Error('페이지 배열이 올바르지 않습니다.');
@@ -56,8 +102,8 @@
   }
   // If a repeated running header precedes the real section heading, skip
   // the repeated text and select the first unique heading on that page.
-  return candidates.map(x=>({title:x.titles.find(t=>frequency.get(t.toLocaleLowerCase())===1),page:x.page}))
-   .filter(x=>x.title).slice(0,limit);
+  return normalizeLevels(candidates.map(x=>({title:x.titles.find(t=>frequency.get(t.toLocaleLowerCase())===1),page:x.page}))
+   .filter(x=>x.title).map(x=>({...x,level:inferLevel(x.title)})).slice(0,limit));
  }
- return {chooseHeading,suggestBookmarks,getLines};
+ return {chooseHeading,suggestBookmarks,getLines,inferLevel,normalizeLevels,changeLevel,removeSubtree};
 });
