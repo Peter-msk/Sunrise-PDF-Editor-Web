@@ -26,6 +26,10 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
      edited[12]^=1; // Same file length; leave timestamp unchanged.
      await fs.writeFile(original,edited);
      await fs.utimes(original,before.atime,before.mtime);
+     const after=await fs.stat(original);
+     assert.equal(after.size,before.size,'Tamper fixture must preserve input size');
+     assert.equal(after.mtimeMs,before.mtimeMs,'Tamper fixture must preserve original mtime');
+     assert.equal(after.ino,before.ino,'Tamper fixture must retain file identity');
      mutateOriginal=false;
     }
     return {code:0,stdout:''};
@@ -71,6 +75,8 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   // Regression: replacing bytes in-place while preserving length and mtime
   // must never publish a protected PDF derived from a moving source.
   const tamperedTarget=path.join(tmp,'tampered.pdf');
+  const fixedTime=new Date('2024-01-01T00:00:00.000Z');
+  await fs.utimes(original,fixedTime,fixedTime);
   mutateOriginal=true;
   await assert.rejects(
    protect.protectPdfFile({inputPath:original,outputPath:tamperedTarget,password,qpdf:mock}),
