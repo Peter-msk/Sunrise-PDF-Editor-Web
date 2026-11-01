@@ -91,7 +91,7 @@ async function main(){
   // Search and inspect a selected inquiry, then keep detail visible after saving.
   await page.locator('#query').fill('저장할 때');
   await page.locator('#query').press('Enter');
-  await page.locator('#inquiryRows tr[data-id="51"]').waitFor();
+  await page.waitForFunction(()=>document.querySelectorAll('#inquiryRows tr[data-id]').length===1&&document.querySelector('#inquiryRows tr[data-id="51"]'),null,{timeout:15000});
   assert.equal(await page.locator('#inquiryRows tr[data-id]').count(),1);
   await page.locator('#inquiryRows tr[data-id="51"]').click();
   await page.locator('#editStatus').selectOption('in_progress');
