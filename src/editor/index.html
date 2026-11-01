@@ -1999,6 +1999,7 @@
               { id: "visualTextCorrection", label: "텍스트 시각 교정 (원문 유지)", icon: "fa-pen", docReq: true },
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
+              { id: "fillAllFormFields", label: "PDF 양식 여러 칸 한번에 입력", icon: "fa-list-check", docReq: true },
               { id: "insertTable", label: "표 삽입", icon: "fa-table", shortcut: "Ctrl+Alt+B", docReq: true },
               { id: "insertShape", label: "도형 삽입", icon: "fa-draw-polygon", docReq: true },
               { id: "insertPageNumber", label: "페이지 번호 삽입", icon: "fa-list-ol", docReq: true },
@@ -5478,6 +5479,11 @@
           await openFillFormFieldModal(doc);
           break;
 
+        case "fillAllFormFields":
+          if (!doc) return;
+          await openFillAllFormFieldsModal(doc);
+          break;
+
         case "insertText":
           if (!doc) return;
           openStyledInsertModal(doc, "Text", "텍스트 삽입", "삽입할 텍스트를 입력하세요");
@@ -7318,6 +7324,57 @@
       } finally { finish(outcome); }
     }
 
+
+    // USR-10: commit multiple AcroForm values in one transaction.
+    // Validate every requested value BEFORE changing even an in-memory PDF field.
+    async function updatePdfFormFields(bytes, changes) {
+      const finish=beginOperationMetric('form_fill_bulk');let outcome='failed';
+      try {
+        const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
+        if(!Array.isArray(changes)||changes.length<1||changes.length>100)
+          throw new Error('한 번에 1~100개 양식 필드를 수정할 수 있습니다.');
+        const pdf=await PDFDocument.load(bytes,{updateMetadata:false});
+        const form=editablePdfForm(pdf);
+        const existing=new Map(form.getFields().map(field=>[field.getName(),field]));
+        const seen=new Set(),prepared=[],texts=[];
+        for(const change of changes){
+          const name=change?.name;
+          if(typeof name!=='string'||!name.length||name.length>512||seen.has(name))
+            throw new Error('중복되거나 잘못된 양식 필드 이름이 있습니다.');
+          seen.add(name);
+          const field=existing.get(name);
+          if(!field)throw new Error('존재하지 않는 양식 필드: '+name);
+          if(field.isReadOnly())throw new Error('읽기 전용 양식 필드: '+name);
+          if(field instanceof PDFTextField){
+            if(field.isRichFormatted()||field.isPassword()||field.isFileSelector())
+              throw new Error('서식 있는 텍스트·비밀번호·파일 선택 필드는 지원하지 않습니다.');
+            if(typeof change.value!=='string'||change.value.length>1000||
+              /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(change.value))
+              throw new Error('양식 텍스트 값은 1000자 이하이며 제어 문자를 포함할 수 없습니다.');
+            texts.push(change.value||' ');
+            prepared.push({field,type:'text',value:change.value});
+          }else if(field instanceof PDFCheckBox){
+            if(typeof change.value!=='boolean')
+              throw new Error('체크박스 상태는 참 또는 거짓이어야 합니다.');
+            prepared.push({field,type:'checkbox',value:change.value});
+          }else throw new Error('지원하지 않는 양식 필드: '+name);
+        }
+        const font=texts.length?await window.SunriseKoreanFont.embed(pdf,texts):null;
+        for(const change of prepared){
+          if(change.type==='text'){
+            change.field.setText(change.value);
+            change.field.updateAppearances(font);
+          }else{
+            if(change.value)change.field.check();else change.field.uncheck();
+            change.field.updateAppearances();
+          }
+        }
+        const output=await pdf.save({updateFieldAppearances:false});
+        outcome='succeeded';
+        return output;
+      }finally{finish(outcome);}
+    }
+
     async function openFillFormFieldModal(doc) {
       if(doc.operationBusy)return;
       const captured=captureSaveState(doc),{PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
@@ -7353,6 +7410,99 @@
             finally{doc.operationBusy=false;button.disabled=field.readOnly;}
           });
         }});
+    }
+
+
+    // USR-10: edit all supported standard AcroForm controls in one review dialog.
+    // Existing single-field editor stays available for backward compatibility.
+    async function openFillAllFormFieldsModal(doc) {
+      if(!doc||doc.operationBusy)return;
+      const captured=captureSaveState(doc);
+      const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
+      let fields;
+      try {
+        const pdf=await PDFDocument.load(captured.snapshot.bytes,{updateMetadata:false});
+        const form=editablePdfForm(pdf);
+        const all=form.getFields();
+        if(all.length>100)throw new Error('양식 필드가 100개를 초과하여 전체 편집창을 열 수 없습니다.');
+        fields=all.filter(field=>
+          (field instanceof PDFTextField&&!field.isRichFormatted()&&!field.isPassword()&&!field.isFileSelector())||
+          field instanceof PDFCheckBox
+        ).map(field=>({
+          name:field.getName(),
+          kind:field instanceof PDFTextField?'text':'checkbox',
+          readOnly:field.isReadOnly(),
+          value:field instanceof PDFTextField?(field.getText()||''):field.isChecked()
+        }));
+        if(activeDoc()!==doc||!saveStateIsCurrent(doc,captured))throw new Error('문서가 변경되어 작업을 취소했습니다.');
+      }catch(error){showToast(error.message||'양식 필드 목록을 읽을 수 없습니다.','fa-circle-exclamation');return;}
+      if(!fields.length){showToast('편집 가능한 표준 텍스트·체크박스 필드가 없습니다.','fa-circle-info');return;}
+      openModal({
+        title:'PDF 양식 여러 칸 한번에 입력',icon:'fa-list-check',width:'700px',
+        bodyHtml:'<p>텍스트·체크박스의 값을 여러 개 수정한 후 한 번에 적용합니다. 기존 필드 중 변경한 값만 반영하며, 읽기 전용은 수정할 수 없습니다.</p>'+
+          '<div id="bulkFormRows" style="max-height:48dvh;overflow:auto;display:grid;gap:8px" role="group" aria-label="PDF 양식 입력칸"></div>'+
+          '<p id="bulkFormStatus" role="status" aria-live="polite">기본값을 불러왔습니다.</p>',
+        footerHtml:'<div></div><div class="modal-footer-right"><button type="button" class="dialog-btn primary" id="bulkFormApply">변경한 값 일괄 적용</button>'+
+          '<button type="button" class="dialog-btn" id="bulkFormCancel">취소</button></div>',
+        onMount:()=>{
+          const get=id=>document.getElementById(id),rows=get('bulkFormRows'),
+            status=get('bulkFormStatus'),apply=get('bulkFormApply'),cancel=get('bulkFormCancel');
+          const controls=[],modalCurrent=()=>activeDoc()===doc&&saveStateIsCurrent(doc,captured)&&
+            get('bulkFormApply')===apply&&get('modalBackdrop')?.classList.contains('open');
+          cancel.addEventListener('click',closeModal);
+          fields.forEach((field,i)=>{
+            const row=document.createElement('div');
+            row.className='dialog-form-grid';
+            row.style.gridTemplateColumns='minmax(120px,1fr) minmax(160px,2fr)';
+            row.style.padding='6px';
+            row.style.border='1px solid var(--border-soft)';
+            const label=document.createElement('label');
+            const id='bulkFormValue_'+i;
+            label.htmlFor=id;
+            label.textContent=field.name+(field.readOnly?' (읽기 전용)':'');
+            label.title=field.name;
+            const input=document.createElement('input');
+            input.id=id;
+            input.className=field.kind==='text'?'dialog-input':'';
+            input.type=field.kind==='text'?'text':'checkbox';
+            if(field.kind==='text'){input.maxLength=1000;input.value=field.value;}
+            else input.checked=!!field.value;
+            input.disabled=field.readOnly;
+            row.append(label,input);
+            rows.appendChild(row);
+            controls.push({field,input});
+          });
+          apply.addEventListener('click',async()=>{
+            if(doc.operationBusy||!modalCurrent()){status.textContent='문서가 변경되어 다시 열어야 합니다.';return;}
+            const changes=controls.filter(({field,input})=>!field.readOnly&&
+              (field.kind==='text'?input.value!==field.value:input.checked!==field.value))
+              .map(({field,input})=>({name:field.name,value:field.kind==='text'?input.value:input.checked}));
+            if(!changes.length){status.textContent='변경된 값이 없습니다.';return;}
+            doc.operationBusy=true;apply.disabled=true;cancel.disabled=true;
+            for(const item of controls)item.input.disabled=true;
+            status.textContent=changes.length+'개 입력칸을 PDF에 적용하고 있습니다.';
+            let info;
+            try {
+              const nextBytes=await updatePdfFormFields(captured.snapshot.bytes,changes);
+              await verifySavedPdfBytes(captured.snapshot.bytes,nextBytes);
+              info=await parsePageCountAndMeta(nextBytes);
+              if(!modalCurrent())throw new Error('문서 또는 대화상자가 변경되어 작업을 취소했습니다.');
+              saveUndoSnapshot(doc,'양식 입력칸 '+changes.length+'개 일괄 수정');
+              doc.bytes=nextBytes;
+              await reloadDocPdfJs(doc,{info});info=null;
+              closeModal();await refreshAllViews();
+              showToast('양식 '+changes.length+'개 입력값을 적용했습니다. PDF를 별도로 저장하세요.','fa-list-check');
+            }catch(error){
+              if(info?.pdfJsDoc&&doc.pdfJsDoc!==info.pdfJsDoc)await info.pdfJsDoc.destroy();
+              status.textContent='일괄 입력 실패: '+(error.message||error);
+            }finally{
+              doc.operationBusy=false;
+              apply.disabled=false;cancel.disabled=false;
+              for(const item of controls)item.input.disabled=item.field.readOnly;
+            }
+          });
+        }
+      });
     }
 
     function openCreateFormFieldModal(doc) {
