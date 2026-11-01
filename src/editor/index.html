@@ -3737,6 +3737,33 @@
           el.style.alignItems = "center";
           el.style.justifyContent = "center";
           el.textContent = item.text;
+        } else if (item.type === "Shape") {
+          el.style.background = "transparent";
+          const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
+          const w = Math.max(20, Number(item.width) || 180), h = Math.max(20, Number(item.height) || 90);
+          const stroke = Math.max(1,Math.min(15,Number(item.strokeWidth) || 2));
+          svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+          svg.setAttribute("preserveAspectRatio","none");
+          svg.setAttribute("width","100%");svg.setAttribute("height","100%");
+          svg.style.pointerEvents="none";
+          const kind = ["rect","ellipse","line"].includes(item.shapeKind) ? item.shapeKind : "rect";
+          const node = document.createElementNS("http://www.w3.org/2000/svg",kind === "line" ? "line" : kind);
+          if (kind === "rect") {
+            node.setAttribute("x",String(stroke/2));node.setAttribute("y",String(stroke/2));
+            node.setAttribute("width",String(Math.max(1,w-stroke)));
+            node.setAttribute("height",String(Math.max(1,h-stroke)));
+          } else if (kind === "ellipse") {
+            node.setAttribute("cx",String(w/2));node.setAttribute("cy",String(h/2));
+            node.setAttribute("rx",String(Math.max(1,(w-stroke)/2)));
+            node.setAttribute("ry",String(Math.max(1,(h-stroke)/2)));
+          } else {
+            node.setAttribute("x1",String(stroke/2));node.setAttribute("y1",String(stroke/2));
+            node.setAttribute("x2",String(w-stroke/2));node.setAttribute("y2",String(h-stroke/2));
+          }
+          node.setAttribute("stroke",item.color || "#1F6F9F");
+          node.setAttribute("stroke-width",String(stroke));
+          node.setAttribute("fill",kind === "line" ? "none" : item.bgColor || "transparent");
+          svg.appendChild(node);el.appendChild(svg);
         } else if (item.type === "Note") {
           el.style.borderLeft = "4px solid #E58A18";
           el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.12)";
@@ -4743,12 +4770,24 @@
         offCanvas.height = Math.round(h * dpr);
         octx.scale(dpr, dpr);
 
-        if (item.bgColor && item.bgColor !== "transparent") {
+        if (item.type !== "Shape" && item.bgColor && item.bgColor !== "transparent") {
           octx.fillStyle = item.bgColor;
           octx.fillRect(0, 0, w, h);
         }
 
-        if (item.type === "Stamp") {
+        if (item.type === "Shape") {
+          const stroke=Math.max(1,Math.min(15,Number(item.strokeWidth)||2));
+          const kind=["rect","ellipse","line"].includes(item.shapeKind)?item.shapeKind:"rect";
+          octx.beginPath();
+          octx.strokeStyle=item.color || "#1F6F9F";
+          octx.fillStyle=item.bgColor || "#FFFFFF";
+          octx.lineWidth=stroke;
+          if (kind === "rect") octx.rect(stroke/2,stroke/2,Math.max(1,w-stroke),Math.max(1,h-stroke));
+          else if (kind === "ellipse") octx.ellipse(w/2,h/2,Math.max(1,(w-stroke)/2),Math.max(1,(h-stroke)/2),0,0,2*Math.PI);
+          else {octx.moveTo(stroke/2,stroke/2);octx.lineTo(w-stroke/2,h-stroke/2);}
+          if (kind !== "line") octx.fill();
+          octx.stroke();
+        } else if (item.type === "Stamp") {
           octx.strokeStyle = item.color || "#1F6F9F";
           octx.lineWidth = 2;
           octx.strokeRect(1.5, 1.5, w - 3, h - 3);
@@ -4757,7 +4796,9 @@
           octx.fillRect(0, 0, 4, h);
         }
 
-        if (item.type === "Table" && Array.isArray(item.cells) && item.cells.length > 0) {
+        if (item.type === "Shape") {
+          // Shape geometry has already been painted; no text overlay.
+        } else if (item.type === "Table" && Array.isArray(item.cells) && item.cells.length > 0) {
           const rows = item.cells.length;
           const cols = Math.max(1, item.cells[0]?.length || 1);
           const cw = w / cols;
