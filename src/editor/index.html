@@ -1970,6 +1970,7 @@
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
               { id: "insertTable", label: "표 삽입", icon: "fa-table", shortcut: "Ctrl+Alt+B", docReq: true },
+              { id: "insertShape", label: "도형 삽입", icon: "fa-draw-polygon", docReq: true },
               { id: "insertPageNumber", label: "페이지 번호 삽입", icon: "fa-list-ol", docReq: true },
               { id: "insertHeaderFooter", label: "머리말/꼬리말", icon: "fa-heading", docReq: true },
             ],
@@ -5314,6 +5315,11 @@
           openInsertTableModal(doc);
           break;
 
+        case "insertShape":
+          if (!doc) return;
+          openInsertShapeModal(doc);
+          break;
+
         case "insertPageNumber":
           if (!doc) return;
           openPageNumberModal(doc);
@@ -7178,6 +7184,89 @@
       });
     }
 
+    // A table is editable metadata until PDF export; enforce bounded rectangular
+    // cells so preview and exported raster never disagree about row/column counts.
+    function validateEditableTableCells(cells) {
+      if (!Array.isArray(cells) || cells.length < 2 || cells.length > 12)
+        throw new Error("표는 2~12행으로 입력해 주세요.");
+      const columns = Array.isArray(cells[0]) ? cells[0].length : 0;
+      if (columns < 2 || columns > 8 ||
+          cells.some(row => !Array.isArray(row) || row.length !== columns))
+        throw new Error("표의 각 행은 같은 개수의 셀(2~8열)을 가져야 합니다.");
+      return cells.map(row => row.map(cell => {
+        const text = String(cell ?? "").trim();
+        if (text.length > 80 || /[\r\n\t]/.test(text))
+          throw new Error("셀 내용은 줄바꿈 없이 80자 이내로 작성해 주세요.");
+        return text;
+      }));
+    }
+    function parseEditableTableText(text) {
+      const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+      while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+      return validateEditableTableCells(lines.map(line => line.split("\t")));
+    }
+    function validateOverlayDimension(value, min, max, name) {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < min || n > max)
+        throw new Error(name + "은(는) " + min + "~" + max + " 범위여야 합니다.");
+      return Math.round(n * 10) / 10;
+    }
+    function openInsertShapeModal(doc) {
+      const size = doc.pageSizes[doc.currentPage] || {width:595,height:842};
+      openModal({
+        title:"도형 삽입 (사각형 · 타원 · 선)",icon:"fa-draw-polygon",width:"470px",
+        bodyHtml:`
+          <div class="dialog-form-grid">
+            <label for="shapeKindInput">도형 종류:</label>
+            <select id="shapeKindInput" class="dialog-select">
+              <option value="rect">사각형</option><option value="ellipse">타원</option><option value="line">대각선</option>
+            </select>
+            <label for="shapeWidthInput">너비 (pt):</label>
+            <input id="shapeWidthInput" type="number" class="dialog-input" min="20" max="800" value="180">
+            <label for="shapeHeightInput">높이 (pt):</label>
+            <input id="shapeHeightInput" type="number" class="dialog-input" min="20" max="800" value="90">
+            <label for="shapeColorInput">선 색상:</label>
+            <input id="shapeColorInput" type="color" class="dialog-input" value="#1F6F9F">
+            <label for="shapeFillInput">채움 색상:</label>
+            <input id="shapeFillInput" type="color" class="dialog-input" value="#FFFFFF">
+            <label for="shapeStrokeInput">선 두께 (pt):</label>
+            <input id="shapeStrokeInput" type="number" class="dialog-input" min="1" max="15" value="2">
+          </div>
+        `,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="shapeConfirmBtn">도형 삽입</button>
+          <button type="button" class="dialog-btn" id="shapeCancelBtn">취소</button></div>`,
+        onMount:()=>{
+          document.getElementById("shapeCancelBtn").addEventListener("click",closeModal);
+          document.getElementById("shapeConfirmBtn").addEventListener("click",()=>{
+            if (activeDoc() !== doc || doc.operationBusy) return;
+            let width,height,strokeWidth;
+            try {
+              width=validateOverlayDimension(document.getElementById("shapeWidthInput").value,20,800,"너비");
+              height=validateOverlayDimension(document.getElementById("shapeHeightInput").value,20,800,"높이");
+              strokeWidth=validateOverlayDimension(document.getElementById("shapeStrokeInput").value,1,15,"선 두께");
+            } catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+            const shapeKind=document.getElementById("shapeKindInput").value;
+            if (!["rect","ellipse","line"].includes(shapeKind)) return;
+            const color=document.getElementById("shapeColorInput").value;
+            const bgColor=document.getElementById("shapeFillInput").value;
+            const id="ov_"+overlayIdCounter++;
+            const metricFinish=beginOperationMetric('overlay_insert');let outcome='failed';
+            try {
+              saveUndoSnapshot(doc,"도형 삽입");
+              doc.overlays.push({id,pageIndex:doc.currentPage,type:"Shape",shapeKind,
+                x:Math.max(0,Math.min(90,size.width-width)),y:Math.max(0,Math.min(140,size.height-height)),
+                width,height,color,bgColor,strokeWidth,opacity:1,text:""});
+              state.selectedInsertId=id;
+              closeModal();renderCurrentPageCanvas();renderLeftPane();
+              showToast("도형을 추가했습니다. 클릭하여 수정하거나 드래그하세요.","fa-draw-polygon");
+              outcome='succeeded';
+            }finally{metricFinish(outcome);}
+          });
+        }
+      });
+    }
+
     function openInsertTableModal(doc) {
       openModal({
         title: "표 삽입 (결재란 / 데이터 표)",
@@ -7222,6 +7311,9 @@
             try {
             const hCells = document.getElementById("tblHeaderInput").value.split(",").map((s) => s.trim());
             const rCells = document.getElementById("tblRowInput").value.split(",").map((s) => s.trim());
+            let cells;
+            try { cells = validateEditableTableCells([hCells, rCells]); }
+            catch (error) { showToast(error.message, "fa-triangle-exclamation"); return; }
             saveUndoSnapshot(doc, "표 삽입");
             const id = `ov_${overlayIdCounter++}`;
             doc.overlays.push({
@@ -7233,7 +7325,7 @@
               y: 100,
               width: 240,
               height: 64,
-              cells: [hCells, rCells],
+              cells,
               color: "#1B2631",
               bgColor: "#FFFFFF",
               opacity: 0.98,
