@@ -7,6 +7,7 @@
   'use strict';
   const MAX_FILES=5;
   const MAX_SOURCE_PAGES=150,MAX_MERGED_PAGES=250,MAX_OUTPUTS=50;
+  const PAGE_YIELD_INTERVAL=8;
   // No fixed byte quota for split results. Retain checked arithmetic so a
   // rounded/overflowing byte counter cannot silently break queue accounting.
   function reserveOutputBytes(usedBytes,nextBytes){
@@ -95,6 +96,7 @@
       throw new Error('PDF 처리 엔진 또는 파일 읽기 기능이 없습니다.');
     const cancelled=()=>Boolean(handlers?.cancelled?.());
     const progress=(i,total,name)=>handlers?.progress?.(i,total,name);
+    const pageProgress=(done,total,name)=>handlers?.pageProgress?.(done,total,name);
     const error=(e)=>handlers?.error?.(e);
     const result=(e)=>handlers?.result?.(e);
     const pdfCtor=opts.PDFLib.PDFDocument;
@@ -131,6 +133,7 @@
             reserveOutputBytes(emittedBytes+stagedBytes,bytes.byteLength);
             stagedBytes+=bytes.byteLength;
             staged.push({index:i,part:chunk+1,startPage:start+1,endPage:end,totalParts:chunkCount,name:file.name,bytes});
+            pageProgress(end,source.pages.length,file.name);
             await yieldToBrowser();
           }
           if(cancelled())break;
@@ -158,11 +161,22 @@
     try{
       const merged=await pdfCtor.create();
       merged.setTitle('Sunrise PDF Editor - Merged PDF');
+      let added=0;
       for(const input of sources){
         if(cancelled())return;
         const indices=Array.from({length:input.pages.length},(_,i)=>i);
+        // Copy each source once: splitting the copy into multiple calls would
+        // duplicate shared PDF resources and could increase output size.
         const copied=await merged.copyPages(input.pdf,indices);
-        copied.forEach(p=>merged.addPage(p));
+        for(let first=0;first<copied.length;first+=PAGE_YIELD_INTERVAL){
+          if(cancelled())return;
+          const last=Math.min(first+PAGE_YIELD_INTERVAL,copied.length);
+          for(let index=first;index<last;index++)merged.addPage(copied[index]);
+          added+=last-first;
+          pageProgress(added,expected.length,input.name);
+          // Give the UI a chance to process a Cancel click after each group.
+          await yieldToBrowser();
+        }
       }
       if(cancelled())return;
       const bytes=await verifyResult(merged,expected,opts);
