@@ -9,9 +9,9 @@ assert(a>=0&&b>a&&c>b&&d>c,'Batch functions must exist');
 const output=[],errors=[],progress=[];
 let stopped=false;
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseKoreanFont:{embed:(pdf,text)=>korean.embed(pdf,text,fontData)}},
- ArrayBuffer,Uint8Array,Number,Error,Set,Map,console,
- validatePdfByteLength:length=>{if(length>50*1024*1024)throw Error('50MiB 초과')},
- readPdfInputFile:async file=>{if(file.size>50*1024*1024)throw Error('50 MiB 초과');return file.data},
+ ArrayBuffer,Uint8Array,Number,Error,Set,Map,console,setTimeout,
+ validatePdfByteLength:length=>{if(!Number.isSafeInteger(length)||length<0)throw Error('파일 크기 정보 오류')},
+ readPdfInputFile:async file=>file.data,
  editablePdfForm:pdf=>{
   if(pdf.catalog.get(lib.PDFName.of('Perms')))throw Error('서명 관련 문서');
   const acro=pdf.catalog.get(lib.PDFName.of('AcroForm'));
@@ -30,7 +30,9 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
  await ctx.batchMarkPdfs([file('good-a.pdf'),invalid,file('good-b.pdf')],{kind:'watermark',text:'대외비'},handlers);
  if(output.length!==2)console.error('Batch mark failure messages:',errors.map(e=>e.message));
  assert.deepEqual(output.map(x=>x.name),['good-a.pdf','good-b.pdf']);
- assert.equal(errors.length,1);assert.equal(progress.length,3);
+ assert.equal(errors.length,1);
+ assert.equal(progress.filter(args=>args.length===3).length,3,'all source files get one start event');
+ assert.equal(progress.filter(args=>args[3]?.page).length,2,'successful pages emit progress details');
  for(const r of output){
   const doc=await lib.PDFDocument.load(r.bytes);
   assert.equal(doc.getPageCount(),1);
@@ -63,7 +65,7 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
  const signed=await lib.PDFDocument.load(source);signed.catalog.set(lib.PDFName.of('Perms'),signed.context.obj({}));
  errors.length=0;await ctx.batchMarkPdfs([file('signed.pdf',await signed.save())],{kind:'page-number',text:''},handlers);
  assert.match(errors[0]?.message||'',/서명/);
- await assert.rejects(ctx.batchMarkPdfs(Array(6).fill(file('x.pdf')),{kind:'watermark',text:'TEST'},handlers),/최대 5개/);
+ await assert.rejects(ctx.batchMarkPdfs(Array(6).fill(file('x.pdf')),{kind:'watermark',text:'TEST'},handlers),/1~5개/);
  await assert.rejects(ctx.batchMarkPdfs([file('x.pdf')],{kind:'watermark',text:'\u0000'},handlers),/1~40자/);
  stopped=true;output.length=0;progress.length=0;
  await ctx.batchMarkPdfs([file('cancelled.pdf')],{kind:'page-number'},handlers);

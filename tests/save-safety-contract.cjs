@@ -13,7 +13,7 @@ vm.runInContext('let pendingSaveUrl = null;\n'+src.slice(start,end),ctx);
 (async()=>{
  const capture=vm.runInContext('captureSaveState(doc)',ctx);doc.overlays[0].text='changed';assert.equal(capture.snapshot.overlays[0].text,'old');assert.equal(vm.runInContext('saveStateIsCurrent(doc, capture)',vm.createContext({...ctx,capture})),false);
  doc.overlays[0].text='old';vm.runInContext('openSaveAsModal(doc)',ctx);
- let prepare=els.saveAsConfirmBtn.listeners.click();assert.notEqual(compiled.bytes,doc.bytes);doc.metadata.title='changed';resolveCompile(new Uint8Array([8]));await prepare;
+ let prepare=els.saveAsConfirmBtn.listeners.click();assert.strictEqual(compiled.bytes,doc.bytes,'immutable PDF bytes must be shared without a large copy');doc.metadata.title='changed';resolveCompile(new Uint8Array([8]));await prepare;
  assert(els.saveAsStatus.textContent.includes('변경'));assert.equal(els.saveAsDownloadLink.style.display,undefined);assert.equal(doc.dirty,true);
  doc.metadata.title='old';
  damagedOutput=true;prepare=els.saveAsConfirmBtn.listeners.click();resolveCompile(new Uint8Array([8]));await prepare;

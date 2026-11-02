@@ -7,7 +7,11 @@ const end=html.indexOf('    async function openNativeAnnotationsModal(',start);
 assert(start>=0 && end>start, 'native annotation mutation routines must be present');
 assert(html.includes('id: "manageNativeAnnotations"'), 'Ribbon must expose native annotations');
 assert(html.includes('case "manageNativeAnnotations":'), 'Ribbon command must open annotation manager');
-assert(html.includes('await verifySavedPdfBytes(originalBytes,next)'), 'Download structure must be checked before mutation commit');
+// Annotation edits intentionally allow a reduced /Annots count on delete.
+// The serialized PDF must still be verified before committing an undo snapshot.
+const verified=html.indexOf('await verifySavedPdfBytes(originalBytes,next,{allowAnnotationChanges:true})');
+const committed=html.indexOf('saveUndoSnapshot(doc,action==="edit"?"원본 주석 문구 수정":"원본 주석 삭제")');
+assert(verified>=0 && committed>verified, 'Annotation-aware PDF structure validation must precede the mutation commit');
 const ctx=vm.createContext({window:{PDFLib},Uint8Array,Array,Number,Error});
 vm.runInContext(html.slice(start,end),ctx);
 const n=PDFLib.PDFName.of;

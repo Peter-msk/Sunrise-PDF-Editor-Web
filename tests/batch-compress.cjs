@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js'),source=fs.readFileSync('src/editor/index.html','utf8');
 const s=source.indexOf('    function guardBatchSource('),e=source.indexOf('    function openBatchCompressModal(',s);assert(s>=0&&e>s);
 let cancelled=false,results=[],errors=[],progress=[];
-const ctx=vm.createContext({window:{PDFLib:lib},Number,Error,readPdfInputFile:async f=>{if(f.size>50*1024*1024)throw Error('50 MiB 초과');return f.data},editablePdfForm:pdf=>{if(pdf.catalog.get(lib.PDFName.of('Perms')))throw Error('서명 문서')},compressPdfImages:async bytes=>({bytes})});
+const ctx=vm.createContext({window:{PDFLib:lib},Number,Error,readPdfInputFile:async f=>f.data,editablePdfForm:pdf=>{if(pdf.catalog.get(lib.PDFName.of('Perms')))throw Error('서명 문서')},compressPdfImages:async bytes=>({bytes})});
 vm.runInContext(source.slice(s,e),require('./helpers/editor-metrics.cjs')(ctx));
 const handlers={cancelled:()=>cancelled,progress:(...x)=>progress.push(x),result:x=>results.push(x),error:x=>errors.push(x)};
 (async()=>{
@@ -15,8 +15,10 @@ const handlers={cancelled:()=>cancelled,progress:(...x)=>progress.push(x),result
  const stop={...handlers,result:x=>{results.push(x);cancelled=true}};
  await ctx.batchCompressPdfs([file('one.pdf'),file('two.pdf')],{strength:0},stop);
  assert.equal(results.length,1);assert.equal(progress.length,1);cancelled=false;
- await assert.rejects(ctx.batchCompressPdfs(Array(6).fill(file('x.pdf')),{strength:0},handlers),/최대 5개/);
- await assert.rejects(ctx.batchCompressPdfs([{name:'large',size:101*1024*1024}],{strength:0},handlers),/100 MiB/);
+ await assert.rejects(ctx.batchCompressPdfs(Array(6).fill(file('x.pdf')),{strength:0},handlers),/1~5개/);
+ assert.doesNotThrow(()=>ctx.validateBatchOfficeFiles([{name:'large.pdf',size:101*1024*1024}]),
+  'valid large inputs have no arbitrary MB quota');
+ await assert.rejects(ctx.batchCompressPdfs([{name:'unsafe.pdf',size:Number.MAX_SAFE_INTEGER+1}],{strength:0},handlers),/1~5개/);
  const signed=await lib.PDFDocument.create();signed.addPage();signed.catalog.set(lib.PDFName.of('Perms'),signed.context.obj({}));
  errors=[];await ctx.batchCompressPdfs([file('signed.pdf',await signed.save())],{strength:0},handlers);assert.match(errors[0].message,/서명/);
  const formSource=await lib.PDFDocument.create(),page=formSource.addPage([400,600]),form=formSource.getForm();

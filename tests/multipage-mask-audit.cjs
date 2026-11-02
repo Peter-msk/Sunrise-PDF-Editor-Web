@@ -53,7 +53,7 @@ const reader={numPages:3,getPage:async n=>{
  await assert.rejects(special.exportMaskedPages({reader,plan:[],PDFLib,makeCanvas}),/목록/);
  await assert.rejects(special.checkOutputStructure(output.bytes,PDFLib,3),/페이지 수/);
  const editor=fs.readFileSync('src/editor/index.html','utf8');
- for(const phrase of ['maskPlanLines','maskPlanCheck','maskPlanPreview','exportMaskedPages','기재되지 않은 페이지는 출력에서 완전히 제외'])
+ for(const phrase of ['maskPlanLines','maskPlanCheck','maskPlanPreview','exportMaskedPages','목록에 없는 페이지는 제외합니다.'])
   assert(editor.includes(phrase),'Editor must expose mask plan UI and warnings: '+phrase);
  console.log('PASS: multi-page multi-mask plan, bounds, output fresh PDF/no source catalog, cancellation, progress and safeguards');
 })().catch(error=>{console.error(error);process.exitCode=1});

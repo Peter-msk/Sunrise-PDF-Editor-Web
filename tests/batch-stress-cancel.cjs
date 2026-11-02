@@ -1,4 +1,4 @@
-// Medium-sized document workload and deterministic cancellation/byte-budget checks.
+// Medium-sized workload, deterministic cancellation, and safe byte accounting.
 const assert=require('node:assert/strict');
 const PDFLib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const {process:processBatch,reserveOutputBytes}=require('../src/assets/sunrise-batch-pages.js');
@@ -6,10 +6,11 @@ const MiB=1024*1024;
 async function main(){
  assert.equal(reserveOutputBytes(0,1),1);
  assert.equal(reserveOutputBytes(50*MiB,50*MiB),100*MiB);
- assert.throws(()=>reserveOutputBytes(50*MiB,50*MiB+1),/100 MiB|50 MiB/);
- assert.throws(()=>reserveOutputBytes(99*MiB,2*MiB),/100 MiB/);
- assert.throws(()=>reserveOutputBytes(-1,1),/100 MiB/);
- assert.throws(()=>reserveOutputBytes(0,0),/100 MiB/);
+ assert.equal(reserveOutputBytes(50*MiB,50*MiB+1),100*MiB+1);
+ assert.equal(reserveOutputBytes(99*MiB,2*MiB),101*MiB);
+ assert.throws(()=>reserveOutputBytes(-1,1),/바이트/);
+ assert.throws(()=>reserveOutputBytes(0,0),/바이트/);
+ assert.throws(()=>reserveOutputBytes(Number.MAX_SAFE_INTEGER,1),/바이트/);
 
  // The 120-page workload repeatedly serializes separate page groups.
  // It runs through the actual PDF processing engine, not a mocked algorithm.
@@ -31,7 +32,7 @@ async function main(){
  assert.equal(outcomes.length,20);
  assert.deepEqual(outcomes.map(x=>x.part),Array.from({length:20},(_,i)=>i+1));
  const size=outcomes.reduce((n,item)=>n+item.bytes.byteLength,0);
- assert(size>0&&size<=100*MiB);
+ assert(Number.isSafeInteger(size)&&size>0,'serialized split sizes must be safe positive integers');
  for(const item of [outcomes[0],outcomes[9],outcomes[19]]){
    const restored=await PDFLib.PDFDocument.load(item.bytes);
    assert.equal(restored.getPageCount(),6);
@@ -64,6 +65,6 @@ async function main(){
  await processBatch([input],{mode:'split',pagesPerFile:2},handlers,options);
  assert.equal(outcomes.length,0);
  assert.match(failures[0]?.message||'',/50개/);
- console.log('PASS: 120-page split workload, output byte budget 100 MiB, timer-driven cancellation without partial files, output count cap; elapsed='+elapsed+'ms');
+ console.log('PASS: 120-page split workload, safe output byte accounting, timer-driven cancellation without partial files, output count cap; elapsed='+elapsed+'ms');
 }
 main().catch(error=>{console.error(error);process.exitCode=1});
