@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {readFileSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
+import {handlePublicationRestore} from '../src/admin-publication-restore.mjs';
+import {createPublicationBackupV2,readPublicationTablesV2} from '../src/admin-publication-backup-v2.mjs';
+const require=createRequire(import.meta.url);const crypto=require('node:crypto');
+const db0=new DatabaseSync(':memory:');db0.exec('PRAGMA foreign_keys=ON');
+for(const file of ['0001_inquiries_and_site_updates.sql','0003_password_admin.sql','0004_publication_lifetime.sql','0015_admin_edit_revisions.sql','0016_admin_publication_restore_audit.sql'])db0.exec(readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));
+const db={prepare(sql){const q=db0.prepare(sql);const p={values:[],bind(...values){this.values=values;return this},all:async function(){return {results:q.all(...this.values)}},first:async function(){return q.get(...this.values)||null},run:async function(){return {meta:{changes:q.run(...this.values).changes}}}};return p},async batch(queries){db0.exec('BEGIN IMMEDIATE');try{const out=[];for(const q of queries)out.push(await q.run());db0.exec('COMMIT');return out}catch(e){db0.exec('ROLLBACK');throw e}}};
+const token='a'.repeat(64);const hash=crypto.createHash('sha256').update(token).digest('hex');const now=Date.now();
+db0.prepare('INSERT INTO admin_accounts(id,username,password_salt,password_hash,iterations) VALUES (1,?,?,?,?)').run('testadmin','browser-pbkdf2-v1:0123456789abcdef0123456789abcdef','b'.repeat(64),600000);
+db0.prepare('INSERT INTO admin_sessions (token_hash,admin_id,created_ms,last_seen_ms,expires_ms) VALUES (?,1,?,?,?)').run(hash,now,now,now+3600000);
+const env={DB:db,PUBLICATION_RESTORE_SIGNING_KEY:'a'.repeat(48)};
+const cookie='__Host-sunrise_pdf_admin='+token;
+const base='https://example.test/api/admin/publication-restore/';
+function req(part,body,cookieValue=cookie){const headers={'cookie':cookieValue,'origin':'https://example.test','content-type':'application/json'};return new Request(base+part,{method:part==='export'?'GET':'POST',headers,body:body===undefined?undefined:JSON.stringify(body)})}
+async function call(part,body,cookieValue){const r=await handlePublicationRestore(req(part,body,cookieValue),env,new URL(base+part));return {status:r.status,body:await r.json()}}
+assert.equal((await call('export')).status,200);
+assert.equal((await call('export',undefined,'')).status,401);
+const baseline=await readPublicationTablesV2(db);
+const modified=structuredClone(baseline);modified.announcements.push({id:200,title:'복원 안전성 테스트',body:'시험용 새 항목',level:'info',published_at:'2026-11-03',first_published_at:null,is_active:0,revision:0,sort_order:3});
+const backup=(await createPublicationBackupV2(modified)).envelope;
+const p=await call('preview',{backup});assert.equal(p.status,200);assert.equal(p.body.insert,1);assert.equal(p.body.requiresConfirmation,true);assert.equal(db0.prepare('SELECT COUNT(*) n FROM site_announcements WHERE id=200').get().n,0);
+const apply=await call('apply',{backup,token:p.body.token,confirm:'공지·업데이트 복원 실행'});assert.equal(apply.status,200);assert.equal(apply.body.isRestoreExecuted,true);
+assert.equal(db0.prepare('SELECT COUNT(*) n FROM site_announcements WHERE id=200').get().n,1);
+assert.equal(db0.prepare('SELECT COUNT(*) n FROM admin_publication_restore_runs').get().n,1);
+assert.equal(db0.prepare('SELECT COUNT(*) n FROM admin_publication_restore_steps').get().n,1);
+assert.notEqual((await call('apply',{backup,token:p.body.token,confirm:'공지·업데이트 복원 실행'})).status,200);
+const current=await readPublicationTablesV2(db);
+const more=structuredClone(current);more.announcements.push({id:201,title:'두번째 복원',body:'새 기록',level:'info',published_at:'2026-11-03',first_published_at:null,is_active:0,revision:0,sort_order:0});
+const b2=(await createPublicationBackupV2(more)).envelope;const p2=await call('preview',{backup:b2});assert.equal(p2.status,200);
+db0.prepare('UPDATE site_announcements SET body=?,revision=revision+1 WHERE id=?').run('변경',1);
+const stale=await call('apply',{backup:b2,token:p2.body.token,confirm:'공지·업데이트 복원 실행'});assert.equal(stale.status,409);
+assert.equal(db0.prepare('SELECT COUNT(*) n FROM site_announcements WHERE id=201').get().n,0);
+assert.equal(db0.prepare('SELECT COUNT(*) n FROM admin_publication_restore_runs').get().n,1);
+console.log('PASS: R08 publication restore authorization / preview / apply / replay / concurrent change / audit');

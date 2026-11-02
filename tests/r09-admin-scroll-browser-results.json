@@ -1,0 +1,56 @@
+{
+  "status": "PASS",
+  "desktop": {
+    "height": 358,
+    "fullHeight": 2991,
+    "position": 0,
+    "overflow": "scroll",
+    "count": 50,
+    "nextDisabled": false,
+    "requests": [
+      null
+    ],
+    "selected": 0
+  },
+  "autoLoaded": {
+    "height": 358,
+    "fullHeight": 4783,
+    "position": 2633,
+    "overflow": "scroll",
+    "count": 80,
+    "nextDisabled": true,
+    "requests": [
+      null,
+      "51"
+    ],
+    "selected": 0
+  },
+  "afterSelection": {
+    "height": 358,
+    "fullHeight": 4783,
+    "position": 2633,
+    "overflow": "scroll",
+    "count": 80,
+    "nextDisabled": true,
+    "requests": [
+      null,
+      "51"
+    ],
+    "selected": 1
+  },
+  "mobile": {
+    "height": 213,
+    "fullHeight": 4783,
+    "position": 2633,
+    "overflow": "scroll",
+    "count": 80,
+    "nextDisabled": true,
+    "requests": [
+      null,
+      "51"
+    ],
+    "selected": 1
+  },
+  "pageErrors": [],
+  "scope": "local Chromium DOM with mocked API, not authenticated hosted application"
+}

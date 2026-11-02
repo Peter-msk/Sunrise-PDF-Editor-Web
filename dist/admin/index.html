@@ -30,12 +30,12 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 .detail textarea{width:100%;min-height:80px;resize:vertical}.detail label{display:grid;gap:5px}
 .status{color:var(--blue);font-size:12px}.notice{background:#fff3dd;border:1px solid #edcf96;color:#7e5512;padding:10px 14px;border-radius:8px}
 .publication-grid{display:grid;grid-template-columns:minmax(220px,1fr) minmax(280px,1.4fr);gap:14px}
-.publication-list{max-height:430px;overflow:auto;display:grid;align-content:start;gap:6px}
+.publication-list{height:clamp(240px,40vh,430px);overflow-x:hidden;overflow-y:scroll;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:#4f85aa #e9f2f8;overscroll-behavior-y:contain;display:grid;align-content:start;gap:6px;padding:5px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .publication-list button{text-align:left;overflow-wrap:anywhere}.publication-list button[aria-pressed="true"]{border-color:var(--blue);background:#edf6fc}
-.publication-list small{display:block;color:var(--muted)}.publication-form{display:grid;gap:9px}.publication-form label{display:grid;gap:4px}
+.publication-list small{display:block;color:var(--muted)}.publication-list::-webkit-scrollbar{width:11px}.publication-list::-webkit-scrollbar-track{background:#e9f2f8;border-radius:7px}.publication-list::-webkit-scrollbar-thumb{background:#6395b5;border-radius:7px;border:2px solid #e9f2f8}.publication-list:focus-visible{outline:2px solid var(--blue);outline-offset:2px}#publicationPreviewBody{max-height:190px;overflow-y:auto;scrollbar-gutter:stable;padding:8px;border-radius:6px;background:#f6f9fc;white-space:pre-wrap;overflow-wrap:anywhere}.publication-form{display:grid;gap:9px}.publication-form label{display:grid;gap:4px}
 .publication-form textarea{width:100%;min-height:72px;resize:vertical}.publication-form [hidden]{display:none}
 .publication-form label.check{display:flex;align-items:center;gap:7px}.publication-form label.check input{width:auto}
-@media(max-width:700px){.publication-grid{grid-template-columns:1fr}.publication-list{max-height:210px}}
+@media(max-width:700px){.publication-grid{grid-template-columns:1fr}.publication-list{height:215px;min-height:180px;max-height:215px}}
 @media(max-width:950px){.metrics{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}}
 @media(max-width:550px){.metrics{grid-template-columns:repeat(2,1fr)}.wrap{padding:12px}.metric strong{font-size:24px}h1{font-size:16px}}
 .operations{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}
@@ -43,6 +43,9 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 .operation-line span{overflow-wrap:anywhere}.operation-alerts{margin:8px 0 0;padding-left:18px;max-height:135px;overflow:auto}
 .operation-alerts li{margin:4px 0}
 @media(max-width:700px){.operations{grid-template-columns:1fr}}
+
+/* R07C: guarded publication backup/restore controls */
+.sun-restore-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}.sun-restore-row input[type=file]{flex:1 1 230px;min-width:0}#sunRestoreSummary{font-weight:650;margin:8px 0;color:var(--navy)}#sunRestoreStatus[data-state=error]{color:#a52323}.sun-restore-note{color:var(--muted);font-size:12px;line-height:1.6}.sun-restore-confirm{width:min(100%,460px)}
 </style></head><body>
 <header><div class="wrap"><div><h1>SUNRISE PDF EDITOR <span class="muted">/ 관리자</span></h1><small class="muted">방문·사용시간·기능 오류·문의 관리</small></div><div style="display:flex;align-items:center;gap:8px"><a class="home" href="/">홈으로</a><a class="home" href="/admin/password/">비밀번호 변경</a><button id="adminLogout" type="button" title="관리자 로그아웃">로그아웃</button></div></div></header>
 <main class="wrap">
@@ -143,7 +146,7 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="toolbar"><h2 id="publicationsTitle" style="margin:0">공지사항 · 업데이트 관리</h2><div><button type="button" id="publicationsReload">목록 새로고침</button> <button type="button" id="newPublication">새 항목 작성</button></div></div>
 <p class="muted">최초 게시일을 포함한 7일만 홈페이지에 표시됩니다. 수정·숨김·재게시해도 최초 게시일은 바뀌지 않습니다. 만료된 기록도 이곳에서 확인할 수 있습니다.</p>
 <div class="toolbar"><label>종류 <select id="publicationFilterKind"><option value="all">전체</option><option value="announcement">공지사항</option><option value="release">업데이트</option></select></label><label>상태 <select id="publicationFilterStatus"><option value="all">전체</option><option value="published">게시 중</option><option value="draft">미게시</option><option value="hidden">숨김</option><option value="expired">표시기간 만료</option><option value="scheduled">게시 예정</option><option value="unknown">게시일 확인 필요</option></select></label><label>검색 <input id="publicationSearch" type="search" maxlength="160" placeholder="제목 검색"></label><span id="publicationCount" role="status" aria-live="polite"></span></div>
-<div class="publication-grid"><div><div class="publication-list" id="publicationList" aria-label="공지와 업데이트 목록"></div><button type="button" id="publicationsMore" disabled>이전 항목 더 보기</button><p id="publicationsStatus" role="status" aria-live="polite"></p></div>
+<div class="publication-grid"><div><div class="publication-list" id="publicationList" tabindex="0" role="region" aria-label="공지사항·업데이트 목록. 마우스 휠 또는 키보드로 스크롤할 수 있습니다."></div><p id="publicationScrollHint" class="muted" style="font-size:12px;margin:5px 0">공지·업데이트가 많으면 이 목록 안에서 스크롤하세요. 끝에 닿으면 이전 항목을 자동으로 불러옵니다.</p><button type="button" id="publicationsMore" disabled>이전 항목 더 보기</button><p id="publicationsStatus" role="status" aria-live="polite"></p></div>
 <form id="publicationForm" class="publication-form">
 <label>항목 종류<select id="publicationKind"><option value="announcement">공지사항</option><option value="release">업데이트</option></select></label>
 <label>제목<input id="publicationTitle" maxlength="160" required></label>
@@ -153,6 +156,15 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <section class="panel" aria-labelledby="publicationPreviewTitle"><h3 id="publicationPreviewTitle">입력 내용 미리보기</h3><p class="muted" id="publicationPreviewStatus"></p><strong id="publicationPreviewHeading"></strong><div id="publicationPreviewBody" style="white-space:pre-wrap;overflow-wrap:anywhere"></div></section>
 <div><button class="primary" id="publicationSave" type="submit">저장</button> <span id="publicationResult" class="status" role="status" aria-live="polite"></span></div>
 </form></div>
+</section>
+<section class="panel" id="sunPublicationRestorePanel" aria-labelledby="sunRestoreHeading" style="margin-top:12px">
+<h2 id="sunRestoreHeading">공지사항·업데이트 백업 및 복원</h2>
+<p class="sun-restore-note">공지·업데이트만 포함합니다. 문의·통계·관리자 계정이나 PDF 원본은 포함하지 않습니다. 복원 전 충돌 미리보기를 거치며 관리자의 명시적 확인 없이는 쓰지 않습니다.</p>
+<div class="sun-restore-row"><button type="button" id="sunRestoreExport">공지·업데이트 백업 내려받기</button></div>
+<div class="sun-restore-row"><label for="sunRestoreFile">복원할 JSON 선택</label><input type="file" id="sunRestoreFile" accept=".json,application/json"><button type="button" id="sunRestorePreview">사전검사 및 충돌 확인</button></div>
+<p id="sunRestoreSummary" aria-live="polite"></p>
+<div class="sun-restore-row"><label for="sunRestoreConfirmation">복원 확인 문구</label><input class="sun-restore-confirm" type="text" id="sunRestoreConfirmation" autocomplete="off" spellcheck="false" placeholder="공지·업데이트 복원 실행" aria-describedby="sunRestoreStatus"><button type="button" id="sunRestoreApply" class="primary" disabled>확인 후 복원 실행</button></div>
+<p id="sunRestoreStatus" class="sun-restore-note" role="status" aria-live="polite">백업을 내려받거나 JSON 파일을 선택해 주세요.</p>
 </section>
 <p class="muted" style="margin-top:12px">방문·사용시간은 추정치입니다. PDF 내용, 파일명, 검색어, IP 주소 및 오류 전문은 통계 서버에 저장하지 않습니다.</p>
 </main>
@@ -445,14 +457,27 @@ function renderPublications(){
   button.setAttribute('aria-pressed',String(!!selectedPublication&&selectedPublication.kind===row.kind&&selectedPublication.id===row.item.id));
   const title=document.createElement('strong');title.textContent=(row.kind==='announcement'?'공지 · ':'업데이트 · ')+(row.item.title||row.item.version);
   const meta=document.createElement('small');meta.textContent=(row.item.first_published_at||'최초 게시 전')+' · '+publicationStatus(row.item);
-  button.append(title,meta);button.addEventListener('click',()=>{if(publicationSaving)return;publicationEditor(row.kind,row.item);renderPublications()});root.append(button);
+  button.append(title,meta);button.addEventListener('click',()=>{
+   if(publicationSaving)return;
+   publicationEditor(row.kind,row.item);
+   // Keep existing DOM nodes intact: rebuilding a scrolled list jumps to the top.
+   for(const item of root.querySelectorAll('button[aria-pressed]'))
+    item.setAttribute('aria-pressed',String(item===button));
+  });root.append(button);
  }
 }
 let publicationRequest=0,publicationQuery='',publicationNext=null,publicationTimer,publicationSaving=false;
+// R06: scroll to load previous notices/releases without losing the explicit button.
+$('publicationList').addEventListener('scroll',()=>{
+ const list=$('publicationList'),more=$('publicationsMore');
+ if(publicationSaving||more.disabled||list.scrollHeight-list.clientHeight-list.scrollTop>80)return;
+ loadPublications(true).catch(()=>{});
+},{passive:true});
 function publicationParams(){return new URLSearchParams({kind:$('publicationFilterKind').value,status:$('publicationFilterStatus').value,q:$('publicationSearch').value.trim()})}
 async function loadPublications(append=false){
  const request=++publicationRequest,params=publicationParams(),query=params.toString();
  if(append&&query!==publicationQuery)append=false;
+ const previousScroll=append?$('publicationList').scrollTop:0;
  if(append){for(const kind of ['announcement','release'])params.set('before_'+kind,String(publicationNext?.[kind]??0))}
  $('publicationsMore').disabled=true;$('publicationsStatus').textContent='목록을 조회하고 있습니다.';
  try{
@@ -463,6 +488,7 @@ async function loadPublications(append=false){
   for(const rows of [data.announcements,data.releases])if(rows.some(item=>!Number.isSafeInteger(item.revision)||item.revision<0))throw Error('수정 버전을 확인해 주세요.');
   if(append){for(const key of ['announcements','releases']){const known=new Set(publications[key].map(row=>row.id));data[key]=publications[key].concat(data[key].filter(row=>!known.has(row.id)))}}
   publications=data;publicationQuery=query;publicationNext=data.next;renderPublications();
+  $('publicationList').scrollTop=append?previousScroll:0;
   $('publicationsMore').disabled=!publicationNext.announcement&&!publicationNext.release;
   $('publicationsStatus').textContent=$('publicationsMore').disabled?'조회 조건에 맞는 항목을 모두 불러왔습니다.':'이전 항목은 더 보기로 이어서 조회할 수 있습니다.';
  }catch(error){if(request===publicationRequest){$('publicationsStatus').textContent='목록 조회 실패: '+error.message;$('publicationsMore').disabled=!publicationNext||publicationQuery!==query||(!publicationNext.announcement&&!publicationNext.release)}throw error}
@@ -575,4 +601,5 @@ $('sessionsRevoke').addEventListener('click',async()=>{
 loadSessions();
 renderPublicationPreview();
 Promise.all([dashboard(),inquiries(),loadPublications(),loadHealth(),loadQuality(),loadSaveQuality(),loadOperationQuality(),loadSessionUsage(),loadDeployments()]).catch(e=>{$('state').textContent='관리자 데이터를 불러오지 못했습니다: '+e.message});
-</script></body></html>
+</script><script defer src="/assets/sunrise-admin-restore.js"></script>
+</body></html>

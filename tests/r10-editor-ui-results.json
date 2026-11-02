@@ -1,0 +1,111 @@
+{
+  "scope": "Chromium isolated DOM, real R09 JS/PDFLib; no live routing/auth, no pdf.js rendering, no official build",
+  "tools": [
+    {
+      "id": "organize",
+      "result": "PASS",
+      "title": "PDF 페이지 자유 구성",
+      "fileInputs": 1
+    },
+    {
+      "id": "form",
+      "result": "PASS",
+      "title": "별도 PDF 양식 필드 일괄 변경",
+      "fileInputs": 2
+    },
+    {
+      "id": "watermark",
+      "result": "PASS",
+      "title": "페이지 번호·워터마크",
+      "fileInputs": 2
+    },
+    {
+      "id": "number",
+      "result": "PASS",
+      "title": "페이지 번호·워터마크",
+      "fileInputs": 2
+    },
+    {
+      "id": "metadata",
+      "result": "PASS",
+      "title": "PDF 문서 속성",
+      "fileInputs": 1
+    },
+    {
+      "id": "batch-preflight",
+      "result": "PASS",
+      "title": "PDF 일괄 제출 전 검사",
+      "fileInputs": 1
+    },
+    {
+      "id": "images-to-pdf",
+      "result": "PASS",
+      "title": "이미지를 PDF로",
+      "fileInputs": 1
+    },
+    {
+      "id": "pdf-to-images",
+      "result": "PASS",
+      "title": "PDF를 이미지로 변환",
+      "fileInputs": 1
+    },
+    {
+      "id": "crop-pdf",
+      "result": "PASS",
+      "title": "PDF 자르기 · 페이지 크기 변경",
+      "fileInputs": 1
+    },
+    {
+      "id": "resize-pdf",
+      "result": "PASS",
+      "title": "PDF 자르기 · 페이지 크기 변경",
+      "fileInputs": 1
+    },
+    {
+      "id": "pdf-nup",
+      "result": "PASS",
+      "title": "PDF 모아찍기 · 여러 페이지를 한 장에",
+      "fileInputs": 1
+    },
+    {
+      "id": "overlay-pdf",
+      "result": "PASS",
+      "title": "PDF 오버레이 · 페이지 겹치기",
+      "fileInputs": 2
+    },
+    {
+      "id": "pdf-visual-compare",
+      "result": "PASS",
+      "title": "PDF 시각적 비교",
+      "fileInputs": 2
+    }
+  ],
+  "runs": [
+    {
+      "id": "pdf-nup",
+      "result": "PASS",
+      "outputPages": 1,
+      "downloadName": "sample_nup4.pdf",
+      "bytes": 3089
+    },
+    {
+      "id": "images-to-pdf",
+      "result": "PASS",
+      "outputPages": 1,
+      "downloadName": "sunrise_images_1pages.pdf",
+      "bytes": 1113
+    },
+    {
+      "id": "metadata-ui",
+      "result": "PASS",
+      "fileInput": true,
+      "fields": 0
+    }
+  ],
+  "errors": [],
+  "mobile": {
+    "vw": 390,
+    "box": 374.219970703125,
+    "scroll": true
+  }
+}

@@ -2,9 +2,12 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),vm=require('node:vm'),{spawnSync}=require('node:child_process');
 const repo=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'sunrise-build-endings-'));
 try{
- for(const dir of ['scripts','src/editor','src/assets','dist/editor','dist/assets'])fs.mkdirSync(path.join(temp,dir),{recursive:true});
+ for(const dir of ['scripts','src/editor','src/assets','src/tools','dist/editor','dist/assets'])fs.mkdirSync(path.join(temp,dir),{recursive:true});
  for(const name of ['build-release.cjs','site-integration.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(temp,'scripts',name));
- for(const name of ['korean-font.js','sunrise-edit-state.js','sunrise-auto-bookmarks.js','sunrise-outline-transfer.js','sunrise-batch-pages.js','sunrise-pdf-quality.js','sunrise-pdf-quality-report.js','sunrise-comment-report.js','sunrise-embedded-images.js','sunrise-special-pdf.js', 'sunrise-office-export.js'])fs.writeFileSync(path.join(temp,'src/assets',name),'window.fixtureAsset=1;');
+ // Mirror the actual release asset set so new tools do not invalidate the line-ending fixture.
+ for(const name of fs.readdirSync(path.join(repo,'src/assets')).filter(name=>name.endsWith('.js')))
+  fs.writeFileSync(path.join(temp,'src/assets',name),'window.fixtureAsset=1;');
+ fs.writeFileSync(path.join(temp,'src/tools/index.html'),'<html><body>Test tools</body></html>');
  const source=['<!doctype html><html><head></head><body>','  <script>','function sum(value) { return value + 1; } window.fixtureResult=sum(1);','  </script>','</body></html>'].join('\n');
  for(const newline of ['\n','\r\n','\r']){
   const input=source.replaceAll('\n',newline);fs.writeFileSync(path.join(temp,'src/editor/index.html'),input);

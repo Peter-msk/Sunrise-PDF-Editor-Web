@@ -1,0 +1,47 @@
+{
+  "png": {
+    "size": 6258,
+    "entries": [
+      "01_a_page-0001.png",
+      "01_a_page-0002.png"
+    ]
+  },
+  "jpeg": null,
+  "compare": null,
+  "jpg": {
+    "size": 4644,
+    "entries": [
+      "01_a_page-0001.jpg",
+      "01_a_page-0002.jpg"
+    ]
+  },
+  "diffZip": {
+    "size": 6090,
+    "entries": [
+      "comparison_report.json",
+      "comparison_report.csv",
+      "diff_page_0001.png",
+      "diff_page_0002.png"
+    ]
+  },
+  "equal": [
+    "same"
+  ],
+  "diffRows": [
+    {
+      "status": "different",
+      "changed": 731
+    },
+    {
+      "status": "different",
+      "changed": 687
+    }
+  ],
+  "diffImageCount": 2,
+  "missing": [
+    "same",
+    "missing"
+  ],
+  "abort": "AbortError",
+  "status": "PASS"
+}

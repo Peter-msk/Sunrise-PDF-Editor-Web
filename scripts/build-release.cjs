@@ -20,6 +20,38 @@ async function compact(code, module = false) {
     const source = fs.readFileSync(path.join(root, 'src/assets', name), 'utf8');
     fs.writeFileSync(path.join(root, 'dist/assets', name), await compact(source) + '\n');
   }
+  // SUNRISE-LOCAL-R07: manifest-pinned feature assets.
+  for (const name of [
+    "sunrise-local-ui.js",
+    "sunrise-local-metrics.js",
+    "sunrise-page-composer.js",
+    "sunrise-page-composer-ui.js",
+    "sunrise-pdf-form-tools.js",
+    "sunrise-pdf-stamper.js",
+    "sunrise-pdf-finishing-ui.js",
+    "sunrise-pdf-metadata.js",
+    "sunrise-pdf-metadata-ui.js",
+    "sunrise-batch-preflight.js",
+    "sunrise-batch-preflight-ui.js",
+    "sunrise-images-to-pdf.js",
+    "sunrise-images-to-pdf-ui.js",
+    "sunrise-pdf-to-images.js",
+    "sunrise-pdf-to-images-ui.js",
+    "sunrise-pdf-page-geometry.js",
+    "sunrise-pdf-page-geometry-ui.js",
+    "sunrise-pdf-nup.js",
+    "sunrise-pdf-nup-ui.js",
+    "sunrise-pdf-overlay.js",
+    "sunrise-pdf-overlay-ui.js",
+    "sunrise-pdf-visual-compare.js",
+    "sunrise-pdf-visual-compare-ui.js",
+    "sunrise-tool-hub.js"
+  ]) {
+    const input = fs.readFileSync(path.join(root, 'src/assets', name), 'utf8');
+    fs.writeFileSync(path.join(root, 'dist/assets', name), await compact(input) + '\n');
+  }
+  fs.mkdirSync(path.join(root, 'dist/tools'), {recursive:true});
+  fs.copyFileSync(path.join(root, 'src/tools/index.html'), path.join(root, 'dist/tools/index.html'));
   require('./site-integration.cjs');
 })().catch(error => { console.error(error); process.exitCode = 1; });
 

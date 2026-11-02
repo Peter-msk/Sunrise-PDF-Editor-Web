@@ -1,0 +1,20 @@
+{
+  "runs": [
+    {
+      "id": "pdf-to-images-ui",
+      "status": "PASS",
+      "count": 4,
+      "name": "sample_images.zip"
+    },
+    {
+      "id": "visual-compare-ui",
+      "status": "PASS",
+      "message": "비교 완료: 동일 4쪽 · 차이 0쪽 · 크기 다름 0쪽 · 페이지 없음 0쪽",
+      "files": [
+        "comparison_report.json",
+        "comparison_report.csv"
+      ]
+    }
+  ],
+  "errors": []
+}
