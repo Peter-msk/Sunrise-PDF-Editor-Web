@@ -12,10 +12,15 @@ el('splitRangeInput').value='1-2';
 el('splitSizeInput').value='1';
 el('splitReadyResults').isConnected=true;
 el('splitReadyResults').replaceChildren=()=>{};
+el('modalBackdrop').classList={contains:()=>true};
 el('reorderInput').value='2, 1';el('blankPosSelect').value='after';el('blankSizeSelect').value='a4p';el('blankCountInput').value='1';
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseEditState:{},SunriseKoreanFont:{}},state,Set,Array,JSON,Uint8Array,
  console:{warn(){}},document:{getElementById:el},activeDoc:()=>active,showToast:s=>notices.push(s),
  saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},renderMergeQueueList(){},
+ // The real editable-state comparison is covered by page-range-contract.cjs.
+ // Here a stable immutable source snapshot lets us test AcroForm rejection.
+ captureSaveState:doc=>({sourceBytes:doc.bytes}),
+ saveStateIsCurrent:(doc,captured)=>doc.bytes===captured.sourceBytes,
  openModal:config=>config.onMount(),closeModal:()=>closes++,escapeHtml:x=>x,downloadBytes:()=>downloads++,
  openPdfFromBytes:async()=>opens++,compileDocumentWithOverlays:async doc=>doc.bytes,remapPageItems(){}});
 vm.runInContext(
