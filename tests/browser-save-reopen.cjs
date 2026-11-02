@@ -316,6 +316,33 @@ async function main(){
    });
    await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('현장_검토보고서.PDF'),
      null,{timeout:40000});
+   // R14: real mixed-size PDF must center its narrow page in the wider grid track.
+   await page.waitForFunction(()=>document.querySelector('#pageStage canvas')?.width > 1);
+   const centered=await page.evaluate(()=>{
+     const view=document.querySelector('#canvasViewport').getBoundingClientRect();
+     const first=document.querySelector('#pagesFlow .page-slot[data-page-index="0"]').getBoundingClientRect();
+     return first.left+first.width/2-(view.left+view.width/2);
+   });
+   assert(Math.abs(centered)<4,'Mixed-width first page must be centered in the PDF pane');
+   await page.evaluate(()=>executeCommand('fitWidth'));
+   const fitCentered=await page.evaluate(()=>{
+     const view=document.querySelector('#canvasViewport').getBoundingClientRect();
+     const first=document.querySelector('#pagesFlow .page-slot[data-page-index="0"]').getBoundingClientRect();
+     return first.left+first.width/2-(view.left+view.width/2);
+   });
+   assert(Math.abs(fitCentered)<4,'Width fit must keep mixed-width pages centered');
+   const zoomBefore=await page.locator('#zoomSlider').inputValue();
+   const browserScale=await page.evaluate(()=>window.visualViewport.scale);
+   await page.evaluate(()=>{
+     const view=document.querySelector('#canvasViewport'),r=view.getBoundingClientRect();
+     const e=new WheelEvent('wheel',{deltaY:-100,ctrlKey:true,cancelable:true,bubbles:true,
+       clientX:r.left+view.clientWidth/2,clientY:r.top+view.clientHeight/3});
+     view.dispatchEvent(e);
+     if(!e.defaultPrevented)throw Error('Ctrl-wheel must cancel native browser zoom');
+   });
+   await page.waitForFunction(before=>Number(document.querySelector('#zoomSlider').value)>Number(before),zoomBefore,{timeout:7000});
+   assert.equal(await page.evaluate(()=>window.visualViewport.scale),browserScale,
+     'Ctrl-wheel must change PDF zoom, not browser page zoom');
    await page.evaluate(()=>executeCommand('splitPages'));
    await page.locator('#splitPrepareBtn').waitFor({state:'visible'});
    await page.locator('#splitRangeInput').fill('1-6');
