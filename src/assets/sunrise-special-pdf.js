@@ -81,7 +81,9 @@
 
  // Explicit per-page coordinates only. There is no automatic privacy detection.
  // Format: page,x,y,width,height (top-left of the rendered page at scale 1).
+ // When preserving all pages, require a bounded number of raster pages/pixels.
  const MAX_MASK_PAGES=10,MAX_MASK_LINES=40,MAX_MASKS_PER_PAGE=12;
+ const MAX_DOCUMENT_PAGES=30, MAX_DOCUMENT_PIXELS=100_000_000;
  function parseMaskPlan(raw,pageSizes){
   if(typeof raw!=='string'||raw.length>5000||!Array.isArray(pageSizes)||!pageSizes.length)
    throw Error('마스킹 페이지 목록이 올바르지 않습니다.');
@@ -125,22 +127,37 @@
    return {pageCount:document.getPageCount(),sourceStreamsCopied:false};
   });
  }
- async function exportMaskedPages({reader,plan,PDFLib,makeCanvas,cancelled,onProgress}){
+ async function exportMaskedPages({reader,plan,PDFLib,makeCanvas,cancelled,onProgress,includeUnmaskedPages=false}){
   if(!reader?.getPage||!PDFLib?.PDFDocument?.create||
-    !Array.isArray(plan)||!plan.length||plan.length>MAX_MASK_PAGES)
+    !Number.isSafeInteger(reader.numPages)||reader.numPages<1||
+    !Array.isArray(plan)||!plan.length||plan.length>MAX_MASK_PAGES||typeof includeUnmaskedPages!=='boolean')
    throw Error('마스킹 변환의 페이지 목록이 올바르지 않습니다.');
-  const used=new Set(),output=await PDFLib.PDFDocument.create();
-  let maskCount=0;
-  for(let index=0;index<plan.length;index++){
-   if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
-   const {pageNumber,rectangles}=plan[index]||{};
+  if(includeUnmaskedPages&&reader.numPages>MAX_DOCUMENT_PAGES)
+   throw Error('전체 페이지 보존 출력은 최대 30쪽까지 지원합니다. 원본을 분할하여 처리하세요.');
+  // Validate the complete plan before producing any page; missing or duplicated targets are errors.
+  const used=new Set(),byPage=new Map();
+  for(const item of plan){
+   const {pageNumber,rectangles}=item||{};
    if(!Number.isSafeInteger(pageNumber)||pageNumber<1||pageNumber>reader.numPages||used.has(pageNumber)||
       !Array.isArray(rectangles)||rectangles.length<1||rectangles.length>MAX_MASKS_PER_PAGE)
     throw Error('마스킹할 페이지 및 사각형 목록이 올바르지 않습니다.');
-   used.add(pageNumber);
+   used.add(pageNumber);byPage.set(pageNumber,rectangles);
+  }
+  // In document mode the untargeted pages remain visually present, but are
+  // rasterized into new image-only streams (source page bytes are never copied).
+  const targets=includeUnmaskedPages ?
+   Array.from({length:reader.numPages},(_,index)=>({pageNumber:index+1,rectangles:byPage.get(index+1)||[]})) : plan;
+  const output=await PDFLib.PDFDocument.create();
+  let maskCount=0,usedPixels=0;
+  for(let index=0;index<targets.length;index++){
+   if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
+   const {pageNumber,rectangles}=targets[index];
    const page=await reader.getPage(pageNumber);
    const view=page.getViewport({scale:1});
    checkRasterSize(view.width,view.height);
+   usedPixels+=Math.ceil(view.width*RENDER_SCALE)*Math.ceil(view.height*RENDER_SCALE);
+   if(usedPixels>MAX_DOCUMENT_PIXELS)
+    throw Error('전체 이미지 출력 픽셀 제한을 초과했습니다. 분할하거나 페이지 수를 줄여 주세요.');
    const boxes=rectangles.map(rect=>validateMaskRect(rect,view.width,view.height));
    const viewport=page.getViewport({scale:RENDER_SCALE});
    const canvas=makeCanvas?makeCanvas():document.createElement('canvas');
@@ -164,16 +181,17 @@
     const pageOut=output.addPage([view.width,view.height]);
     pageOut.drawImage(image,{x:0,y:0,width:view.width,height:view.height});
     maskCount+=boxes.length;
-    if(onProgress)onProgress({done:index+1,total:plan.length,maskCount});
+    if(onProgress)onProgress({done:index+1,total:targets.length,maskCount,pageNumber});
    }finally{
     canvas.width=0;canvas.height=0;
    }
   }
   if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
   const bytes=await output.save();
-  const inspection=await checkOutputStructure(bytes,PDFLib,plan.length);
+  const inspection=await checkOutputStructure(bytes,PDFLib,targets.length);
   if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
-  return {bytes,pages:plan.length,maskCount,sourcePages:plan.map(x=>x.pageNumber),inspection};
+  return {bytes,pages:targets.length,maskCount,sourcePages:targets.map(x=>x.pageNumber),
+   includeUnmaskedPages,inspection};
  }
 
  return {correctionCandidate,validateMaskRect,checkRasterSize,exportMaskedPage,parseMaskPlan,checkOutputStructure,exportMaskedPages};
