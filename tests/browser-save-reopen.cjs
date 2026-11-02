@@ -287,7 +287,7 @@ async function main(){
    assert((await page.locator('#maskPlanPreview').innerText()).includes('검증 실패'));
    await page.locator('#maskPlanLines').fill('1,70,100,180,40\n1,260,200,50,30\n2,105,100,200,40');
    await page.locator('#maskPlanCheck').click();
-   assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 / 3개 영역'));
+   assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 출력 / 3개 영역 적용 예정'));
    await page.locator('#maskConfirmed').check();
    const maskingDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#maskExportBtn').click();
