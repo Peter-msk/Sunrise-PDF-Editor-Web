@@ -25,6 +25,9 @@ ctx.doc.name='회의/보고서.pdf';
 assert.equal(vm.runInContext(stemExpression,ctx),'회의_보고서','sanitize file name separators');
 assert.match(splitCode,/captureSaveState\(doc, false\)/);
 assert.match(splitCode,/saveStateIsCurrent\(doc,captured\)/);
+assert.match(splitCode,/verifyPdfPageGeometry\(part,reopened,"분할"\)/);
+assert(splitCode.indexOf('verifyPdfPageGeometry(part,reopened,"분할")') <
+  splitCode.indexOf('downloadBytes(bytes,spec.name'),'split result must be reopened and checked before download');
 const saveBegin=src.indexOf('    function captureSaveState(doc, includeSnapshot = true)');
 const saveEnd=src.indexOf('    function pdfCompressionSettings(',saveBegin);
 assert(saveBegin>=0&&saveEnd>saveBegin);
