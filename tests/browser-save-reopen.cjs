@@ -450,7 +450,13 @@ async function main(){
        null,{timeout:30000});
      await touch.locator('#mobLeftPaneBtn').tap();
      await touch.locator('#mobileDrawerBackdrop').waitFor({state:'visible'});
-     await touch.locator('#mobileDrawerBackdrop').tap();
+     // Backdrop covers the screen behind the 84vw side drawer. Tap OUTSIDE
+     // that drawer; the backdrop's geometric center is inside the drawer.
+     const backdrop=await touch.locator('#mobileDrawerBackdrop').boundingBox();
+     assert(backdrop&&backdrop.width>=390,'mobile overlay must cover the viewport');
+     await touch.locator('#mobileDrawerBackdrop').tap({
+       position:{x:backdrop.width-8,y:Math.round(backdrop.height/2)}
+     });
      await touch.locator('#mobileDrawerBackdrop').waitFor({state:'hidden'});
      await touch.locator('#quickSaveBtn').tap();
      await touch.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:20000});
