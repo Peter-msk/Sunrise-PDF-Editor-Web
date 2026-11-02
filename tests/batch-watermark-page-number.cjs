@@ -9,7 +9,7 @@ assert(a>=0&&b>a&&c>b&&d>c,'Batch functions must exist');
 const output=[],errors=[],progress=[];
 let stopped=false;
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseKoreanFont:{embed:(pdf,text)=>korean.embed(pdf,text,fontData)}},
- ArrayBuffer,Uint8Array,Number,Error,Set,Map,console,
+ ArrayBuffer,Uint8Array,Number,Error,Set,Map,console,setTimeout,
  validatePdfByteLength:length=>{if(!Number.isSafeInteger(length)||length<0)throw Error('파일 크기 정보 오류')},
  readPdfInputFile:async file=>file.data,
  editablePdfForm:pdf=>{
