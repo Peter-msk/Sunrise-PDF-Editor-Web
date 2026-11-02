@@ -30,7 +30,9 @@ const handlers={cancelled:()=>stopped,progress:(...x)=>progress.push(x),result:r
  await ctx.batchMarkPdfs([file('good-a.pdf'),invalid,file('good-b.pdf')],{kind:'watermark',text:'대외비'},handlers);
  if(output.length!==2)console.error('Batch mark failure messages:',errors.map(e=>e.message));
  assert.deepEqual(output.map(x=>x.name),['good-a.pdf','good-b.pdf']);
- assert.equal(errors.length,1);assert.equal(progress.length,3);
+ assert.equal(errors.length,1);
+ assert.equal(progress.filter(args=>args.length===3).length,3,'all source files get one start event');
+ assert.equal(progress.filter(args=>args[3]?.page).length,2,'successful pages emit progress details');
  for(const r of output){
   const doc=await lib.PDFDocument.load(r.bytes);
   assert.equal(doc.getPageCount(),1);
