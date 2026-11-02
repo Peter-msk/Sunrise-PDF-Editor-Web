@@ -900,7 +900,8 @@
       overflow: auto;
       display: flex;
       flex-direction: column;
-      align-items: center;
+      /* Safe center leaves the left edge reachable when the PDF is wider than the pane. */
+      align-items: safe center;
       padding: 20px 26px;
       position: relative;
       -webkit-overflow-scrolling: touch;
@@ -932,7 +933,8 @@
       transform: translateX(-50%) translateY(-4px);
     }
 
-    #pagesFlow { display: grid; gap: 16px; align-items: start; flex: none; padding-bottom: 20px; }
+    /* Grid tracks take the widest page; center smaller pages within those tracks. */
+    #pagesFlow { display: grid; gap: 16px; align-items: start; justify-items: center; flex: none; padding-bottom: 20px; margin-inline: auto; }
     .page-slot { position: relative; background: white; box-shadow: 0 6px 24px rgba(0,0,0,.18); flex: none; }
     .page-slot > canvas { display: block; width: 100%; height: 100%; }
     .page-preview-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
@@ -3643,9 +3645,20 @@
     function syncThumbnailSelection(doc) {
       const wrap = document.getElementById("thumbnailContainer");
       if (!wrap || wrap.dataset.docId !== doc.id) return;
-      for (const card of wrap.children) {
-        const i = Number(card.dataset.pageIndex);
-        card.classList.toggle("selected", doc.selectedPages.has(i) || (doc.selectedPages.size <= 1 && i === doc.currentPage));
+      if (doc.selectedPages.size === 1 && doc.selectedPages.has(doc.currentPage) && wrap.dataset.singleSelected !== undefined) {
+        // Typical page navigation touches two cards, not every thumbnail in an 800-page PDF.
+        const oldCard = wrap.children[Number(wrap.dataset.singleSelected)];
+        if (oldCard) oldCard.classList.remove("selected");
+        const newCard = wrap.children[doc.currentPage];
+        if (newCard) newCard.classList.add("selected");
+        wrap.dataset.singleSelected = String(doc.currentPage);
+      } else {
+        for (const card of wrap.children) {
+          const i = Number(card.dataset.pageIndex);
+          card.classList.toggle("selected", doc.selectedPages.has(i) || (doc.selectedPages.size <= 1 && i === doc.currentPage));
+        }
+        if (doc.selectedPages.size === 1 && doc.selectedPages.has(doc.currentPage)) wrap.dataset.singleSelected = String(doc.currentPage);
+        else delete wrap.dataset.singleSelected;
       }
       const selected = wrap.querySelector(`[data-page-index="${doc.currentPage}"]`);
       if (selected) {
@@ -3816,8 +3829,20 @@
       canvas.style.width = `${cssW}px`;
       canvas.style.height = `${cssH}px`;
       const displayMatches = stage.dataset.displayDoc === doc.id && stage.dataset.displayPage === String(pageIdx) && displayReader === doc.pdfJsDoc;
+      // Overlay edits, toolbar updates and returning to the same page need not decode/render the PDF twice.
+      const pixelMatches = displayMatches && !currentRenderTask && stage.dataset.displayScale === String(scale) &&
+        stage.dataset.displayDpr === String(dpr) && canvas.width > 1 &&
+        canvas.height > 1 && stage.dataset.loading !== "true";
       stage.dataset.loading = String(!displayMatches);
       if (!displayMatches) { canvas.width = 1; canvas.height = 1; }
+      if (pixelMatches) {
+        stage.dataset.loading = "false";
+        renderOverlayItems(doc, pageIdx, scale);
+        renderSearchIndicator(doc, pageIdx, scale, generation);
+        updateCommandStates();
+        syncThumbnailSelection(doc);
+        return;
+      }
 
       if (doc.pdfJsDoc) {
         try {
@@ -3835,6 +3860,7 @@
           canvas.width = buffer.width; canvas.height = buffer.height;
           canvas.getContext("2d").drawImage(buffer, 0, 0);
           stage.dataset.displayPage = String(pageIdx); stage.dataset.displayDoc = doc.id; displayReader = reader;
+          stage.dataset.displayScale = String(scale); stage.dataset.displayDpr = String(dpr);
           stage.dataset.loading = "false";
         } catch (error) {
           if (error.name === "RenderingCancelledException" || generation !== renderGeneration) return;
@@ -4235,6 +4261,7 @@
           return;
         }
         thumbWrap.dataset.docId = doc.id;
+        if (doc.selectedPages.size === 1 && doc.selectedPages.has(doc.currentPage)) thumbWrap.dataset.singleSelected = String(doc.currentPage);
         const thumbReader = doc.pdfJsDoc;
         thumbObserver = new IntersectionObserver(entries => {
           for (const entry of entries) {
@@ -10079,6 +10106,48 @@
       );
 
       canvasViewportEl.addEventListener("touchcancel", () => { multiTouchActive = false; lastMultiTouchTime = Date.now(); swipeTouchState = null; }, {passive:true});
+
+      // Native-like Ctrl/Cmd + wheel zoom, scoped to the PDF pane (not the whole browser).
+      // Coalesce trackpad events so one gesture does not rebuild hundreds of page slots repeatedly.
+      let wheelZoomTimer = null;
+      let wheelZoomAnchor = null;
+      canvasViewportEl.addEventListener("wheel", (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        const doc = activeDoc();
+        if (!doc) return;
+        event.preventDefault();
+        const delta = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? canvasViewportEl.clientHeight : 1);
+        if (!Number.isFinite(delta) || delta === 0) return;
+        const stage = document.getElementById("pageStage");
+        if (!wheelZoomAnchor || wheelZoomAnchor.doc !== doc) {
+          const rect = stage.getBoundingClientRect();
+          const pane = canvasViewportEl.getBoundingClientRect();
+          const clientX = Math.min(pane.right, Math.max(pane.left, event.clientX));
+          const clientY = Math.min(pane.bottom, Math.max(pane.top, event.clientY));
+          wheelZoomAnchor = {doc, clientX, clientY,
+            relativeX: rect.width ? (clientX - rect.left) / rect.width : 0.5,
+            relativeY: rect.height ? (clientY - rect.top) / rect.height : 0.5};
+        }
+        const multiplier = Math.exp(Math.max(-120, Math.min(120, -delta)) * 0.002);
+        const next = Math.max(0.25, Math.min(4, Number((doc.zoom * multiplier).toFixed(3))));
+        if (next === doc.zoom) return;
+        doc.fitMode = "custom";
+        doc.zoom = next;
+        document.getElementById("zoomSlider").value = String(Math.round(next * 100));
+        clearTimeout(wheelZoomTimer);
+        wheelZoomTimer = setTimeout(async () => {
+          const anchor = wheelZoomAnchor;
+          wheelZoomAnchor = null;
+          if (!anchor || activeDoc() !== anchor.doc) return;
+          const committedZoom = anchor.doc.zoom;
+          await renderCurrentPageCanvas();
+          if (activeDoc() !== anchor.doc || anchor.doc.zoom !== committedZoom) return;
+          const after = stage.getBoundingClientRect();
+          // Anchor the same document coordinate under the pointer after layout changes.
+          canvasViewportEl.scrollLeft += after.left + anchor.relativeX * after.width - anchor.clientX;
+          canvasViewportEl.scrollTop += after.top + anchor.relativeY * after.height - anchor.clientY;
+        }, 100);
+      }, {passive:false});
 
       canvasViewportEl.addEventListener(
         "wheel",
