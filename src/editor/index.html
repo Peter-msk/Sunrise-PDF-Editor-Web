@@ -7053,8 +7053,8 @@
       return chunks;
     }
     async function splitDocumentPages(doc){
-      const source=doc.bytes;
-      const stem=doc.name.replace(/\\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
+      const source=doc.bytes, captured=captureSaveState(doc, false);
+      const stem=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
       openModal({
         title:"PDF 페이지 분할",icon:"fa-table-columns",width:"600px",
         bodyHtml:`
@@ -7081,7 +7081,8 @@
           const close=document.getElementById("splitCloseBtn");
           const open=()=>document.getElementById("modalBackdrop")?.classList.contains("open")&&
             document.getElementById("splitPrepareBtn")===start;
-          const valid=()=>open()&&activeDoc()===doc&&doc.bytes===source&&results.isConnected;
+          const valid=()=>open()&&activeDoc()===doc&&doc.bytes===source&&
+            saveStateIsCurrent(doc,captured)&&results.isConnected;
           let running=false,sourcePdf=null,sourceBookmarks=null,planGeneration=0;
           const setBusy=busy=>{
             running=busy;doc.operationBusy=busy;
@@ -7107,7 +7108,8 @@
           input.addEventListener("input",refresh);per.addEventListener("input",refresh);
           refresh();
           start.addEventListener("click",async()=>{
-            if(running||!valid()||doc.operationBusy)return;
+            if(running||doc.operationBusy)return;
+            if(!valid()){status.textContent="문서 상태가 변경되었습니다. 분할 창을 다시 열어 주세요.";return;}
             let chunks;
             try{chunks=planDocumentSplit(input.value,doc.pageCount,Number(per.value));}
             catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
@@ -7140,7 +7142,12 @@
                 const button=document.createElement("button");button.type="button";
                 button.className="dialog-btn";button.textContent="이 PDF 생성·저장";
                 button.addEventListener("click",async()=>{
-                  if(running||!valid()||doc.operationBusy||generation!==planGeneration||sourcePdf!==pdf)return;
+                  if(running||doc.operationBusy||generation!==planGeneration||sourcePdf!==pdf)return;
+                  if(!valid()){
+                    discard();
+                    if(status.isConnected)status.textContent="문서 상태가 변경되었습니다. 분할 창을 다시 열어 주세요.";
+                    return;
+                  }
                   const saveFinish=beginOperationMetric("split_download");let saveOutcome="failed";
                   setBusy(true);
                   try{
