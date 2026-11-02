@@ -7160,6 +7160,10 @@
                     part.setTitle(spec.title);
                     const bytes=await part.save();
                     if(!bytes?.byteLength)throw Error("분할 결과가 비어 있습니다.");
+                    // Reopen the actual serialized PDF and compare page geometry
+                    // before publishing any download, as in the general save path.
+                    const reopened=await PDFDocument.load(bytes,{updateMetadata:false});
+                    verifyPdfPageGeometry(part,reopened,"분할");
                     if(!valid()||generation!==planGeneration)throw Error("다운로드 전에 원본 문서가 변경되었습니다.");
                     downloadBytes(bytes,spec.name,"application/pdf");
                     status.textContent=spec.name+" 생성·다운로드 요청 완료 ("+
