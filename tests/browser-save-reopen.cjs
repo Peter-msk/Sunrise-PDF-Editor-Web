@@ -434,12 +434,22 @@ async function main(){
      await touch.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
      await touch.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseEditState),
        null,{timeout:40000});
-     await touch.locator('#openPdfInput').setInputFiles({
+     await touch.locator('#mobileBottomNav').waitFor({state:'visible',timeout:15000});
+     // Real tap -> mobile file menu -> browser file chooser, not a hidden
+     // input assignment that could mask a broken touch action.
+     await touch.locator('#mobFileBtn').tap();
+     await touch.locator('#mobileFileOpen').waitFor({state:'visible'});
+     assert.equal(await touch.locator('#mobileFileSave').isDisabled(),true,
+       'Save should be disabled until a PDF is open');
+     const choosePdf=touch.waitForEvent('filechooser',{timeout:20000});
+     await touch.locator('#mobileFileOpen').tap();
+     const chooser=await choosePdf;
+     await chooser.setFiles({
        name:'mobile-touch.pdf',mimeType:'application/pdf',buffer:await fixture()
      });
      await touch.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('mobile-touch.pdf'),
        null,{timeout:40000});
-     await touch.locator('#mobileBottomNav').waitFor({state:'visible',timeout:15000});
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
      await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
        null,{timeout:30000});
      await touch.locator('#mobNextPageBtn').tap();
@@ -458,7 +468,11 @@ async function main(){
        position:{x:backdrop.width-8,y:Math.round(backdrop.height/2)}
      });
      await touch.locator('#mobileDrawerBackdrop').waitFor({state:'hidden'});
-     await touch.locator('#quickSaveBtn').tap();
+     // Mobile File button must expose Save As without scrolling the top
+     // toolbar, and still use the exact same PDF save/reopen pipeline.
+     await touch.locator('#mobFileBtn').tap();
+     assert.equal(await touch.locator('#mobileFileSave').isEnabled(),true);
+     await touch.locator('#mobileFileSave').tap();
      await touch.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:20000});
      const modal=await touch.locator('#modalBox').boundingBox();
      assert(modal&&modal.x>=-1&&modal.x+modal.width<=391,
@@ -477,6 +491,12 @@ async function main(){
      assert.equal(mobileDoc.getPage(1).getRotation().angle,90);
      assert.equal(mobileDoc.getForm().getTextField('employee').getText(),'Sample Person');
      await touch.locator('#saveAsDownloadedBtn').tap();
+     // Preserve PDF merge access in the new mobile file menu.
+     await touch.locator('#mobFileBtn').tap();
+     await touch.locator('#mobileFileMerge').tap();
+     await touch.waitForFunction(()=>document.getElementById('modalTitle')?.textContent.includes('PDF 병합'),
+       null,{timeout:30000});
+     await touch.locator('#modalCloseBtn').tap();
      await touch.locator('#openPdfInput').setInputFiles({
        name:'mobile-reopened.pdf',mimeType:'application/pdf',buffer:mobileBytes
      });

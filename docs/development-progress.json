@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-02",
-  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시. 2026-11-02 USR-11 병합 메모리 구조 개선: 원본 PDFPage 문서 참조를 경량 페이지 박스/회전값으로 치환하고 복사가 완료된 PDF 소스 참조를 즉시 해제. 실제 240쪽 합성 병합·RSS 관측 테스트로 검증하며 절대 메모리 상한이나 현장 파일 대응을 주장하지 않음.",
+  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시. 2026-11-02 USR-11 병합 메모리 구조 개선: 원본 PDFPage 문서 참조를 경량 페이지 박스/회전값으로 치환하고 복사가 완료된 PDF 소스 참조를 즉시 해제. 실제 240쪽 합성 병합·RSS 관측 테스트로 검증하며 절대 메모리 상한이나 현장 파일 대응을 주장하지 않음. 2026-11-02 PR #41: 모바일 파일 메뉴(열기·저장·병합), 터치 기반 브라우저 파일 선택·저장 다운로드/재열기 및 병합 창 실기 브라우저 E2E, Linux Chromium/Windows Chrome·Edge+Node 빌드 4/4 PASS(Actions #41407776399). USR-19 소스/자동검증 점수만 근거에 따라 갱신하며 실제 모바일 기기·운영 점수는 유지.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -288,11 +288,11 @@
       "id": "USR-19",
       "name": "모바일 UX",
       "phase": 3,
-      "implementation": 50,
-      "automated": 25,
+      "implementation": 65,
+      "automated": 65,
       "practical": 10,
       "deployment": 35,
-      "note": "일부 반응형 UI, 실제 모바일 파일/터치 검증 부족"
+      "note": "모바일 하단 파일 메뉴를 추가해 PDF 열기·다른 이름으로 저장·병합을 터치로 실행, 문서 미개방 시 저장 버튼 비활성화. 실제 모바일 터치 에뮬레이션의 브라우저 FileChooser 호출·2쪽 페이지 이동·서랍 닫기·Save As 다운로드/디스크 PDF 재열기·병합 창 진입을 Linux Chromium/Windows Chrome·Edge에서 검증(PR #41, Actions #41407776399 전체 4/4 PASS). iOS Safari/Android 실기기와 외부 고객 PDF·운영 수용은 여전히 미완료."
     },
     {
       "id": "USR-05",
