@@ -65,6 +65,10 @@ jobs:
           console.log('Backup/restoration evidence format checked; operator must retain the private records');
           NODE
       - run: npm ci --ignore-scripts
+      - name: Revalidate source contracts and tracked development progress
+        run: |
+          npm test
+          npm run progress:check
       - name: Build reviewed source
         run: npm run build
       - name: Install pinned Wrangler for D1 preflight and release
