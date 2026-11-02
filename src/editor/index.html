@@ -6292,7 +6292,7 @@
                   const row=document.createElement('p'),button=document.createElement('button');
                   button.type='button';
                   const filename=settings.mode==='merge'?'Sunrise_batch_merged.pdf':
-                    name.replace(/\\.pdf$/i,'')+`_part_${part}_p${startPage}-${endPage}.pdf`;
+                    name.replace(/\.pdf$/i,'')+`_part_${part}_p${startPage}-${endPage}.pdf`;
                   button.textContent=filename+' 다운로드';
                   button.addEventListener('click',()=>downloadBytes(bytes,filename));
                   row.append(button);results.append(row);successes++;
@@ -7843,7 +7843,7 @@
             document.getElementById("modalBackdrop")?.classList.contains("open")&&
             document.getElementById("maskExportBtn")===submit;
           let previewGeneration=0,previewTask=null,drawnPage=0,drawSize=null,drag=null;
-          const planLines=()=>lines.value.split(/\\r?\\n/).map(row=>row.trim()).filter(Boolean);
+          const planLines=()=>lines.value.split(/\r?\n/).map(row=>row.trim()).filter(Boolean);
           const invalidate=()=>{
             validated=null;confirmed.checked=false;
             preview.textContent="영역이 변경되었습니다. 다시 검증해 주세요.";
