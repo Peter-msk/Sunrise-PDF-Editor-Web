@@ -1,0 +1,32 @@
+{
+  "runs": [
+    {
+      "id": "compose",
+      "status": "PASS",
+      "download": "Sunrise_composed_pages.pdf",
+      "bytes": 1377,
+      "pagesOrChars": 4
+    },
+    {
+      "id": "overlay",
+      "status": "PASS",
+      "download": "sample_overlay.pdf",
+      "bytes": 5615,
+      "pagesOrChars": 4
+    },
+    {
+      "id": "preflight",
+      "status": "PASS",
+      "download": "sunrise_pdf_preflight_2026-11-03.csv",
+      "bytes": 800,
+      "pagesOrChars": 465
+    },
+    {
+      "id": "form",
+      "status": "PASS",
+      "pages": 4,
+      "fields": 1
+    }
+  ],
+  "errors": []
+}

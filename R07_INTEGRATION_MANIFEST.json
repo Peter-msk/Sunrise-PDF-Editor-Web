@@ -1,0 +1,199 @@
+{
+  "phase": "R07-local-source-integration",
+  "repo": "Peter-msk/Sunrise-PDF-Editor-Web",
+  "candidateCommit": "2a23280dd815b7a2a296ac08e8e53294c10931f0",
+  "notAppliedToGithub": true,
+  "notDeployed": true,
+  "localJsModules": 24,
+  "newFiles": 30,
+  "modifiedFiles": 6,
+  "changes": [
+    {
+      "path": "dist/admin/index.html",
+      "kind": "modify",
+      "sha256": "b0d33e85bd2661f6f397c778e00ef3911a38fc55a2c168684d81ea71f22b541a"
+    },
+    {
+      "path": "dist/assets/sunrise-admin-restore.js",
+      "kind": "add",
+      "sha256": "3f447503d54576488cdbd081cdd1ce097965f09c9a456d6b8f6e49a29cf0adde"
+    },
+    {
+      "path": "dist/assets/sunrise-telemetry.js",
+      "kind": "modify",
+      "sha256": "abfc242034b039b912db6fedee7e90318d5deea1ed3a617018ec5a4ab6f30c35"
+    },
+    {
+      "path": "migrations/0016_admin_publication_restore_audit.sql",
+      "kind": "add",
+      "sha256": "6cdb60678a7b72fe94dff99ce5f75db4ac9f0342c303f5b02bc1c6d2b39403b5"
+    },
+    {
+      "path": "scripts/build-release.cjs",
+      "kind": "modify",
+      "sha256": "83af4ded145e30c6422baf455b7efc9d024cab4d27ecf50eff7a8b4a19681cf2"
+    },
+    {
+      "path": "src/admin-api.mjs",
+      "kind": "modify",
+      "sha256": "f86ee89a56c790e123e39ce563943c65ae89a53809684229ba63c4284664b4eb"
+    },
+    {
+      "path": "src/admin-csv.mjs",
+      "kind": "add",
+      "sha256": "960ccd9b8a272f8e34687fe3d37956006f32e8b7359667a84f2f44e179255e63"
+    },
+    {
+      "path": "src/admin-publication-backup-v2.mjs",
+      "kind": "add",
+      "sha256": "b8787ab7e27cd1c6b80e47888ee4575a021ab59272aaf3425ced4b59af06fdd3"
+    },
+    {
+      "path": "src/admin-publication-restore.mjs",
+      "kind": "add",
+      "sha256": "1838fffab255bc4064772b5c5c705d404e2c1724fb40260755e98e7059537be3"
+    },
+    {
+      "path": "src/assets/sunrise-batch-preflight-ui.js",
+      "kind": "add",
+      "sha256": "fcfe1e56e5cf5821029e077a352c13942a4261a6bc100438339b578ca2466475"
+    },
+    {
+      "path": "src/assets/sunrise-batch-preflight.js",
+      "kind": "add",
+      "sha256": "36a09d44972014480d641d70bc89c136715417fad6eec7386bad95240c57b694"
+    },
+    {
+      "path": "src/assets/sunrise-images-to-pdf-ui.js",
+      "kind": "add",
+      "sha256": "393898470c6db43ad8f9e0fb0942481d35a790218258e8bd5823f568be96e591"
+    },
+    {
+      "path": "src/assets/sunrise-images-to-pdf.js",
+      "kind": "add",
+      "sha256": "b7a091e1743669b0b77ba1dd2c0b519c79693a2bd6860b28991f4b5773ae5dc2"
+    },
+    {
+      "path": "src/assets/sunrise-local-metrics.js",
+      "kind": "add",
+      "sha256": "2c9a1c5ddf1739e95f770a667899da0fc9d6f8b05a3379ba2471850d3b8dc7fe"
+    },
+    {
+      "path": "src/assets/sunrise-local-ui.js",
+      "kind": "add",
+      "sha256": "7ae15aa948d9d51c8430676c1cf2fd370a1a467f6507a1918ea91948b99ff0f8"
+    },
+    {
+      "path": "src/assets/sunrise-page-composer-ui.js",
+      "kind": "add",
+      "sha256": "7440dc8315fff370974f80d8e17424e660429960f55c5578fd326f7e0e5ccb3d"
+    },
+    {
+      "path": "src/assets/sunrise-page-composer.js",
+      "kind": "add",
+      "sha256": "86625453f9cccf4efb465bc0e1b4d95251a412ad6cdf598c7aa10861451516b3"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-finishing-ui.js",
+      "kind": "add",
+      "sha256": "d879f6c2e3360eaa6e6a4d109231c05e77f2262f400e034662bcdec0a554eb58"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-form-tools.js",
+      "kind": "add",
+      "sha256": "c825d8d8fa3c4caed64a238ea4b957745e8ce5c8103b23d203da2e68f9a1fd1f"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-metadata-ui.js",
+      "kind": "add",
+      "sha256": "affd2d9a8471c9bef16955b84957eb93325bc9b63b8f0140a6bf97038c5e50a1"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-metadata.js",
+      "kind": "add",
+      "sha256": "2ecce96f997d86dd50ed9dcd68286e3b5c086c6b096d49bef14d24291cdafadc"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-nup-ui.js",
+      "kind": "add",
+      "sha256": "a627d52653e374ead902345b8ce7e3965d9ff03b8cc4c8f2645e5835054efe91"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-nup.js",
+      "kind": "add",
+      "sha256": "db0e7813dedf921cbd5c4244e0a422a8fdd1a4367fc9ac4925bd0c4b13936df6"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-overlay-ui.js",
+      "kind": "add",
+      "sha256": "edf1da043baa0988f7b0e8ec39c573a41546dcfc0bd5cc5c8cfc89a24e6451ff"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-overlay.js",
+      "kind": "add",
+      "sha256": "3d9a7ac1e6ad8b1dc3411610eb862276ba34f6b3e809d8900dc88ff9e26eb965"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-page-geometry-ui.js",
+      "kind": "add",
+      "sha256": "8c4a7e170ae10971477deea9424c41ba151f1f7792da8e10ca5cdbdfb1521b40"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-page-geometry.js",
+      "kind": "add",
+      "sha256": "67426fbf667951b66f5064ac58aa5893c3f6ca6a805abe7577b91143fa337dc4"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-stamper.js",
+      "kind": "add",
+      "sha256": "bc6fb5ace141e9c4c994b92802588279156c068912ae83f4b9eaa0d768830ea6"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-to-images-ui.js",
+      "kind": "add",
+      "sha256": "f4492363dc96b9583b288f48f3133cb2cbea095ea4297a9fd1a4a172169722a5"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-to-images.js",
+      "kind": "add",
+      "sha256": "0ca03add069320b853a9073edd73434a73812de79909e3fcfa9df00ef6d08d7b"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-visual-compare-ui.js",
+      "kind": "add",
+      "sha256": "33b7d1e7adc46f2e172d0bfeb724bf9e2e6476d5d3647bb98ccf72b7e1639509"
+    },
+    {
+      "path": "src/assets/sunrise-pdf-visual-compare.js",
+      "kind": "add",
+      "sha256": "38c5fae869d5b456365dd6c5c65834f78307731ba1cbe6d13c7fa34468353cc4"
+    },
+    {
+      "path": "src/assets/sunrise-tool-hub.js",
+      "kind": "add",
+      "sha256": "ef885e0729f83d866d1bf0619f8820b313adfa49d22a50e0d5319e55d0ab9989"
+    },
+    {
+      "path": "src/editor/index.html",
+      "kind": "modify",
+      "sha256": "48f3b9d66a1cd95d80457b0cb68ea197166ef435fc35c37d5951b6ccd02216fa"
+    },
+    {
+      "path": "src/operation-metrics.mjs",
+      "kind": "modify",
+      "sha256": "6fd9018a03c4bff009e7b7b66bd4a04a601309f30afe17d47403f4db5251cf9f"
+    },
+    {
+      "path": "src/tools/index.html",
+      "kind": "add",
+      "sha256": "ffee9aa43281af04317a9176fb1880c7254fadf002f92ec0d0da373c7135b448"
+    }
+  ],
+  "manualActionsNeeded": [
+    "D1 migration 0016 — never auto-run",
+    "set PUBLICATION_RESTORE_SIGNING_KEY on controlled rollout",
+    "review runtime admin restore and dashboard UI availability before production",
+    "run browser/CI regression only after separately approved phase 2",
+    "GitHub commit and Cloudflare deployment only after separate approval"
+  ]
+}

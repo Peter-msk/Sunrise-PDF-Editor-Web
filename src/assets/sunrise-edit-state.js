@@ -2,7 +2,7 @@
   'use strict';
   const KEY = 'SunriseWebEdits';
   const TOKEN = 'SunriseWebToken';
-  const TYPES = new Set(['Text', 'Note', 'Highlight', 'Stamp', 'Watermark', 'Table', 'PageNumber', 'Header', 'Footer']);
+  const TYPES = new Set(['Text', 'Note', 'Highlight', 'Stamp', 'Watermark', 'Table', 'Shape', 'Correction', 'VisualSignature', 'PageNumber', 'Header', 'Footer']);
 
   function validItem(item, pageCount) {
     if (!item || !TYPES.has(item.type) || !Number.isInteger(item.pageIndex) ||
@@ -11,6 +11,10 @@
       if (item[key] !== undefined && (typeof item[key] !== 'number' || !Number.isFinite(item[key]) || Math.abs(item[key]) > 10000)) return false;
     }
     if (item.rotation !== undefined && ![0, 90, 180, 270].includes(item.rotation)) return false;
+    if (item.type === 'Shape' && (!['rect','ellipse','line'].includes(item.shapeKind) ||
+        !Number.isFinite(item.width) || item.width < 20 || item.width > 800 ||
+        !Number.isFinite(item.height) || item.height < 20 || item.height > 800 ||
+        !Number.isFinite(item.strokeWidth) || item.strokeWidth < 1 || item.strokeWidth > 15)) return false;
     for (const key of ['color', 'bgColor']) {
       if (item[key] !== undefined && (typeof item[key] !== 'string' || item[key].length > 80 ||
           !/^(#[0-9a-f]{3,8}|transparent|rgba?\([\d\s.,%]+\))$/i.test(item[key]))) return false;

@@ -3,12 +3,25 @@ on:
   workflow_dispatch:
     inputs:
       confirmed_release:
-        description: Functional/browser review and schema preparation are complete
+        description: Functional/browser review, backup and schema preparation are complete
         required: true
         type: boolean
         default: false
+      validated_commit:
+        description: Exact main commit SHA whose full CI passed
+        required: true
+        type: string
+      private_backup_sha256:
+        description: SHA-256 of the protected D1 backup stored outside GitHub
+        required: true
+        type: string
+      isolated_restore_receipt:
+        description: R12 receipt from private SQL import into sunrise-pdf-restore-test
+        required: true
+        type: string
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: sunrise-production-release
   cancel-in-progress: false
@@ -16,42 +29,135 @@ jobs:
   release:
     if: inputs.confirmed_release && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       DEPLOYMENT_EVENT_SECRET: ${{ secrets.DEPLOYMENT_EVENT_SECRET }}
       DEPLOYMENT_ENVIRONMENT: production
+      BACKUP_HASH: ${{ inputs.private_backup_sha256 }}
+      RESTORE_RECEIPT: ${{ inputs.isolated_restore_receipt }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-      - name: Require production configuration
+      - name: Verify exact release commit and successful full main CI
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VALIDATED_COMMIT: ${{ inputs.validated_commit }}
+        run: node scripts/check-release-ci-gate.cjs
+      - name: Require Cloudflare credentials and private D1 recovery evidence
         shell: bash
         run: |
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
           test -n "$DEPLOYMENT_EVENT_SECRET"
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          assert(/^[a-f0-9]{64}$/i.test(process.env.BACKUP_HASH||''),
+            'Private D1 backup SHA-256 evidence is required');
+          console.log('Backup hash format checked; operator must retain the private SQL outside GitHub');
+          NODE
       - run: npm ci --ignore-scripts
-      - run: npm run build
-      - name: Production D1 and administrator safety gate (read-only)
-        run: node scripts/admin-production-gate.cjs
+      - name: Revalidate source contracts and tracked development progress
+        run: |
+          npm test
+          npm run progress:check
+      - name: Build reviewed source
+        run: npm run build
+      - name: Install pinned Wrangler for D1 preflight and release
+        run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.156.0
+      - name: Prepare isolated D1 verification config (not production)
+        env:
+          REHEARSAL_D1_ID: ${{ secrets.CLOUDFLARE_REHEARSAL_D1_DATABASE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$REHEARSAL_D1_ID"
+          umask 077
+          node - <<'NODE'
+          const fs=require('node:fs'),path=require('node:path');
+          const id=process.env.REHEARSAL_D1_ID;
+          if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id))
+            throw Error('Approved rehearsal D1 identifier missing or invalid');
+          const config={name:'sunrise-pdf-restore-review',compatibility_date:'2026-10-30',
+            d1_databases:[{binding:'REHEARSAL_DB',database_name:'sunrise-pdf-restore-test',database_id:id}]};
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'sunrise-rehearsal-d1.jsonc'),JSON.stringify(config),{mode:0o600,flag:'wx'});
+          NODE
+      - name: Verify isolated D1 restore receipt against remote counts (read-only)
+        env:
+          WRANGLER_BIN: ./node_modules/.bin/wrangler
+          WRANGLER_REHEARSAL_CONFIG: ${{ runner.temp }}/sunrise-rehearsal-d1.jsonc
+          REHEARSAL_D1_ID: ${{ secrets.CLOUDFLARE_REHEARSAL_D1_DATABASE_ID }}
+        run: node scripts/check-release-recovery-evidence.cjs
+      - name: Verify remote production D1 schema (read-only)
+        env:
+          WRANGLER_BIN: ./node_modules/.bin/wrangler
+        run: npm run release:schema
+      - name: Verify publication restore audit migration on production D1 (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/wrangler d1 execute sunrise-pdf-editor-web-contact --remote --command "SELECT name FROM sqlite_master WHERE name IN ('admin_publication_restore_runs','admin_publication_restore_steps','admin_publication_restore_recent') ORDER BY name" --json > /tmp/sunrise-release-migration-check.json
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const data=JSON.parse(fs.readFileSync('/tmp/sunrise-release-migration-check.json','utf8'));
+          const items=data?.[0]?.results;
+          const actual=new Set(Array.isArray(items)?items.map(x=>x.name):[]);
+          const required=['admin_publication_restore_runs','admin_publication_restore_steps','admin_publication_restore_recent'];
+          if(data?.[0]?.success!==true||required.some(x=>!actual.has(x)))
+            throw Error('0016 publication restoration audit migration must be applied with separate approval before production release');
+          console.log('Publication restore audit schema present');
+          NODE
+      - name: Require existing production Worker secret binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/wrangler secret list --name sunrise-pdf-editor --format json > /tmp/sunrise-worker-secret-names.json
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const names=JSON.parse(fs.readFileSync('/tmp/sunrise-worker-secret-names.json','utf8'));
+          const required=['DEPLOYMENT_EVENT_SECRET','PUBLICATION_RESTORE_SIGNING_KEY'];
+          for(const secret of required)
+            if(!Array.isArray(names)||!names.some(x=>x?.name===secret))
+              throw new Error('운영 Worker에 '+secret+' 바인딩이 없어 배포를 차단합니다.');
+          console.log('Production Worker required secret binding names are present');
+          NODE
+      - name: Verify Worker bundle without publishing
+        run: ./node_modules/.bin/wrangler deploy --dry-run
       - name: Deploy reviewed source
         id: deploy
         continue-on-error: true
-        run: npm exec --yes --package=wrangler@4.102.0 -- wrangler deploy
-      - name: Report deployment outcome
+        run: ./node_modules/.bin/wrangler deploy
+      - name: Smoke-test public editor, D1 notices and protected admin API
+        id: smoke
+        if: steps.deploy.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://sunrise-pdf-editor.ko-pg.workers.dev'
+          curl --fail --silent --show-error --retry 4 --retry-delay 3 "${base}/editor/" -o /tmp/sunrise-editor.html
+          grep -q 'Sunrise PDF Editor' /tmp/sunrise-editor.html
+          curl --fail --silent --show-error --retry 4 --retry-delay 3 "${base}/api/site-updates" -o /tmp/sunrise-updates.json
+          node -e "const d=require('/tmp/sunrise-updates.json');if(!Array.isArray(d.announcements)||!Array.isArray(d.releases))process.exit(1)"
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' "${base}/api/admin/health")"
+          test "$status" = '401'
+      - name: Report actual deployment and smoke outcome
         if: always() && (steps.deploy.outcome == 'success' || steps.deploy.outcome == 'failure')
         env:
           DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          SMOKE_OUTCOME: ${{ steps.smoke.outcome }}
+        shell: bash
         run: |
-          if [ "$DEPLOY_OUTCOME" = "success" ]; then
+          if [ "$DEPLOY_OUTCOME" = "success" ] && [ "$SMOKE_OUTCOME" = "success" ]; then
             node scripts/report-deployment.cjs succeeded
           else
             node scripts/report-deployment.cjs failed
           fi
-      - name: Preserve failed deployment outcome
-        if: steps.deploy.outcome == 'failure'
+      - name: Preserve unsuccessful deployment or smoke outcome
+        if: steps.deploy.outcome != 'success' || steps.smoke.outcome != 'success'
         run: exit 1

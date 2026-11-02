@@ -1,0 +1,28 @@
+const assert = require('node:assert/strict');
+const {DatabaseSync} = require('node:sqlite');
+const {webcrypto} = require('node:crypto');
+globalThis.crypto ||= webcrypto;
+(async () => {
+  const sqlite = new DatabaseSync(':memory:');
+  sqlite.exec('CREATE TABLE analytics_daily(day TEXT,visits INTEGER,editor_seconds INTEGER)');
+  sqlite.exec("INSERT INTO analytics_daily VALUES(date('now','+9 hours'),7,125),(date('now','+9 hours','-29 days'),2,30),(date('now','+9 hours','-30 days'),999,999),(date('now','+9 hours','+1 day'),888,888)");
+  const db = {prepare(sql) { const stmt=sqlite.prepare(sql); return {args:[],bind(...args){this.args=args;return this},async all(){return {results:stmt.all(...this.args)}}}; }};
+  const {adminApi} = await import('../src/admin-api.mjs');
+  const url = new URL('https://example.test/api/admin/statistics.csv');
+  const res = await adminApi(new Request(url), {DB:db}, url, 'admin');
+  assert.equal(res.status,200);
+  assert.match(res.headers.get('content-type'),/^text\/csv/);
+  assert.equal(res.headers.get('cache-control'),'no-store');
+  const csv=await res.text();
+  assert.match(csv,/방문 세션/);
+  assert.match(csv,/"7","125"/);
+  assert.match(csv,/"2","30"/);
+  assert.doesNotMatch(csv,/999|888|email|message|문의/);
+  const worker=(await import('../src/worker.mjs')).default;
+  const denied=await worker.fetch(new Request(url),{DB:db},{});
+  assert.equal(denied.status,401);
+  sqlite.exec("INSERT INTO analytics_daily VALUES('=1+1',3,4)");
+  const broken={prepare(){return {bind(){return this},async all(){return {results:[{day:'=1+1',visits:1,editor_seconds:1}]}}}}};
+  await assert.rejects(adminApi(new Request(url),{DB:broken},url,'admin'));
+  console.log('PASS: authenticated aggregate CSV, 30-day boundaries, privacy and malformed data rejection');
+})().catch(error=>{console.error(error);process.exitCode=1});

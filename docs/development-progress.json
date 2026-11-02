@@ -1,0 +1,388 @@
+{
+  "schema": 1,
+  "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
+  "asOf": "2026-11-02",
+  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시. 2026-11-02 USR-11 병합 메모리 구조 개선: 원본 PDFPage 문서 참조를 경량 페이지 박스/회전값으로 치환하고 복사가 완료된 PDF 소스 참조를 즉시 해제. 실제 240쪽 합성 병합·RSS 관측 테스트로 검증하며 절대 메모리 상한이나 현장 파일 대응을 주장하지 않음. 2026-11-02 PR #41: 모바일 파일 메뉴(열기·저장·병합), 터치 기반 브라우저 파일 선택·저장 다운로드/재열기 및 병합 창 실기 브라우저 E2E, Linux Chromium/Windows Chrome·Edge+Node 빌드 4/4 PASS(Actions #41407776399). USR-19 소스/자동검증 점수만 근거에 따라 갱신하며 실제 모바일 기기·운영 점수는 유지.",
+  "excluded": [
+    "USR-20 (OCR)"
+  ],
+  "scoreWeights": {
+    "implementation": 40,
+    "automated": 30,
+    "practical": 20,
+    "deployment": 10
+  },
+  "phaseMethod": "1~7단계 동일 가중치; 단계 점수는 해당 기능의 산술 평균",
+  "features": [
+    {
+      "id": "ADM-01",
+      "name": "운영 홈·KPI",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 95,
+      "practical": 70,
+      "deployment": 35,
+      "note": "기간/전기 비교 SQL와 Linux/Windows Chrome/Edge 대시보드 통과. 실제 운영 원천 수치 대조·업무 PC 확인 미완"
+    },
+    {
+      "id": "ADM-02",
+      "name": "방문 통계",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 95,
+      "practical": 50,
+      "deployment": 35,
+      "note": "SQLite 중복 방문·KST 자정 및 Linux/Windows 방문 표시 통과. 익명 탭 추정이며 운영 수치/사람 재방문율과 구분"
+    },
+    {
+      "id": "ADM-03",
+      "name": "사용시간 분석",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 95,
+      "practical": 25,
+      "deployment": 30,
+      "note": "전경/포커스·2분 유휴·KST 경계 VM 검사 통과. 실제 장시간 사용 오차·Windows/모바일 검증 미완"
+    },
+    {
+      "id": "ADM-04",
+      "name": "기능 오류율",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 95,
+      "practical": 20,
+      "deployment": 30,
+      "note": "기능/기간/수집 Worker 버전 집계 API 검사 통과. 모든 주요 경로의 모든 입력 조합·실운영 분석 미검증"
+    },
+    {
+      "id": "ADM-05",
+      "name": "문의 관리",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 80,
+      "deployment": 35,
+      "note": "SQLite 검색/페이지/이력/충돌과 Linux/Windows Chrome/Edge 문의 흐름 및 실제 인증 API 쓰기 통과. 실제 운영 D1 수용 미완"
+    },
+    {
+      "id": "ADM-06",
+      "name": "공지사항 관리",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 80,
+      "deployment": 0,
+      "note": "SQLite 전체 검색/이전 기록/충돌/7일 수명 및 Linux/Windows Chrome/Edge 공지 흐름 통과. 운영 공개 피드 수용 미완"
+    },
+    {
+      "id": "ADM-07",
+      "name": "업데이트 관리",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 80,
+      "deployment": 0,
+      "note": "SQLite 검색/이전 기록/수정 보호와 Linux/Windows Chrome/Edge 업데이트 흐름 통과. 실제 배포 내용 대조/운영 반영 미완"
+    },
+    {
+      "id": "ADM-08",
+      "name": "서비스 상태",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 80,
+      "deployment": 0,
+      "note": "Linux/Windows 상태·버전·장애/복구 표시와 운영 D1 구조/Worker 바인딩 이름·종류 읽기 확인. 실제 운영 새 스키마/배포는 미적용"
+    },
+    {
+      "id": "ADM-09",
+      "name": "배포·버전",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 40,
+      "deployment": 0,
+      "note": "합성 서명 보고의 변조/시각/중복·역순/권한/DB 실패 검사 및 Linux/Windows 버전 표시 통과. 운영 배포 비밀값/버전 바인딩 미연결 확인"
+    },
+    {
+      "id": "ADM-10",
+      "name": "보존·백업",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 50,
+      "deployment": 25,
+      "note": "Linux/Windows 합성 Wrangler 프로세스 및 실제 Python SQLite 백업/격리 복원 통과. 실제 D1 원격 백업·복원/새 스키마 적용은 미실시"
+    },
+    {
+      "id": "ADM-11",
+      "name": "계정 보안",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 85,
+      "deployment": 45,
+      "note": "Linux/Windows Chrome/Edge HTTPS 등록·로그인·쿠키·비밀번호 변경·세션 폐기 통과. 실제 업무 PC/운영 도메인 수용 미완"
+    },
+    {
+      "id": "ADM-12",
+      "name": "이용 품질",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 95,
+      "practical": 55,
+      "deployment": 0,
+      "note": "결과/재시도/버전 API와 Linux/Windows 품질 화면 통과. 실제 PC 저장 완료 계측과 구분하며 운영 수용 미완"
+    },
+    {
+      "id": "ADM-13",
+      "name": "통계 CSV",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 100,
+      "practical": 80,
+      "deployment": 0,
+      "note": "기간·버전 CSV API와 Linux/Windows Chrome/Edge 실제 다운로드 통과. 실제 Excel·운영 자료 수용 미완"
+    },
+    {
+      "id": "ADM-14",
+      "name": "운영 알림",
+      "phase": 1,
+      "implementation": 100,
+      "automated": 95,
+      "practical": 70,
+      "deployment": 0,
+      "note": "렌더 중복 제거/텍스트 출력 및 Linux/Windows 장애·복구 통과. 운영 배포/보존 알림·장시간 자동 조회 수용 미완"
+    },
+    {
+      "id": "USR-01",
+      "name": "PDF 병합",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 70,
+      "practical": 15,
+      "deployment": 35,
+      "note": "기존 병합, 양식 안전 차단·특수 PDF 실검증 필요"
+    },
+    {
+      "id": "USR-02",
+      "name": "분할·추출",
+      "phase": 2,
+      "implementation": 78,
+      "automated": 82,
+      "practical": 20,
+      "deployment": 35,
+      "note": "페이지 범위 및 파일당 1~100쪽, 최대 50개 결과를 목록으로 준비하고 선택 파일만 개별 생성(고정 MB 제한 없음). 일반 페이지 목적지 원본 북마크는 결과별 재매핑, 특수 목적지는 안전 차단. 합성 6쪽 PDF의 한글 2단계 북마크·90도 회전·비대칭 CropBox·파일명·디스크 저장/재열기·오래된 분할 계획 차단을 Linux Chromium·Windows Chrome/Edge에서 PASS(PR #30). 실제 고객 업무 PDF, 고용량 장시간 메모리 실측, 모바일/운영 배포 미검증."
+    },
+    {
+      "id": "USR-03",
+      "name": "페이지 편집",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 10,
+      "deployment": 35,
+      "note": "복제·회전·삭제 회귀, 실무 파일 실검증 부족"
+    },
+    {
+      "id": "USR-04",
+      "name": "텍스트 삽입",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 70,
+      "practical": 10,
+      "deployment": 35,
+      "note": "한글 지원, 실다운로드 위치·폰트 확인 필요"
+    },
+    {
+      "id": "USR-10",
+      "name": "PDF 양식",
+      "phase": 2,
+      "implementation": 80,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 0,
+      "note": "Work PR9 Draft 한글 필드·체크박스, 독립 실기 미완"
+    },
+    {
+      "id": "USR-11",
+      "name": "PDF 일괄 처리",
+      "phase": 2,
+      "implementation": 94,
+      "automated": 98,
+      "practical": 0,
+      "deployment": 0,
+      "note": "PDF 일괄 분할·병합·압축 및 안전한 출력 제한/원본 보호. PR #37에서 8쪽 단위 병합 취소 경계·페이지 진행률을 도입하고 36쪽 실기 CI 통과. 이번 개선에서는 병합 검증용 원본 PDFPage 보관을 수치 좌표 스냅샷으로 대체하고, 복사 완료 원본의 문서 참조를 해제하여 장시간 다중파일 병합 메모리 보유 구조를 경량화. 실제 PDF 엔진의 240쪽 합성 병합·회전/박스 검증 및 메모리 RSS 관측 회귀 추가. 메모리 성능 절대 상한 및 실제 고객 파일·모바일·운영 배포 수용은 미검증."
+    },
+    {
+      "id": "USR-18",
+      "name": "저장 안전성",
+      "phase": 2,
+      "implementation": 80,
+      "automated": 92,
+      "practical": 65,
+      "deployment": 30,
+      "note": "PDF 저장 시 상태 일관성·페이지 구조 검사, 실제 디스크 다운로드/재열기와 양식/회전 유지 Linux Chromium·Windows Chrome/Edge PASS. PR #30에서 복합 합성 6쪽 분할 결과의 저장/재열기·계층 북마크/좌표 복원 및 편집 후 오래된 다운로드 차단 PASS. 현장 업무 PC와 복잡한 외부 실무 PDF의 수동 수용검사는 미실시."
+    },
+    {
+      "id": "USR-06",
+      "name": "표·도형",
+      "phase": 3,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 15,
+      "deployment": 30,
+      "note": "삽입 표 다행·다열 셀 재편집/크기·데이터 검증, 사각형·타원·선 삽입과 색·선두께·크기·투명도 재편집 및 PDF 편집 메타데이터 복원 구현. Node/Chromium/Windows Chrome·Edge 회귀 통과. 원본 PDF 벡터 직접 편집 및 업무 PDF 수용·운영 배포 미완"
+    },
+    {
+      "id": "USR-07",
+      "name": "주석·형광펜",
+      "phase": 3,
+      "implementation": 70,
+      "automated": 80,
+      "practical": 10,
+      "deployment": 30,
+      "note": "기존 Sunrise 삽입 메모·강조 영역 재편집 기능 유지. 외부 표준 PDF /Text·/Highlight 현재 쪽 원본 주석 문구 수정·삭제(페이지 참조 제거), Unicode 저장·재열기/Undo·변경 감지, 전자서명·AcroForm·연결 답글·잠금·과다 참조 보수적 차단 구현. Node 전체·빌드와 Linux Chromium/Windows Chrome·Edge 기존 자동 회귀 PASS(PR #28); 실제 새 UI의 업무 PDF 수동 E2E·특수 PDF 호환성·운영 배포 미완. 삭제는 민감정보 완전 삭제가 아님."
+    },
+    {
+      "id": "USR-08",
+      "name": "북마크·목차",
+      "phase": 3,
+      "implementation": 85,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 30,
+      "note": "기존 텍스트 레이어의 장·절·항·목 및 1.1 등에서 최대 4단계 북마크 생성, 화면 들여쓰기/내어쓰기와 Undo, PDF 실제 계층 Outlines/Count·기존 북마크 보존 계약 추가. 전체 Node 검사/빌드 통과; 실무 PDF 제목 정확도·브라우저 직접 조작 검증은 별도"
+    },
+    {
+      "id": "USR-09",
+      "name": "PDF 압축",
+      "phase": 3,
+      "implementation": 75,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 30,
+      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요"
+    },
+    {
+      "id": "USR-12",
+      "name": "제출 전 품질 검사",
+      "phase": 3,
+      "implementation": 82,
+      "automated": 88,
+      "practical": 20,
+      "deployment": 0,
+      "note": "저장 PDF 구조/필수양식/빈쪽 후보 검사 + CSV·JSON 로컬 리포트 다운로드, 수식주입 방어. Linux Chromium·Windows Chrome/Edge에서 실제 저장 PDF 검사→리포트 JSON/CSV 디스크 다운로드·내용검사 PASS. 실무 PDF의 시각 품질·서명 유효성·운영 배포 미검증"
+    },
+    {
+      "id": "USR-17",
+      "name": "이미지·텍스트 추출",
+      "phase": 3,
+      "implementation": 82,
+      "automated": 82,
+      "practical": 20,
+      "deployment": 30,
+      "note": "텍스트/페이지 PNG/내장 RGB 래스터 PNG 추출. 실제 2x2 RGB 이미지 내장 PDF에서 Linux Chromium·Windows Chrome/Edge로 PNG 파일 다운로드 및 헤더 확인. 복잡한 색공간·마스크·원본 JPEG 바이트 미지원, 실무 PDF 품질 검증 미완"
+    },
+    {
+      "id": "USR-19",
+      "name": "모바일 UX",
+      "phase": 3,
+      "implementation": 65,
+      "automated": 65,
+      "practical": 10,
+      "deployment": 35,
+      "note": "모바일 하단 파일 메뉴를 추가해 PDF 열기·다른 이름으로 저장·병합을 터치로 실행, 문서 미개방 시 저장 버튼 비활성화. 실제 모바일 터치 에뮬레이션의 브라우저 FileChooser 호출·2쪽 페이지 이동·서랍 닫기·Save As 다운로드/디스크 PDF 재열기·병합 창 진입을 Linux Chromium/Windows Chrome·Edge에서 검증(PR #41, Actions #41407776399 전체 4/4 PASS). iOS Safari/Android 실기기와 외부 고객 PDF·운영 수용은 여전히 미완료."
+    },
+    {
+      "id": "USR-05",
+      "name": "원문 직접 수정",
+      "phase": 4,
+      "implementation": 15,
+      "automated": 60,
+      "practical": 10,
+      "deployment": 0,
+      "note": "PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완"
+    },
+    {
+      "id": "USR-13",
+      "name": "민감정보 완전 삭제",
+      "phase": 4,
+      "implementation": 43,
+      "automated": 85,
+      "practical": 20,
+      "deployment": 0,
+      "note": "페이지별 쉼표 구분 마스크 계획으로 최대 10쪽·40영역(쪽당 12개), 입력 경계/사전 미리 검증, 진행·취소, 선택 쪽만 신규 래스터 PDF 작성, 원본 텍스트·양식·첨부·북마크·편집 메타데이터 비이식 및 출력 PDF 구조 검사. Node·Linux Chromium·Windows Chrome/Edge에서 2쪽·3영역 실다운로드·픽셀/텍스트 확인 PASS. 지정 외 이미지/문구 노출 가능, 문서 전체 완전 삭제/인증 불가. OCR 제외"
+    },
+    {
+      "id": "USR-14",
+      "name": "PDF 암호 보호",
+      "phase": 4,
+      "implementation": 22,
+      "automated": 85,
+      "practical": 30,
+      "deployment": 0,
+      "note": "QPDF 11.7+가 설치된 로컬 PC용 AES-256 암호화 도구 구현. 비밀번호를 qpdf 명령줄이 아닌 @- 표준입력으로 전송, 원본 불변·기존 출력 덮어쓰기 거부·임시 출력 삭제, 전자서명/미판독 PDF 차단, 정상·오류 암호 검증 후 결과 공개. Linux qpdf 실파일 CI 및 Node 계약검증 통과. 사용자 웹 편집기 암호화/브라우저 WASM 미구현, Windows·외부 뷰어 호환 수용 미완. OCR 제외."
+    },
+    {
+      "id": "USR-15",
+      "name": "전자서명",
+      "phase": 4,
+      "implementation": 30,
+      "automated": 70,
+      "practical": 15,
+      "deployment": 0,
+      "note": "시각 서명 표시 삽입·편집·Undo·PDF 저장/복원, 원문에 전자서명·인증서 서명 아님 고정 문구 및 Chrome·Edge·Chromium 자동검사. 인증서 개인키/전자서명 유효성 검증 기능 없음; 법적 디지털 서명 완료 기능 아님"
+    },
+    {
+      "id": "USR-16",
+      "name": "Word·Excel 변환",
+      "phase": 4,
+      "implementation": 55,
+      "automated": 87,
+      "practical": 20,
+      "deployment": 0,
+      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외."
+    },
+    {
+      "id": "TECH-01",
+      "name": "코드·언어·성능 고도화",
+      "phase": 5,
+      "implementation": 40,
+      "automated": 50,
+      "practical": 0,
+      "deployment": 0,
+      "note": "관리자·PDF 일괄·편집 선택 검사용 명령 및 PR 중복 CI 취소·Chromium 캐시 도입, 6개 파일 1회 커밋. 타입·모듈/병렬 성능 검증 미완; Windows CRLF 릴리스 빌드 결함 수정 및 LF/CRLF/CR 회귀·Windows 빌드 통과"
+    },
+    {
+      "id": "QA-01",
+      "name": "전체 통합 안정화",
+      "phase": 6,
+      "implementation": 32,
+      "automated": 90,
+      "practical": 55,
+      "deployment": 0,
+      "note": "전체 Node 계약검사·프로덕션 빌드 및 Linux Chromium/Windows Chrome/Edge PDF 저장·관리자 대표 브라우저 흐름 통과(2026-11-02 PR #30 Actions #41390913711). 실제 업무 PC·모바일·외부 실무 PDF·실제 운영 D1·장시간 메모리 수용 미완."
+    },
+    {
+      "id": "REL-01",
+      "name": "최종 배포·운영 인계",
+      "phase": 7,
+      "implementation": 0,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "PR9/10 Draft; 전체 릴리스·운영 인수검사 미시행"
+    }
+  ],
+  "adminSourceStatus": {
+    "state": "implementation-complete-candidate",
+    "scope": "ADM-01~14",
+    "functionalValidation": "node-28-passed",
+    "browserValidation": "linux-chromium-windows-chrome-edge-admin-flows-passed",
+    "productionRollout": "pending",
+    "evidence": "docs/ADMIN_SOURCE_CLOSEOUT.md",
+    "validationEvidence": "docs/ADMIN_VALIDATION_REPORT.md",
+    "productionSchemaReview": "read-only-gaps-confirmed"
+  }
+}

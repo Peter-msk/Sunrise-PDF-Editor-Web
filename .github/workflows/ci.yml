@@ -1,0 +1,135 @@
+name: Sunrise PDF Editor validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    # Draft PRs are implementation checkpoints, not validation milestones.
+    types: [opened, reopened, synchronize, ready_for_review]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'dist/**'
+      - 'migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'wrangler.toml'
+      - '.github/workflows/ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'dist/**'
+      - 'migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'wrangler.toml'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: sunrise-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  node-contracts:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: Node contracts and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --ignore-scripts
+      - name: Run the complete contract suite
+        run: npm test
+      - name: Validate feature-by-feature development progress
+        run: npm run progress:check
+      - name: Build release assets
+        run: npm run build
+      - name: Ensure repository files are not modified unexpectedly
+        run: |
+          git status --short
+          test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"
+
+  browser-chromium:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: Real Chromium PDF save and reopen
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install release dependencies
+        run: npm ci --ignore-scripts
+      - name: Build the editor as deployed
+        run: npm run build
+      - name: Restore Chromium browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-1.58.0
+      - name: Install isolated browser test runtime
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.58.0
+          npx playwright install --with-deps chromium
+      - name: Chromium upload, Save As, download and reopen
+        run: node tests/browser-save-reopen.cjs
+      - name: Chromium administrator dashboard UI (mocked API, no credentials)
+        run: node tests/browser-admin-quality.cjs
+      - name: Chromium administrator workflows (mock API, no credentials)
+        run: node tests/browser-admin-workflows.cjs
+      - name: Chromium real administrator login and session rotation (local SQLite)
+        run: node tests/browser-admin-auth.cjs
+      - name: Ensure browser test did not alter application sources
+        run: |
+          test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"
+
+  browser-windows:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: Windows administrator and PDF - ${{ matrix.browser }}
+    runs-on: windows-2025
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chrome, msedge]
+    env:
+      SUNRISE_BROWSER_CHANNEL: ${{ matrix.browser }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned release dependencies
+        run: npm ci --ignore-scripts --no-audit
+      - name: Build the deployed assets
+        run: npm run build
+      - name: Validate operator tools with synthetic fixtures
+        run: npm run test:admin:operations
+      - name: Install isolated browser controller
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit playwright@1.58.0
+      - name: Windows PDF download and reopen
+        run: node tests/browser-save-reopen.cjs
+      - name: Windows administrator dashboard, workflows and HTTPS authentication
+        run: npm run test:admin:browser
+      - name: Ensure validation did not modify application sources
+        shell: bash
+        run: test -z "$(git status --porcelain -- src scripts tests package.json package-lock.json)"

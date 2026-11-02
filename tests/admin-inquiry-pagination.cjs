@@ -1,0 +1,24 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {DatabaseSync}=require('node:sqlite');
+(async()=>{
+ const sqlite=new DatabaseSync(':memory:');
+ for(const name of ['0001_inquiries_and_site_updates.sql','0002_admin_analytics.sql','0015_admin_edit_revisions.sql'])sqlite.exec(fs.readFileSync('migrations/'+name,'utf8'));
+ const add=sqlite.prepare('INSERT INTO inquiries(category,email,message,status,created_at) VALUES (?,?,?,?,?)');
+ for(let i=0;i<127;i++)add.run('기타',`case${i}@example.test`,i%2?'검색 대상':'다른 문의',i%2?'new':'read','2026-10-31T03:00:00.000Z');
+ const db={prepare(query){const s=sqlite.prepare(query);return {args:[],bind(...args){this.args=args;return this},async all(){return {results:s.all(...this.args)}}}}};
+ const {adminApi}=await import('../src/admin-api.mjs');
+ const call=async(params={})=>{const url=new URL('https://example.test/api/admin/inquiries');for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));return adminApi(new Request(url),{DB:db},url,'admin')};
+ let r=await call();assert.equal(r.status,200);let d=await r.json();assert.equal(d.items.length,50);assert(d.next);
+ const ids=d.items.map(x=>x.id),first=d.next;
+ add.run('기타','new@example.test','new','new','2026-11-01T00:00:00.000Z');
+ r=await call(first);d=await r.json();assert.equal(d.items.length,50);ids.push(...d.items.map(x=>x.id));
+ r=await call(d.next);d=await r.json();assert.equal(d.items.length,27);assert.equal(d.next,null);ids.push(...d.items.map(x=>x.id));
+ assert.equal(new Set(ids).size,127);assert.deepEqual(ids,[...ids].sort((a,b)=>b-a));
+ r=await call({q:'검색 대상',status:'new'});d=await r.json();assert.equal(d.items.length,50);assert(d.next);
+ r=await call({...d.next,q:'검색 대상',status:'new'});d=await r.json();assert.equal(d.items.length,13);assert.equal(d.next,null);
+ assert.equal((await call({before:'invalid',before_id:'1'})).status,400);
+ assert.equal((await call({before:'2026-10-31T03:00:00.000Z'})).status,400);
+ assert.equal((await call({before:'2026-10-31T03:00:00.000Z',before_id:'0'})).status,400);
+ sqlite.close();console.log('PASS: inquiry keyset pagination, identical timestamps, new rows, filters and invalid cursors');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -1,0 +1,31 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {DatabaseSync}=require('node:sqlite');
+(async()=>{
+ const {runAdminRetention}=await import('../src/admin-retention.mjs');
+ const sql=new DatabaseSync(':memory:');
+ sql.exec(`CREATE TABLE inquiries(id INTEGER PRIMARY KEY,created_at TEXT);
+ CREATE TABLE inquiry_audit(inquiry_id INTEGER);
+ CREATE TABLE inquiry_rate_limits(day TEXT);
+ CREATE TABLE analytics_sessions(day TEXT);
+ CREATE TABLE admin_sessions(expires_ms INTEGER,last_seen_ms INTEGER);
+ CREATE TABLE admin_login_limits(window_start_ms INTEGER);`);
+ // The supplied clock differs from the real clock and crosses a KST day boundary.
+ const now=Date.parse('2025-03-01T15:00:00.000Z');
+ const cutoff=new Date(now-90*86400000);
+ const put=sql.prepare('INSERT INTO inquiries VALUES (?,?)');
+ put.run(1,new Date(cutoff.getTime()-1).toISOString());
+ put.run(2,cutoff.toISOString());
+ put.run(3,new Date(cutoff.getTime()+1).toISOString());
+ sql.exec("INSERT INTO inquiry_audit VALUES (1),(2),(3); INSERT INTO inquiry_rate_limits VALUES ('2025-02-26'),('2025-02-27'); INSERT INTO analytics_sessions VALUES ('2025-02-15'),('2025-02-16');");
+ const db={prepare(query){const stmt=sql.prepare(query);return {bind(...args){return {run:async()=>stmt.run(...args)}}}}};
+ await runAdminRetention(db,now);
+ assert.deepEqual(sql.prepare('SELECT id FROM inquiries ORDER BY id').all().map(x=>x.id),[2,3]);
+ assert.deepEqual(sql.prepare('SELECT inquiry_id FROM inquiry_audit ORDER BY inquiry_id').all().map(x=>x.inquiry_id),[2,3]);
+ assert.deepEqual(sql.prepare('SELECT day FROM inquiry_rate_limits').all().map(x=>x.day),['2025-02-27']);
+ assert.deepEqual(sql.prepare('SELECT day FROM analytics_sessions').all().map(x=>x.day),['2025-02-16']);
+ await runAdminRetention(db,now);
+ assert.equal(sql.prepare('SELECT count(*) n FROM inquiry_audit').get().n,2);
+ sql.close();
+ console.log('PASS: deterministic retention cutoff and UTC/KST boundaries');
+})().catch(error=>{console.error(error);process.exitCode=1});

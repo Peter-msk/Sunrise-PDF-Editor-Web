@@ -1,0 +1,37 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {DatabaseSync}=require('node:sqlite');
+(async()=>{
+ const fixture=require('./helpers/d1-sqlite.cjs').createD1Fixture();
+ const {sqlite:sql,db}=fixture;
+ const {telemetry,adminApi}=await import('../src/admin-api.mjs');
+ const origin='https://example.test',sid='0d4de9dd-7908-4878-a1aa-1e9d15cdf527';
+ const post=(data,actualOrigin=origin)=>{const url=new URL(origin+'/api/telemetry');return telemetry(new Request(url,{method:'POST',headers:{origin:actualOrigin,'content-type':'application/json'},body:JSON.stringify({session:sid,...data})}),{DB:db},url)};
+ assert.equal((await post({type:'visit'})).status,200);
+ const ids=['11111111-1111-4111-8111-111111111111','22222222-2222-4222-8222-222222222222','33333333-3333-4333-8333-333333333333','44444444-4444-4444-8444-444444444444'];
+ for(const id of ids)assert.equal((await post({type:'save_operation',operationId:id,stage:'started'})).status,200);
+ await post({type:'save_operation',operationId:ids[0],stage:'started'});
+ for(const [id,stage] of [[ids[0],'ready'],[ids[1],'failed'],[ids[2],'cancelled']])await post({type:'save_operation',operationId:id,stage});
+ const retry='55555555-5555-4555-8555-555555555555';
+ await post({type:'save_operation',operationId:retry,stage:'started',retryOf:ids[1]});
+ await post({type:'save_operation',operationId:retry,stage:'ready'});
+ const invalid='66666666-6666-4666-8666-666666666666';
+ await post({type:'save_operation',operationId:invalid,stage:'started',retryOf:ids[0]});
+ assert.equal(sql.prepare('SELECT retry_of FROM analytics_save_operations WHERE operation_id=?').get(invalid).retry_of,null,'only a failed operation can be retried');
+ await post({type:'save_operation',operationId:ids[0],stage:'failed'});
+ assert.equal((await post({type:'save_operation',operationId:'bad',stage:'started'})).status,400);
+ assert.equal((await post({type:'save_operation',operationId:retry,stage:'started',retryOf:'invalid'})).status,400);
+ assert.equal((await post({type:'save_operation',operationId:retry,stage:'ready',retryOf:ids[1]})).status,400);
+ assert.equal((await post({type:'save_operation',operationId:ids[0],stage:'ready'},'https://evil.test')).status,403);
+ const url=new URL(origin+'/api/admin/save-quality');const response=await adminApi(new Request(url),{DB:db},url,'admin');
+ assert.equal(response.status,200);assert.deepEqual(await response.json(),{windowDays:14,version:null,attempts:6,ready:2,failed:1,cancelled:1,pending:2,retries:1,recovered:1});
+ const columns=sql.prepare('PRAGMA table_info(analytics_save_operations)').all().map(x=>x.name);
+ assert.deepEqual(columns,['day','session_id','operation_id','state','retry_of','worker_version']);
+ // Repeated or forged retry links cannot claim the same failure twice.
+ const duplicate='77777777-7777-4777-8777-777777777777';
+ await post({type:'save_operation',operationId:duplicate,stage:'started',retryOf:ids[1]});
+ assert.equal(sql.prepare('SELECT retry_of FROM analytics_save_operations WHERE operation_id=?').get(duplicate).retry_of,null);
+ sql.exec('DELETE FROM analytics_sessions');
+ assert.equal(sql.prepare('SELECT count(*) n FROM analytics_save_operations').get().n,0);
+ sql.close();console.log('PASS: save preparation events, deduplication, privacy fields, authenticated aggregate and retention cascade');
+})().catch(e=>{console.error(e);process.exitCode=1});
