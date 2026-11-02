@@ -91,6 +91,8 @@ const name=lib.PDFName.of;
  const build=fs.readFileSync('scripts/build-release.cjs','utf8');
  assert(editor.includes('case "batchPages"'));
  assert(editor.includes('SunriseBatchPages.process('));
+ assert(editor.includes('pageProgress:(done,total,name)=>'),
+   'batch dialog must show page-level split and merge progress');
  assert(editor.includes('/assets/sunrise-batch-pages.js'));
  assert(build.includes("'sunrise-batch-pages.js'"));
  console.log('PASS: split/merge PDF disk roundtrip; rotation, size and source immutability; safe form/signature/bookmark/annotation rejection; cancellation, atomic merge and UI wiring');

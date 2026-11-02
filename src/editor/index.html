@@ -6269,7 +6269,7 @@
           const sync=()=>{pagesPerFile.disabled=running||mode.value!=='split'};
           mode.addEventListener('change',sync);sync();
           cancel.addEventListener('click',()=>{
-            if(running){cancelled=true;cancel.disabled=true;status.textContent='현재 작업 완료 후 중단합니다.';}
+            if(running){cancelled=true;cancel.disabled=true;status.textContent='안전한 페이지 처리 경계에서 취소합니다.';}
             else closeModal();
           });
           start.addEventListener('click',async()=>{
@@ -6287,6 +6287,7 @@
               await window.SunriseBatchPages.process(selected,settings,{
                 cancelled:()=>cancelled||!open(),
                 progress:(index,total,name)=>{if(open())status.textContent=`${index+1}/${total} 처리 중: ${name}`},
+                pageProgress:(done,total,name)=>{if(open())status.textContent=`${name} · ${done}/${total}쪽 ${settings.mode==='merge'?'병합':'분할'} 중`},
                 result:({name,bytes,part,startPage,endPage})=>{
                   if(!open())return;
                   const row=document.createElement('p'),button=document.createElement('button');
