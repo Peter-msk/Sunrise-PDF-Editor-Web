@@ -3190,14 +3190,22 @@
     }
 
     function validatePdfByteLength(length) {
-      if (!Number.isSafeInteger(length) || length < 0 || length > 50 * 1024 * 1024)
-        throw new Error("50MB 이하 PDF를 선택해 주세요.");
+      // No arbitrary MB cap: actual limits are the browser's available memory
+      // and its ability to allocate a typed array for this document.
+      if (!Number.isSafeInteger(length) || length < 0)
+        throw new Error("PDF 파일 크기 정보를 확인할 수 없습니다.");
     }
 
     async function readPdfInputFile(file) {
-      validatePdfByteLength(file.size);
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      validatePdfByteLength(file?.size);
+      if (file.size===0) throw new Error("비어 있는 PDF 파일은 읽을 수 없습니다.");
+      let buffer;
+      try { buffer=await file.arrayBuffer(); }
+      catch(error) { throw new Error("PDF를 메모리로 읽지 못했습니다. 브라우저의 사용 가능한 메모리를 확인해 주세요: "+(error?.message||error)); }
+      const bytes=new Uint8Array(buffer);
       validatePdfByteLength(bytes.byteLength);
+      if (!bytes.byteLength || bytes.byteLength!==file.size)
+        throw new Error("PDF 파일의 읽은 크기가 원본과 일치하지 않습니다.");
       return bytes;
     }
 
@@ -3287,7 +3295,9 @@
         name,
         pageCount,
         openedAt: new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        bytes: bytes.slice(0),
+        // Share the immutable opened byte buffer instead of copying large PDFs.
+        // Subsequent edits replace doc.bytes rather than mutating this snapshot.
+        bytes,
       });
       if (state.recentFiles.length > 15) state.recentFiles.pop();
     }
@@ -5976,7 +5986,7 @@
       if (typeof CompressionStream !== "function") throw new Error("이 브라우저는 PDF 압축을 지원하지 않습니다. 최신 Chrome 또는 Edge를 이용해 주세요.");
       const {PDFDocument, PDFRawStream, PDFName} = window.PDFLib;
       const n = PDFName.of, pdf = await PDFDocument.load(bytes, {updateMetadata:false});
-      let total = 0, changed = 0;
+      let changed = 0;
       for (const [ref, object] of pdf.context.enumerateIndirectObjects()) {
         if (!(object instanceof PDFRawStream)) continue;
         const dict = object.dict, type = dict.get(n("Type"));
@@ -5985,6 +5995,8 @@
             type === n("XRef") || type === n("ObjStm") || type === n("Metadata")) continue;
         let content = object.getContents();
         if (filter) {
+          // Bound an individual decompressed stream to avoid zip bombs; not
+          // a cap on the entire PDF's size.
           if (typeof DecompressionStream !== "function" || content.length > 16 * 1024 * 1024) continue;
           const reader = new Blob([content]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
           const chunks = []; let size = 0, tooLarge = false;
@@ -5993,7 +6005,7 @@
               const {value, done} = await reader.read();
               if (done) break;
               size += value.length;
-              if (size > 16 * 1024 * 1024 || total + size > 50 * 1024 * 1024) { tooLarge = true; await reader.cancel(); break; }
+              if (size > 16 * 1024 * 1024) { tooLarge = true; await reader.cancel(); break; }
               chunks.push(value);
             }
           } catch (error) { throw new Error(`PDF 압축 데이터 해제 실패: ${error.message || error}`); }
@@ -6001,8 +6013,7 @@
           content = new Uint8Array(size); let offset = 0;
           for (const chunk of chunks) { content.set(chunk, offset); offset += chunk.length; }
         }
-        if (content.length < 128 || content.length > 16 * 1024 * 1024 || total + content.length > 50 * 1024 * 1024) continue;
-        total += content.length;
+        if (content.length < 128 || content.length > 16 * 1024 * 1024) continue;
         const stream = new Blob([content]).stream().pipeThrough(new CompressionStream("deflate"));
         const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
         if (compressed.length + 32 >= object.getContents().length) continue;
@@ -6073,7 +6084,10 @@
     }
 
     function validateBatchOfficeFiles(files) {
-      if(!Array.isArray(files)||files.length<1||files.length>5||files.some(file=>!Number.isSafeInteger(file?.size)||file.size<1||file.size>50*1024*1024)||files.reduce((sum,file)=>sum+file.size,0)>100*1024*1024)throw Error("PDF는 1~5개, 파일당 50 MiB, 합계 100 MiB 이하로 선택해 주세요.");
+      if(!Array.isArray(files)||files.length<1||files.length>5||
+         files.some(file=>!Number.isSafeInteger(file?.size)||file.size<1)||
+         !Number.isSafeInteger(files.reduce((sum,file)=>sum+file.size,0)))
+        throw Error("PDF는 비어 있지 않은 파일 1~5개를 선택해 주세요. 파일 용량의 고정 제한은 없습니다.");
     }
 
     async function batchCompressPdfs(files, settings, handlers) {
@@ -6170,7 +6184,7 @@
 
     function openBatchMarkModal() {
       openModal({title:'PDF 일괄 워터마크·페이지 번호',icon:'fa-layer-group',width:'620px',
-        bodyHtml:`<p>최대 5개 PDF, 파일당 50 MiB·합계 100 MiB. 원본은 변경하지 않고 파일별로 다운로드합니다.</p>
+        bodyHtml:`<p>최대 5개 PDF · 파일 용량의 고정 제한 없음. 브라우저 메모리에 따라 처리 가능 여부가 달라집니다. 원본은 변경하지 않습니다.</p>
         <input id="markPdfFiles" type="file" accept="application/pdf,.pdf" multiple>
         <label for="markKind">일괄 작업</label><select id="markKind" class="dialog-select">
           <option value="watermark">워터마크 추가</option><option value="page-number">페이지 번호 추가</option>
@@ -6221,7 +6235,7 @@
 
     function openBatchPagesModal() {
       openModal({title:'PDF 일괄 분할·병합',icon:'fa-object-group',width:'640px',
-        bodyHtml:`<p>최대 5개 파일 · 파일당 50 MiB · 합계 100 MiB. 파일은 외부 서버에 업로드하지 않습니다.</p>
+        bodyHtml:`<p>최대 5개 파일 · 파일 용량의 고정 제한 없음(브라우저 메모리 한계는 적용). 파일은 외부 서버에 업로드하지 않습니다.</p>
           <label for="batchPagesFiles">PDF 파일 선택 (다중 선택)</label>
           <input id="batchPagesFiles" type="file" accept="application/pdf,.pdf" multiple>
           <div class="dialog-form-grid" style="margin-top:10px">
@@ -6233,7 +6247,7 @@
             <label for="batchPagesPerFile">분할 결과 1개당 페이지 수</label>
             <input id="batchPagesPerFile" class="dialog-input" type="number" min="1" max="100" value="10">
           </div>
-          <p>분할: 파일당 최대 150쪽, 전체 결과 최대 50개·총 100 MiB. 병합: PDF 2~5개, 전체 최대 250쪽. 긴 문서는 조각별로 취소 입력을 확인합니다.</p>
+          <p>분할: 파일당 최대 150쪽, 전체 결과 최대 50개. 병합: PDF 2~5개, 전체 최대 250쪽. 페이지 수·파일 수 제한은 메모리 과부하를 막기 위한 별도 보호 기준입니다.</p>
           <p>양식·서명·북마크·주석·이름 있는 대상 등 구조 손실 위험이 있는 PDF는 안전을 위해 제외합니다.
           병합은 모든 파일이 정상일 때만 하나의 결과로 저장됩니다. 분할 시 문서 제목·작성자·주제를 보존하고 병합 결과는 새 문서 제목을 사용합니다. 원본은 수정하지 않습니다.</p>
           <p id="batchPagesStatus" role="status" aria-live="polite">작업 종류를 선택하세요.</p>
@@ -6303,7 +6317,7 @@
 
     function openBatchCompressModal() {
       openModal({title:'PDF 여러 파일 압축',icon:'fa-file-zipper',width:'620px',
-        bodyHtml:`<p>최대 5개, 파일당 50 MiB 및 합계 100 MiB까지 처리합니다. 원본 파일은 변경하지 않습니다.</p>
+        bodyHtml:`<p>최대 5개 · 파일 용량의 고정 제한 없음. 사용 가능한 브라우저 메모리에 따라 큰 문서 처리가 중단될 수 있습니다. 원본은 변경하지 않습니다.</p>
         <input id="batchPdfFiles" type="file" accept="application/pdf,.pdf" multiple>
         <label for="batchStrength">압축 강도 (0: 무손실, 높을수록 이미지 화질 감소)</label><input id="batchStrength" type="number" min="0" max="100" value="0">
         <p>XFA·서명 관련 PDF는 처리하지 않습니다. 완료한 파일은 각각 내려받을 수 있습니다. 취소하면 처리 중인 파일이 끝난 후 중단합니다.</p>
@@ -7041,7 +7055,7 @@
       openModal({
         title:"PDF 페이지 분할",icon:"fa-table-columns",width:"600px",
         bodyHtml:`
-          <div class="dialog-info-box">1~100쪽씩 분할하고, PDF 최대 50개·총 100 MiB까지 준비합니다.
+          <div class="dialog-info-box">1~100쪽씩 분할하고, PDF 최대 50개까지 준비합니다. 결과 파일 용량의 고정 제한은 없습니다.
             결과 파일별 저장 버튼으로 필요한 PDF를 다운로드할 수 있습니다.
             일반 페이지 목적지 북마크는 분할 결과의 해당 페이지에 이식합니다. 외부 링크·특수 목적지는 안전을 위해 분할을 중단합니다. 양식이 포함된 문서는 지원하지 않습니다.</div>
           <div class="dialog-form-grid">
@@ -7103,7 +7117,8 @@
                 part.setTitle(stem+" part "+(i+1));
                 const bytes=await part.save();
                 bytesTotal+=bytes.byteLength;
-                if(bytesTotal>100*1024*1024)throw Error("총 분할 PDF가 100 MiB를 초과했습니다.");
+                if(!Number.isSafeInteger(bytesTotal))
+                  throw Error("분할 결과의 바이트 합계를 안전하게 계산할 수 없습니다.");
                 const first=chunks[i][0]+1,last=chunks[i][chunks[i].length-1]+1;
                 const name=stem+"_part_"+String(i+1).padStart(3,"0")+"_p"+first+"-"+last+".pdf";
                 prepared.push({name,bytes,pages:chunks[i].length});
@@ -7722,6 +7737,16 @@
             <select id="maskDrawRegions" class="dialog-select" size="3" aria-label="삭제할 마스킹 영역 선택" style="flex:1;min-width:190px"></select>
             <button type="button" id="maskDrawRemove" class="dialog-btn">선택 영역 삭제</button>
           </div>
+          <div class="dialog-form-grid" style="margin:8px 0;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">
+            <label for="maskEditX">X</label><label for="maskEditY">Y</label>
+            <label for="maskEditW">너비</label><label for="maskEditH">높이</label>
+            <input id="maskEditX" class="dialog-input" type="number" step="0.01" min="0" aria-label="선택 영역 X 좌표">
+            <input id="maskEditY" class="dialog-input" type="number" step="0.01" min="0" aria-label="선택 영역 Y 좌표">
+            <input id="maskEditW" class="dialog-input" type="number" step="0.01" min="4" aria-label="선택 영역 너비">
+            <input id="maskEditH" class="dialog-input" type="number" step="0.01" min="4" aria-label="선택 영역 높이">
+          </div>
+          <button type="button" id="maskDrawApply" class="dialog-btn">선택 영역의 좌표·크기 변경</button>
+          <small style="display:block;margin-top:6px">영역을 선택하고 X·Y·너비·높이를 입력하면 위치와 크기를 조절할 수 있습니다.</small>
           <small>이미지 위에서 드래그하면 사각형이 좌표 목록에 추가됩니다. 가릴 부분만 검정 영역으로 출력됩니다. 정확한 좌표가 필요하면 아래 숫자 입력을 수정하세요.</small>
         </div>
         <label for="maskPlanLines">마스킹 영역 목록 (한 줄 = 한 영역)</label>
@@ -7757,6 +7782,8 @@
           const drawWrap=document.getElementById("maskDrawCanvasWrap");
           const drawRegions=document.getElementById("maskDrawRegions");
           const drawRemove=document.getElementById("maskDrawRemove");
+          const drawApply=document.getElementById("maskDrawApply");
+          const editInputs=["maskEditX","maskEditY","maskEditW","maskEditH"].map(id=>document.getElementById(id));
           let stopped=false,running=false,validated=null;
           const scopeMode=()=>scope.value==="all";
           const updateScope=()=>{
@@ -7803,6 +7830,17 @@
             rects.forEach((rect,i)=>drawRect(rect,Number(drawRegions.selectedIndex)===i));
             if(drag)drawRect(drawBounds(drag.start,drag.end),false,true);
           };
+          const syncEditRegion=()=>{
+            const rows=planLines(),selected=Number(drawRegions.value);
+            const row=rows[selected],parts=row?.split(",").map(value=>value.trim())||[];
+            const validRegion=drawRegions.options.length>0&&Number.isSafeInteger(selected)&&
+              selected>=0&&parts.length===5&&Number(parts[0])===chosenPage();
+            editInputs.forEach((field,i)=>{
+              field.disabled=!validRegion||running;
+              field.value=validRegion?parts[i+1]:"";
+            });
+            drawApply.disabled=!validRegion||running;
+          };
           const updateMaskList=()=>{
             const previous=drawRegions.value;
             drawRegions.replaceChildren();
@@ -7818,6 +7856,7 @@
             if([...drawRegions.options].some(option=>option.value===previous))drawRegions.value=previous;
             if(drawRegions.selectedIndex<0&&drawRegions.options.length)drawRegions.selectedIndex=0;
             drawRemove.disabled=running||!drawRegions.options.length;
+            syncEditRegion();
             redrawMasks();
           };
           const previewPoint=event=>{
@@ -7900,7 +7939,27 @@
               drawStatus.textContent=drawnPage+"쪽에 새 마스킹 영역을 추가했습니다.";
             }catch(error){drawStatus.textContent="영역 추가 실패: "+(error?.message||error);redrawMasks();}
           });
-          drawRegions.addEventListener("change",redrawMasks);
+          drawRegions.addEventListener("change",()=>{syncEditRegion();redrawMasks();});
+          drawApply.addEventListener("click",()=>{
+            if(!valid()||running||drawApply.disabled)return;
+            const rowIndex=Number(drawRegions.value),rows=planLines();
+            if(!Number.isSafeInteger(rowIndex)||rowIndex<0||rowIndex>=rows.length||
+              !drawSize||drawnPage!==chosenPage())return;
+            try {
+              if(editInputs.some(field=>field.value.trim()===""))throw Error("X, Y, 너비, 높이를 모두 입력해 주세요.");
+              const values=editInputs.map(field=>Number(field.value));
+              const rect=window.SunriseSpecialPdf.validateMaskRect({
+                x:values[0],y:values[1],width:values[2],height:values[3]
+              },drawSize.width,drawSize.height);
+              if(Number(rows[rowIndex].split(",")[0])!==drawnPage)throw Error("선택 영역의 페이지가 변경되었습니다.");
+              rows[rowIndex]=[drawnPage,rect.x,rect.y,rect.width,rect.height].join(",");
+              const candidate=rows.join("\n");
+              window.SunriseSpecialPdf.parseMaskPlan(candidate,doc.pageSizes);
+              if(candidate.length>lines.maxLength)throw Error("좌표 목록의 길이를 확인해 주세요.");
+              lines.value=candidate;invalidate();updateMaskList();
+              drawStatus.textContent=drawnPage+"쪽 선택 영역의 좌표·크기를 수정했습니다.";
+            }catch(error){drawStatus.textContent="수정 실패: "+(error?.message||error);}
+          });
           drawRemove.addEventListener("click",()=>{
             if(!valid()||running||drawRemove.disabled)return;
             const rowIndex=Number(drawRegions.value);
@@ -7955,6 +8014,7 @@
             const finish=beginOperationMetric("page_extract");let outcome="failed";
             running=true;submit.disabled=true;check.disabled=true;lines.disabled=true;scope.disabled=true;confirmed.disabled=true;
             drawPage.disabled=true;drawPrev.disabled=true;drawNext.disabled=true;drawRegions.disabled=true;drawRemove.disabled=true;
+            drawApply.disabled=true;editInputs.forEach(field=>{field.disabled=true;});
             try{
               status.textContent="페이지를 차례대로 래스터화하고 마스크를 적용 중입니다…";
               const output=await window.SunriseSpecialPdf.exportMaskedPages({

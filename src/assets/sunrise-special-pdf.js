@@ -74,8 +74,8 @@
   const pageOut=output.addPage([view.width,view.height]);
   pageOut.drawImage(image,{x:0,y:0,width:view.width,height:view.height});
   const result=await output.save();
-  if(!result?.byteLength||result.byteLength>50*1024*1024)
-   throw Error('마스킹 결과가 50 MiB를 초과했습니다.');
+  if(!Number.isSafeInteger(result?.byteLength)||result.byteLength===0)
+   throw Error('마스킹 PDF 출력 바이트가 올바르지 않습니다.');
   return {bytes:result,pages:1,masked:box,sourcePage:pageNumber};
  }
 
@@ -110,8 +110,8 @@
    .map(([pageNumber,rectangles])=>({pageNumber,rectangles}));
  }
  function checkOutputStructure(bytes,PDFLib,expectedPages){
-  if(!bytes?.byteLength||bytes.byteLength>50*1024*1024)
-   throw Error('마스킹 PDF가 50 MiB를 초과하거나 비어 있습니다.');
+  if(!Number.isSafeInteger(bytes?.byteLength)||bytes.byteLength===0)
+   throw Error('마스킹 PDF가 비어 있거나 바이트 크기를 읽을 수 없습니다.');
   if(!PDFLib?.PDFDocument?.load)throw Error('출력 PDF 구조 검증을 수행할 수 없습니다.');
   return PDFLib.PDFDocument.load(bytes).then(document=>{
    if(document.getPageCount()!==expectedPages)throw Error('출력 PDF 페이지 수가 일치하지 않습니다.');

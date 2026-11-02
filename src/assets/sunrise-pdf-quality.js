@@ -6,7 +6,7 @@
   if(root)root.SunrisePdfQuality=api;
 })(typeof globalThis!=='undefined'?globalThis:undefined,function(){
   'use strict';
-  const MAX_FILE=50*1024*1024,MAX_SCAN=120,MAX_ISSUES=120;
+  const MAX_SCAN=120,MAX_ISSUES=120;
   // pdf-lib can discard unsupported XFA while opening a document. Inspect the
   // original bytes before parsing, but treat this as an indicator only:
   // compressed object streams and escaped names can hide a marker.
@@ -26,8 +26,8 @@
     const PDFLib=opts?.PDFLib;
     if(!PDFLib?.PDFDocument?.load)throw Error('PDF 구조 검사 엔진을 불러오지 못했습니다.');
     const bytes=raw instanceof ArrayBuffer?new Uint8Array(raw):raw;
-    if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength||bytes.byteLength>MAX_FILE)
-      throw Error('PDF는 50 MiB 이하의 파일만 검사할 수 있습니다.');
+    if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength)
+      throw Error('PDF 검사 대상이 비어 있거나 올바른 바이트 형식이 아닙니다.');
     const rawXfa=hasRawPdfName(bytes,'XFA');
     const pdf=await PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
     const pages=pdf.getPages();

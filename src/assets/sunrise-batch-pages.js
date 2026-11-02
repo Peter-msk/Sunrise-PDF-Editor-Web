@@ -5,15 +5,15 @@
   if(root)root.SunriseBatchPages=api;
 })(typeof globalThis!=='undefined'?globalThis:undefined,function(){
   'use strict';
-  const MiB=1024*1024,MAX_FILES=5,MAX_TOTAL_BYTES=100*MiB,MAX_FILE_BYTES=50*MiB;
+  const MAX_FILES=5;
   const MAX_SOURCE_PAGES=150,MAX_MERGED_PAGES=250,MAX_OUTPUTS=50;
-  // Split outputs stay available for individual downloads until the modal
-  // closes. Bound their combined bytes, not only the number of files.
+  // No fixed byte quota for split results. Retain checked arithmetic so a
+  // rounded/overflowing byte counter cannot silently break queue accounting.
   function reserveOutputBytes(usedBytes,nextBytes){
     if(!Number.isSafeInteger(usedBytes)||usedBytes<0||
-       !Number.isSafeInteger(nextBytes)||nextBytes<=0||nextBytes>MAX_FILE_BYTES||
-       usedBytes+nextBytes>MAX_TOTAL_BYTES)
-      throw new Error('일괄 결과 전체 용량은 100 MiB, 파일당 50 MiB 이하로 제한됩니다. 분할 크기를 늘리거나 파일을 나눠 처리하세요.');
+       !Number.isSafeInteger(nextBytes)||nextBytes<=0||
+       !Number.isSafeInteger(usedBytes+nextBytes))
+      throw new Error('분할 결과의 바이트 수를 안전하게 계산할 수 없습니다.');
     return usedBytes+nextBytes;
   }
   // Yield at file/chunk boundaries so the browser can receive a Cancel click.
@@ -26,11 +26,11 @@
   const protectedPage=['Annots','AA','Metadata','StructParents','B','PresSteps'];
   function checkFiles(files,mode){
     if(!Array.isArray(files)||!files.length||files.length>MAX_FILES||
-       (mode==='merge'&&files.length<2)||!files.every(x=>Number.isSafeInteger(x?.size)&&x.size>0&&x.size<=MAX_FILE_BYTES)||
-       files.reduce((n,f)=>n+f.size,0)>MAX_TOTAL_BYTES)
+       (mode==='merge'&&files.length<2)||!files.every(x=>Number.isSafeInteger(x?.size)&&x.size>0)||
+       !Number.isSafeInteger(files.reduce((n,f)=>n+f.size,0)))
       throw new Error(mode==='merge'
-        ? '병합은 PDF 2~5개, 파일당 50 MiB·합계 100 MiB 이하로 선택해 주세요.'
-        : '분할은 PDF 1~5개, 파일당 50 MiB·합계 100 MiB 이하로 선택해 주세요.');
+        ? '병합은 비어 있지 않은 PDF 2~5개를 선택해 주세요.'
+        : '분할은 비어 있지 않은 PDF 1~5개를 선택해 주세요.');
   }
   function checkSource(pdf,lib,maxPages=MAX_SOURCE_PAGES){
     const n=lib.PDFName.of;
@@ -72,7 +72,7 @@
   async function readSource(file,opts){
     const bytes=await opts.readFile(file);
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||
-       !bytes.byteLength||bytes.byteLength>MAX_FILE_BYTES)
+       !bytes.byteLength)
       throw new Error('입력 PDF 크기 또는 바이트를 확인할 수 없습니다.');
     const pdf=await opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
     const pages=checkSource(pdf,opts.PDFLib);
@@ -80,8 +80,8 @@
   }
   async function verifyResult(pdf,expectedPages,opts){
     const bytes=await pdf.save({updateFieldAppearances:false});
-    if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength||bytes.byteLength>MAX_FILE_BYTES)
-      throw new Error('저장 결과가 파일 크기 제한(50 MiB)을 초과하거나 손상되었습니다.');
+    if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength)
+      throw new Error('저장 결과의 바이트를 읽을 수 없거나 비어 있습니다.');
     const restored=await opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
     checkSource(restored,opts.PDFLib,MAX_MERGED_PAGES);
     verifyPages([expectedPages],restored.getPages());
