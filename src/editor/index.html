@@ -3326,7 +3326,7 @@
         bytes: doc.bytes,
         overlays: JSON.parse(JSON.stringify(doc.overlays)),
         bookmarks: JSON.parse(JSON.stringify(doc.bookmarks)),
-        attachments: doc.attachments.map((item) => ({ ...item, bytes: item.bytes.slice(0) })),
+        attachments: doc.attachments.map((item) => ({ ...item, bytes: item.bytes })),
         metadata: JSON.parse(JSON.stringify(doc.metadata)),
         currentPage: doc.currentPage,
         label: actionLabel,
@@ -3345,7 +3345,7 @@
         bytes: doc.bytes,
         overlays: JSON.parse(JSON.stringify(doc.overlays)),
         bookmarks: JSON.parse(JSON.stringify(doc.bookmarks)),
-        attachments: doc.attachments.map((item) => ({ ...item, bytes: item.bytes.slice(0) })),
+        attachments: doc.attachments.map((item) => ({ ...item, bytes: item.bytes })),
         metadata: JSON.parse(JSON.stringify(doc.metadata)),
         currentPage: doc.currentPage,
         label: snap.label,
@@ -3373,7 +3373,7 @@
         bytes: doc.bytes,
         overlays: JSON.parse(JSON.stringify(doc.overlays)),
         bookmarks: JSON.parse(JSON.stringify(doc.bookmarks)),
-        attachments: doc.attachments.map((item) => ({ ...item, bytes: item.bytes.slice(0) })),
+        attachments: doc.attachments.map((item) => ({ ...item, bytes: item.bytes })),
         metadata: JSON.parse(JSON.stringify(doc.metadata)),
         currentPage: doc.currentPage,
         label: snap.label,
@@ -5828,9 +5828,12 @@
         data: JSON.stringify({overlays:doc.overlays, bookmarks:doc.bookmarks, metadata:doc.metadata,
           attachments:doc.attachments.map(({bytes, ...item}) => ({...item, size:bytes.byteLength}))}),
         attachmentBytes: doc.attachments.map(item => item.bytes),
-        snapshot: includeSnapshot ? {...doc, bytes:doc.bytes.slice(), overlays:JSON.parse(JSON.stringify(doc.overlays)),
+        // Source byte arrays are immutable snapshots: all PDF mutations publish
+        // fresh arrays. Share bytes across save states and clone only mutable
+        // overlay/bookmark/metadata containers, preventing multi-GB copies.
+        snapshot: includeSnapshot ? {...doc, bytes:doc.bytes, overlays:JSON.parse(JSON.stringify(doc.overlays)),
           bookmarks:JSON.parse(JSON.stringify(doc.bookmarks)), metadata:JSON.parse(JSON.stringify(doc.metadata)),
-          attachments:doc.attachments.map(item => ({...item, bytes:item.bytes.slice()}))} : null,
+          attachments:doc.attachments.map(item => ({...item, bytes:item.bytes}))} : null,
       };
     }
 
@@ -7051,13 +7054,14 @@
     }
     async function splitDocumentPages(doc){
       const source=doc.bytes;
-      const stem=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
+      const stem=doc.name.replace(/\\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
       openModal({
         title:"PDF 페이지 분할",icon:"fa-table-columns",width:"600px",
         bodyHtml:`
-          <div class="dialog-info-box">1~100쪽씩 분할하고, PDF 최대 50개까지 준비합니다. 결과 파일 용량의 고정 제한은 없습니다.
-            결과 파일별 저장 버튼으로 필요한 PDF를 다운로드할 수 있습니다.
-            일반 페이지 목적지 북마크는 분할 결과의 해당 페이지에 이식합니다. 외부 링크·특수 목적지는 안전을 위해 분할을 중단합니다. 양식이 포함된 문서는 지원하지 않습니다.</div>
+          <div class="dialog-info-box">1~100쪽씩 분할하고 최대 50개의 결과 파일을 제공합니다.
+            PDF 파일 크기에 고정된 MB 제한은 없습니다. 대용량 문서는 <strong>파일 목록만 먼저 준비하고,
+            저장 버튼을 누른 파일 하나씩 생성</strong>하여 동시에 결과 파일을 메모리에 쌓지 않습니다.
+            일반 페이지 목적지 북마크는 해당 분할 결과에 이식합니다. 특수 목적지 및 양식 포함 원본은 지원하지 않습니다.</div>
           <div class="dialog-form-grid">
             <label for="splitRangeInput">분할 페이지 범위:</label>
             <input id="splitRangeInput" class="dialog-input" maxlength="4096" value="1-${doc.pageCount}">
@@ -7068,28 +7072,39 @@
           <div id="splitReadyResults" style="max-height:35vh;overflow:auto;display:grid;gap:6px"></div>
         `,
         footerHtml:`<div></div><div class="modal-footer-right">
-          <button class="dialog-btn primary" type="button" id="splitPrepareBtn">분할 준비</button>
+          <button class="dialog-btn primary" type="button" id="splitPrepareBtn">파일 목록 준비</button>
           <button class="dialog-btn" type="button" id="splitCloseBtn">닫기</button></div>`,
         onMount:()=>{
           const input=document.getElementById("splitRangeInput"),per=document.getElementById("splitSizeInput");
           const start=document.getElementById("splitPrepareBtn"),status=document.getElementById("splitPlanStatus");
           const results=document.getElementById("splitReadyResults");
-          const valid=()=>activeDoc()===doc&&doc.bytes===source&&results.isConnected;
-          let running=false;
-          document.getElementById("splitCloseBtn").addEventListener("click",()=>{
-            if(running){showToast("분할을 준비하고 있습니다.","fa-circle-info");return;}
-            closeModal();
+          const close=document.getElementById("splitCloseBtn");
+          const open=()=>document.getElementById("modalBackdrop")?.classList.contains("open")&&
+            document.getElementById("splitPrepareBtn")===start;
+          const valid=()=>open()&&activeDoc()===doc&&doc.bytes===source&&results.isConnected;
+          let running=false,sourcePdf=null,sourceBookmarks=null,planGeneration=0;
+          const setBusy=busy=>{
+            running=busy;doc.operationBusy=busy;
+            start.disabled=busy;input.disabled=busy;per.disabled=busy;close.disabled=busy;
+            results.querySelectorAll("button").forEach(button=>{button.disabled=busy;});
+          };
+          const discard=()=>{
+            planGeneration++;sourcePdf=null;sourceBookmarks=null;results.replaceChildren();
+          };
+          close.addEventListener("click",()=>{
+            if(running)return;
+            discard();closeModal();
           });
           const refresh=()=>{
             if(running)return;
-            results.replaceChildren();
+            discard();
             try {
               const chunks=planDocumentSplit(input.value,doc.pageCount,Number(per.value));
-              status.textContent=chunks.length+"개 PDF 예정 · "+chunks.reduce((sum,c)=>sum+c.length,0)+"쪽";
+              status.textContent=chunks.length+"개 파일 예정 · "+chunks.reduce((sum,c)=>sum+c.length,0)+
+                "쪽. 목록 준비 후 필요한 파일만 생성할 수 있습니다.";
             }catch(error){status.textContent=error.message;}
           };
-          input.addEventListener("input",refresh);
-          per.addEventListener("input",refresh);
+          input.addEventListener("input",refresh);per.addEventListener("input",refresh);
           refresh();
           start.addEventListener("click",async()=>{
             if(running||!valid()||doc.operationBusy)return;
@@ -7097,51 +7112,69 @@
             try{chunks=planDocumentSplit(input.value,doc.pageCount,Number(per.value));}
             catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
             const finish=beginOperationMetric("split");let outcome="failed";
-            running=true;doc.operationBusy=true;
-            start.disabled=true;input.disabled=true;per.disabled=true;results.replaceChildren();
-            const prepared=[];let bytesTotal=0;
+            discard();const generation=planGeneration;
+            setBusy(true);
             try{
               const {PDFDocument}=window.PDFLib;
-              status.textContent="PDF 분할 준비 중…";
-              const sourcePdf=await PDFDocument.load(await compileDocumentWithOverlays(doc));
-              if(!valid())throw Error("분할 준비 중 원본이 변경되었습니다.");
-              if(!allowPageFormStructure(sourcePdf)){outcome="cancelled";return;}
-              const sourceBookmarks=window.SunriseOutlineTransfer.read(sourcePdf,window.PDFLib);
-              for(let i=0;i<chunks.length;i++){
-                if(!valid())throw Error("분할 준비가 중단되었습니다.");
-                const part=await PDFDocument.create();
-                const copied=await part.copyPages(sourcePdf,chunks[i]);
-                copied.forEach(p=>part.addPage(p));
-                const transferred=window.SunriseOutlineTransfer.subset(sourceBookmarks,chunks[i]);
-                if(transferred.length)appendPdfBookmarks(part,transferred);
-                part.setTitle(stem+" part "+(i+1));
-                const bytes=await part.save();
-                bytesTotal+=bytes.byteLength;
-                if(!Number.isSafeInteger(bytesTotal))
-                  throw Error("분할 결과의 바이트 합계를 안전하게 계산할 수 없습니다.");
-                const first=chunks[i][0]+1,last=chunks[i][chunks[i].length-1]+1;
-                const name=stem+"_part_"+String(i+1).padStart(3,"0")+"_p"+first+"-"+last+".pdf";
-                prepared.push({name,bytes,pages:chunks[i].length});
-                status.textContent=(i+1)+"/"+chunks.length+"개 준비 · "+(bytesTotal/1048576).toFixed(2)+" MiB";
-              }
-              if(!valid())throw Error("원본이 변경되었습니다.");
-              for(const file of prepared){
+              status.textContent="원본 PDF와 페이지 구성·북마크를 확인하고 있습니다…";
+              const compiled=await compileDocumentWithOverlays(doc);
+              if(!valid()||generation!==planGeneration)throw Error("분할 대상 문서가 변경되었습니다.");
+              const pdf=await PDFDocument.load(compiled);
+              if(!valid()||generation!==planGeneration)throw Error("분할 대상 문서가 변경되었습니다.");
+              if(!allowPageFormStructure(pdf)){outcome="cancelled";return;}
+              const bookmarks=window.SunriseOutlineTransfer.read(pdf,window.PDFLib);
+              const plans=chunks.map((indices,i)=>{
+                // Validate bookmark destinations before exposing downloads.
+                const transferred=window.SunriseOutlineTransfer.subset(bookmarks,indices);
+                const first=indices[0]+1,last=indices[indices.length-1]+1;
+                return {indices,transferred,
+                  name:stem+"_part_"+String(i+1).padStart(3,"0")+"_p"+first+"-"+last+".pdf",
+                  title:stem+" part "+(i+1)};
+              });
+              if(!valid()||generation!==planGeneration)throw Error("원본 문서가 변경되었습니다.");
+              sourcePdf=pdf;sourceBookmarks=bookmarks;
+              for(const [i,spec] of plans.entries()){
                 const row=document.createElement("div");row.className="list-row-item";
-                const caption=document.createElement("span");caption.textContent=file.name+" ("+file.pages+"쪽)";
+                const caption=document.createElement("span");
+                caption.textContent=spec.name+" ("+spec.indices.length+"쪽)";
                 const button=document.createElement("button");button.type="button";
-                button.className="dialog-btn";button.textContent="PDF 저장";
-                button.addEventListener("click",()=>downloadBytes(file.bytes,file.name,"application/pdf"));
+                button.className="dialog-btn";button.textContent="이 PDF 생성·저장";
+                button.addEventListener("click",async()=>{
+                  if(running||!valid()||doc.operationBusy||generation!==planGeneration||sourcePdf!==pdf)return;
+                  const saveFinish=beginOperationMetric("split_download");let saveOutcome="failed";
+                  setBusy(true);
+                  try{
+                    status.textContent=(i+1)+"/"+plans.length+"번 파일 생성 중 · "+spec.indices.length+"쪽";
+                    const part=await PDFDocument.create();
+                    const copied=await part.copyPages(pdf,spec.indices);
+                    if(!valid()||generation!==planGeneration)throw Error("파일 생성 중 문서가 변경되었습니다.");
+                    copied.forEach(page=>part.addPage(page));
+                    if(spec.transferred.length)appendPdfBookmarks(part,spec.transferred);
+                    part.setTitle(spec.title);
+                    const bytes=await part.save();
+                    if(!bytes?.byteLength)throw Error("분할 결과가 비어 있습니다.");
+                    if(!valid()||generation!==planGeneration)throw Error("다운로드 전에 원본 문서가 변경되었습니다.");
+                    downloadBytes(bytes,spec.name,"application/pdf");
+                    status.textContent=spec.name+" 생성·다운로드 요청 완료 ("+
+                      (bytes.byteLength/1048576).toFixed(2)+" MiB). 다른 결과도 개별 생성할 수 있습니다.";
+                    saveOutcome="succeeded";
+                  }catch(error){
+                    if(status.isConnected)status.textContent="PDF 생성 실패: "+(error?.message||error);
+                  }finally{
+                    if(valid())setBusy(false);else doc.operationBusy=false;
+                    saveFinish(saveOutcome);
+                  }
+                });
                 row.append(caption,button);results.appendChild(row);
               }
-              status.textContent=prepared.length+"개 PDF 준비 완료 ("+(bytesTotal/1048576).toFixed(2)+
-                " MiB). 개별 PDF 저장을 눌러 다운로드하세요.";
+              status.textContent=plans.length+"개 PDF 목록 준비 완료. 저장할 파일만 생성합니다. "+
+                "파일 크기에 고정된 용량 제한은 없습니다.";
               outcome="succeeded";
             }catch(error){
-              prepared.length=0;results.replaceChildren();
+              discard();
               if(results.isConnected)status.textContent="분할 준비 실패: "+(error?.message||error);
             }finally{
-              running=false;doc.operationBusy=false;
-              if(results.isConnected){start.disabled=false;input.disabled=false;per.disabled=false;}
+              if(valid())setBusy(false);else doc.operationBusy=false;
               finish(outcome);
             }
           });
