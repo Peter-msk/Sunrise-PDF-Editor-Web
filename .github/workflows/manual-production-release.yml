@@ -77,6 +77,18 @@ jobs:
         env:
           WRANGLER_BIN: ./node_modules/.bin/wrangler
         run: npm run release:schema
+      - name: Require existing production Worker secret binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/wrangler secret list --name sunrise-pdf-editor --format json > /tmp/sunrise-worker-secret-names.json
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const names=JSON.parse(fs.readFileSync('/tmp/sunrise-worker-secret-names.json','utf8'));
+          if(!Array.isArray(names)||!names.some(x=>x?.name==='DEPLOYMENT_EVENT_SECRET'))
+            throw new Error('운영 Worker에 DEPLOYMENT_EVENT_SECRET 바인딩이 없어 배포를 차단합니다.');
+          console.log('Production Worker deployment event secret binding is present');
+          NODE
       - name: Verify Worker bundle without publishing
         run: ./node_modules/.bin/wrangler deploy --dry-run
       - name: Deploy reviewed source
