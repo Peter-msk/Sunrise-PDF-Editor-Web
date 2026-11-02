@@ -46,4 +46,17 @@ edited.bookmarks.length=0;
 edited.bytes=Uint8Array.from([1]);
 assert.equal(vm.runInContext('saveStateIsCurrent(doc,captured)',safeCtx),false,'replacement bytes must invalidate prepared split');
 
-console.log('PASS: bounded page ranges, split filenames and stale editable-state guards');
+
+// Batch result names must strip a real PDF extension rather than backslash + wildcard.
+const batchStem=src.match(/name\.replace\((\/[^/\n]+\/i),''\)/)?.[1];
+assert(batchStem,'batch result filename normalization must remain defined');
+assert.equal(vm.runInNewContext(JSON.stringify('양식.PDF')+'.replace('+batchStem+',"")'),'양식');
+const linesFn=src.match(/const planLines=\(\)=>[^;]+;/)?.[0];
+assert(linesFn,'interactive mask list parser must remain defined');
+const parsedLines=vm.runInNewContext(linesFn+' planLines();',{
+ lines:{value:'1,70,100,180,40\r\n2,105,100,200,40\n'}
+});
+assert.deepEqual(Array.from(parsedLines),['1,70,100,180,40','2,105,100,200,40'],
+ 'mask drawing controls must accept LF and CRLF lines');
+
+console.log('PASS: bounded page ranges, PDF filename/mask line parsing and stale editable-state guards');
