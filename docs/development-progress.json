@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-02",
-  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포.",
+  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -172,7 +172,7 @@
       "automated": 82,
       "practical": 20,
       "deployment": 35,
-      "note": "선택 범위 및 파일당 페이지 수(1~100) 기반 최대 50개·총 100MiB 분할, 결과별 PDF 저장 버튼, 원본 양식 보호, Chromium·Windows Chrome/Edge 다운로드/재열기 계약 통과. 원본 전역 북마크 자동 이식·실무 PDF 수용·운영 배포 미완"
+      "note": "페이지 범위 및 파일당 1~100쪽, 최대 50개 결과를 목록으로 준비하고 선택 파일만 개별 생성(고정 MB 제한 없음). 일반 페이지 목적지 원본 북마크는 결과별 재매핑, 특수 목적지는 안전 차단. 합성 6쪽 PDF의 한글 2단계 북마크·90도 회전·비대칭 CropBox·파일명·디스크 저장/재열기·오래된 분할 계획 차단을 Linux Chromium·Windows Chrome/Edge에서 PASS(PR #30). 실제 고객 업무 PDF, 고용량 장시간 메모리 실측, 모바일/운영 배포 미검증."
     },
     {
       "id": "USR-03",
@@ -212,7 +212,7 @@
       "automated": 98,
       "practical": 0,
       "deployment": 0,
-      "note": "일괄 압축·표시·분할·병합 Draft, 결과 총 100MiB/50개 제한·청크별 취소·120쪽 회귀 및 실제 Chromium 저장 검사 PASS; Windows Edge/Chrome·장시간 메모리 실측 미완"
+      "note": "일괄 압축·표시·분할·병합 Draft: 결과 파일 수 최대 50개, 고정 MB 제한 없는 안전정수 바이트 검증, 청크별 취소, 120쪽 회귀 및 Chromium 저장 검사. 일괄 처리 엔진은 여러 출력 바이트를 단계적으로 보유할 수 있어 실사용 대용량 메모리 실측 필요; Windows Edge/Chrome·장시간 수용 검증 미완."
     },
     {
       "id": "USR-18",
@@ -222,7 +222,7 @@
       "automated": 92,
       "practical": 65,
       "deployment": 30,
-      "note": "Linux Chromium 및 Windows Chrome/Edge 실제 PDF 입력→저장 준비→디스크 다운로드→양식/회전 재열기·편집기 재업로드 통과. 실제 업무 PC와 복잡한 실무 PDF 미검증"
+      "note": "PDF 저장 시 상태 일관성·페이지 구조 검사, 실제 디스크 다운로드/재열기와 양식/회전 유지 Linux Chromium·Windows Chrome/Edge PASS. PR #30에서 복합 합성 6쪽 분할 결과의 저장/재열기·계층 북마크/좌표 복원 및 편집 후 오래된 다운로드 차단 PASS. 현장 업무 PC와 복잡한 외부 실무 PDF의 수동 수용검사는 미실시."
     },
     {
       "id": "USR-06",
@@ -362,7 +362,7 @@
       "automated": 90,
       "practical": 55,
       "deployment": 0,
-      "note": "전체 Node 67개·빌드, Linux Chromium/Windows Chrome/Edge 각 PDF 저장 및 관리자 3개 흐름 통과. 업무 PC·모바일·실무 자료·실제 운영 D1 수용 미완"
+      "note": "전체 Node 계약검사·프로덕션 빌드 및 Linux Chromium/Windows Chrome/Edge PDF 저장·관리자 대표 브라우저 흐름 통과(2026-11-02 PR #30 Actions #41390913711). 실제 업무 PC·모바일·외부 실무 PDF·실제 운영 D1·장시간 메모리 수용 미완."
     },
     {
       "id": "REL-01",
