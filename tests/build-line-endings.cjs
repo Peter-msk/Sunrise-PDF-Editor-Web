@@ -4,7 +4,7 @@ const repo=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(
 try{
  for(const dir of ['scripts','src/editor','src/assets','dist/editor','dist/assets'])fs.mkdirSync(path.join(temp,dir),{recursive:true});
  for(const name of ['build-release.cjs','site-integration.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(temp,'scripts',name));
- for(const name of ['korean-font.js','sunrise-edit-state.js','sunrise-auto-bookmarks.js','sunrise-batch-pages.js','sunrise-pdf-quality.js','sunrise-pdf-quality-report.js','sunrise-embedded-images.js','sunrise-special-pdf.js', 'sunrise-office-export.js'])fs.writeFileSync(path.join(temp,'src/assets',name),'window.fixtureAsset=1;');
+ for(const name of ['korean-font.js','sunrise-edit-state.js','sunrise-auto-bookmarks.js','sunrise-outline-transfer.js','sunrise-batch-pages.js','sunrise-pdf-quality.js','sunrise-pdf-quality-report.js','sunrise-comment-report.js','sunrise-embedded-images.js','sunrise-special-pdf.js', 'sunrise-office-export.js'])fs.writeFileSync(path.join(temp,'src/assets',name),'window.fixtureAsset=1;');
  const source=['<!doctype html><html><head></head><body>','  <script>','function sum(value) { return value + 1; } window.fixtureResult=sum(1);','  </script>','</body></html>'].join('\n');
  for(const newline of ['\n','\r\n','\r']){
   const input=source.replaceAll('\n',newline);fs.writeFileSync(path.join(temp,'src/editor/index.html'),input);
