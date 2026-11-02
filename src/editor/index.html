@@ -7701,8 +7701,31 @@
           <option value="all">문서 전체 출력 (최대 30쪽, 나머지는 원본처럼 보이는 이미지)</option>
         </select>
         <p id="maskScopeDetails" style="font-size:12px;color:var(--text-muted)">현재 모드에서는 목록에 없는 페이지를 제외합니다.</p>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin:12px 0">
+          <strong style="display:block;margin-bottom:8px">PDF 위에서 가릴 영역 직접 지정</strong>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <button type="button" id="maskDrawPrev" class="dialog-btn" aria-label="이전 페이지">이전</button>
+            <label for="maskDrawPage">미리보기 페이지</label>
+            <input id="maskDrawPage" class="dialog-input" type="number" min="1" max="${doc.pageCount}" value="${index+1}" style="width:85px">
+            <span> / ${doc.pageCount}</span>
+            <button type="button" id="maskDrawNext" class="dialog-btn" aria-label="다음 페이지">다음</button>
+          </div>
+          <div style="overflow:auto;max-height:55vh;text-align:center;background:var(--surface-soft);border:1px solid var(--border);border-radius:5px;padding:5px">
+            <div id="maskDrawCanvasWrap" style="position:relative;display:inline-block;max-width:100%;vertical-align:top">
+              <canvas id="maskDrawImage" style="display:block;max-width:100%;height:auto" aria-hidden="true"></canvas>
+              <canvas id="maskDrawOverlay" role="img" aria-label="드래그해서 개인정보를 가릴 사각형 그리기" style="position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair"></canvas>
+            </div>
+          </div>
+          <p id="maskDrawStatus" role="status" style="font-size:12px;margin:6px 0">페이지 미리보기를 준비합니다.</p>
+          <label for="maskDrawRegions">현재 페이지의 지정 영역 (선택 후 삭제 가능)</label>
+          <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+            <select id="maskDrawRegions" class="dialog-select" size="3" aria-label="삭제할 마스킹 영역 선택" style="flex:1;min-width:190px"></select>
+            <button type="button" id="maskDrawRemove" class="dialog-btn">선택 영역 삭제</button>
+          </div>
+          <small>이미지 위에서 드래그하면 사각형이 좌표 목록에 추가됩니다. 가릴 부분만 검정 영역으로 출력됩니다. 정확한 좌표가 필요하면 아래 숫자 입력을 수정하세요.</small>
+        </div>
         <label for="maskPlanLines">마스킹 영역 목록 (한 줄 = 한 영역)</label>
-        <textarea class="dialog-textarea" id="maskPlanLines" rows="5" maxlength="5000" style="width:100%;font-family:monospace" spellcheck="false">${index+1},70,100,180,40</textarea>
+        <textarea class="dialog-textarea" id="maskPlanLines" rows="5" maxlength="5000" style="width:100%;font-family:monospace" spellcheck="false" placeholder="예시: ${index+1},70,100,180,40"></textarea>
         <div style="display:flex;gap:8px;margin:8px 0">
           <button type="button" id="maskPlanCheck" class="dialog-btn">대상 페이지·영역 검증</button>
           <span id="maskPlanPreview" style="font-size:12px;color:var(--muted)" role="status">아직 검증하지 않았습니다.</span>
@@ -7725,6 +7748,15 @@
           const scope=document.getElementById("maskExportScope");
           const scopeDetails=document.getElementById("maskScopeDetails");
           const confirmed=document.getElementById("maskConfirmed");
+          const drawPage=document.getElementById("maskDrawPage");
+          const drawPrev=document.getElementById("maskDrawPrev");
+          const drawNext=document.getElementById("maskDrawNext");
+          const drawStatus=document.getElementById("maskDrawStatus");
+          const drawImage=document.getElementById("maskDrawImage");
+          const drawOverlay=document.getElementById("maskDrawOverlay");
+          const drawWrap=document.getElementById("maskDrawCanvasWrap");
+          const drawRegions=document.getElementById("maskDrawRegions");
+          const drawRemove=document.getElementById("maskDrawRemove");
           let stopped=false,running=false,validated=null;
           const scopeMode=()=>scope.value==="all";
           const updateScope=()=>{
@@ -7736,7 +7768,153 @@
           };
           scope.addEventListener("change",updateScope);updateScope();
           const valid=()=>!stopped&&activeDoc()===doc&&doc.pdfJsDoc===reader&&
-            doc.bytes===source&&doc.currentPage===index&&status.isConnected;
+            doc.bytes===source&&doc.currentPage===index&&status.isConnected&&
+            document.getElementById("modalBackdrop")?.classList.contains("open")&&
+            document.getElementById("maskExportBtn")===submit;
+          let previewGeneration=0,previewTask=null,drawnPage=0,drawSize=null,drag=null;
+          const planLines=()=>lines.value.split(/\\r?\\n/).map(row=>row.trim()).filter(Boolean);
+          const invalidate=()=>{
+            validated=null;confirmed.checked=false;
+            preview.textContent="영역이 변경되었습니다. 다시 검증해 주세요.";
+          };
+          const chosenPage=()=>Number(drawPage.value);
+          const regionPlan=()=>{
+            try{return window.SunriseSpecialPdf.parseMaskPlan(lines.value,doc.pageSizes);}
+            catch{return [];}
+          };
+          const drawBounds=(first,second)=>({
+            x:Math.min(first.x,second.x),y:Math.min(first.y,second.y),
+            width:Math.abs(second.x-first.x),height:Math.abs(second.y-first.y)
+          });
+          const redrawMasks=()=>{
+            const ctx=drawOverlay.getContext("2d");
+            if(!ctx||!drawSize)return;
+            ctx.clearRect(0,0,drawOverlay.width,drawOverlay.height);
+            const xs=drawOverlay.width/drawSize.width,ys=drawOverlay.height/drawSize.height;
+            const pagePlan=regionPlan().find(item=>item.pageNumber===drawnPage);
+            const rects=pagePlan?.rectangles||[];
+            const drawRect=(rect,selected=false,draft=false)=>{
+              const x=rect.x*xs,y=rect.y*ys,w=rect.width*xs,h=rect.height*ys;
+              ctx.fillStyle=draft?"rgba(245,158,11,0.3)":"rgba(0,0,0,0.40)";
+              ctx.fillRect(x,y,w,h);
+              ctx.strokeStyle=draft?"#F59E0B":selected?"#DC2626":"#0F766E";
+              ctx.lineWidth=selected?3:2;ctx.strokeRect(x,y,w,h);
+            };
+            rects.forEach((rect,i)=>drawRect(rect,Number(drawRegions.selectedIndex)===i));
+            if(drag)drawRect(drawBounds(drag.start,drag.end),false,true);
+          };
+          const updateMaskList=()=>{
+            const previous=drawRegions.value;
+            drawRegions.replaceChildren();
+            const rows=planLines(),page=chosenPage();
+            rows.forEach((row,i)=>{
+              const values=row.split(",").map(value=>value.trim());
+              if(values.length!==5||Number(values[0])!==page)return;
+              const option=document.createElement("option");
+              option.value=String(i);
+              option.textContent="영역 "+(drawRegions.options.length+1)+": "+values.slice(1).join(", ");
+              drawRegions.appendChild(option);
+            });
+            if([...drawRegions.options].some(option=>option.value===previous))drawRegions.value=previous;
+            if(drawRegions.selectedIndex<0&&drawRegions.options.length)drawRegions.selectedIndex=0;
+            drawRemove.disabled=running||!drawRegions.options.length;
+            redrawMasks();
+          };
+          const previewPoint=event=>{
+            const rect=drawOverlay.getBoundingClientRect();
+            if(!drawSize||rect.width<=0||rect.height<=0)throw Error("미리보기 크기를 확인할 수 없습니다.");
+            return {
+              x:Math.max(0,Math.min(drawSize.width,(event.clientX-rect.left)*drawSize.width/rect.width)),
+              y:Math.max(0,Math.min(drawSize.height,(event.clientY-rect.top)*drawSize.height/rect.height))
+            };
+          };
+          const showPage=async()=>{
+            const number=chosenPage();
+            if(!Number.isSafeInteger(number)||number<1||number>reader.numPages){
+              drawStatus.textContent="미리보기 페이지 번호를 1~"+reader.numPages+" 사이로 지정해 주세요.";return;
+            }
+            const token=++previewGeneration;
+            const oldTask=previewTask;previewTask=null;drag=null;drawnPage=0;drawSize=null;
+            if(oldTask){oldTask.cancel();try{await oldTask.promise;}catch(_){}}
+            if(!valid()||token!==previewGeneration)return;
+            drawStatus.textContent=number+"쪽 미리보기를 준비하고 있습니다.";
+            try{
+              const page=await reader.getPage(number);
+              if(!valid()||token!==previewGeneration)return;
+              const actual=page.getViewport({scale:1});
+              if(!Number.isFinite(actual.width)||!Number.isFinite(actual.height)||actual.width<=0||actual.height<=0)
+                throw Error("페이지 크기를 읽을 수 없습니다.");
+              const scale=Math.min(1,510/actual.width,540/actual.height);
+              const view=page.getViewport({scale});
+              drawImage.width=Math.max(1,Math.ceil(view.width));
+              drawImage.height=Math.max(1,Math.ceil(view.height));
+              drawWrap.style.width=drawImage.width+"px";
+              drawOverlay.width=drawImage.width;drawOverlay.height=drawImage.height;
+              const ctx=drawImage.getContext("2d",{alpha:false});
+              if(!ctx)throw Error("미리보기 캔버스를 사용할 수 없습니다.");
+              ctx.fillStyle="#FFFFFF";ctx.fillRect(0,0,drawImage.width,drawImage.height);
+              const task=page.render({canvasContext:ctx,canvas:drawImage,viewport:view});
+              previewTask=task;
+              await task.promise;
+              if(!valid()||token!==previewGeneration)return;
+              drawnPage=number;drawSize={width:actual.width,height:actual.height};
+              updateMaskList();
+              drawStatus.textContent=number+"쪽 표시 완료 · 마우스나 손가락으로 가릴 영역을 드래그하세요.";
+            }catch(error){
+              if(token===previewGeneration&&valid()&&error?.name!=="RenderingCancelledException")
+                drawStatus.textContent="미리보기 오류: "+(error?.message||error);
+            }
+          };
+          drawOverlay.addEventListener("pointerdown",event=>{
+            if(!valid()||running||!drawSize||drawnPage!==chosenPage()||event.button>0)return;
+            try{
+              const point=previewPoint(event);
+              drag={id:event.pointerId,start:point,end:point};
+              drawOverlay.setPointerCapture(event.pointerId);
+              event.preventDefault();redrawMasks();
+            }catch(error){drawStatus.textContent=error.message;}
+          });
+          drawOverlay.addEventListener("pointermove",event=>{
+            if(!drag||drag.id!==event.pointerId)return;
+            drag.end=previewPoint(event);event.preventDefault();redrawMasks();
+          });
+          const cancelDrag=()=>{drag=null;redrawMasks();};
+          drawOverlay.addEventListener("pointercancel",cancelDrag);
+          drawOverlay.addEventListener("lostpointercapture",cancelDrag);
+          drawOverlay.addEventListener("pointerup",event=>{
+            if(!drag||drag.id!==event.pointerId)return;
+            const start=drag.start,end=previewPoint(event);drag=null;
+            if(!valid()||running||drawnPage!==chosenPage()){redrawMasks();return;}
+            const raw=drawBounds(start,end);
+            const rect={
+              x:Number(raw.x.toFixed(2)),y:Number(raw.y.toFixed(2)),
+              width:Number(raw.width.toFixed(2)),height:Number(raw.height.toFixed(2))
+            };
+            try{
+              const normalized=window.SunriseSpecialPdf.validateMaskRect(rect,drawSize.width,drawSize.height);
+              const row=[drawnPage,normalized.x,normalized.y,normalized.width,normalized.height].join(",");
+              const candidate=[...planLines(),row].join("\n");
+              window.SunriseSpecialPdf.parseMaskPlan(candidate,doc.pageSizes);
+              if(candidate.length>lines.maxLength)throw Error("좌표 입력 길이 제한을 초과했습니다.");
+              lines.value=candidate;invalidate();updateMaskList();
+              drawStatus.textContent=drawnPage+"쪽에 새 마스킹 영역을 추가했습니다.";
+            }catch(error){drawStatus.textContent="영역 추가 실패: "+(error?.message||error);redrawMasks();}
+          });
+          drawRegions.addEventListener("change",redrawMasks);
+          drawRemove.addEventListener("click",()=>{
+            if(!valid()||running||drawRemove.disabled)return;
+            const rowIndex=Number(drawRegions.value);
+            const rows=planLines();
+            if(!Number.isSafeInteger(rowIndex)||rowIndex<0||rowIndex>=rows.length||
+              Number(rows[rowIndex].split(",")[0])!==chosenPage())return;
+            rows.splice(rowIndex,1);
+            lines.value=rows.join("\n");invalidate();updateMaskList();
+            drawStatus.textContent=chosenPage()+"쪽에서 선택한 영역을 삭제했습니다.";
+          });
+          drawPage.addEventListener("change",showPage);
+          drawPrev.addEventListener("click",()=>{drawPage.value=Math.max(1,chosenPage()-1);showPage();});
+          drawNext.addEventListener("click",()=>{drawPage.value=Math.min(reader.numPages,chosenPage()+1);showPage();});
+          showPage();
           const inspect=()=>{
             if(!valid())throw Error("현재 문서가 변경되었습니다.");
             const plan=window.SunriseSpecialPdf.parseMaskPlan(lines.value,doc.pageSizes);
@@ -7748,12 +7926,13 @@
               "개 영역 적용 예정: "+plan.map(p=>p.pageNumber+"쪽").join(", ");
             return plan;
           };
-          lines.addEventListener("input",()=>{validated=null;preview.textContent="좌표가 변경되었습니다. 다시 검증하세요.";});
+          lines.addEventListener("input",()=>{invalidate();updateMaskList();});
           check.addEventListener("click",()=>{
             try{inspect()}catch(error){validated=null;preview.textContent="검증 실패: "+(error?.message||error);}
           });
           document.getElementById("maskExportClose").addEventListener("click",()=>{
-            stopped=true;
+            stopped=true;previewGeneration++;
+            previewTask?.cancel();drag=null;
             if(running)status.textContent="변환 중단을 요청했습니다.";
             else closeModal();
           });
@@ -7775,6 +7954,7 @@
             }catch(error){status.textContent="사전 검사 실패: "+(error?.message||error);return;}
             const finish=beginOperationMetric("page_extract");let outcome="failed";
             running=true;submit.disabled=true;check.disabled=true;lines.disabled=true;scope.disabled=true;confirmed.disabled=true;
+            drawPage.disabled=true;drawPrev.disabled=true;drawNext.disabled=true;drawRegions.disabled=true;drawRemove.disabled=true;
             try{
               status.textContent="페이지를 차례대로 래스터화하고 마스크를 적용 중입니다…";
               const output=await window.SunriseSpecialPdf.exportMaskedPages({
@@ -7793,7 +7973,8 @@
               if(status.isConnected)status.textContent="마스킹 PDF 생성 실패: "+(error?.message||error);
               if(stopped)outcome="cancelled";
             }finally{
-              running=false;if(status.isConnected){submit.disabled=false;check.disabled=false;lines.disabled=false;scope.disabled=false;confirmed.disabled=false;}
+              running=false;if(status.isConnected){submit.disabled=false;check.disabled=false;lines.disabled=false;scope.disabled=false;confirmed.disabled=false;
+                drawPage.disabled=false;drawPrev.disabled=false;drawNext.disabled=false;drawRegions.disabled=false;updateMaskList();}
               finish(outcome);
             }
           });
@@ -7883,8 +8064,8 @@
                 x: defaults.x,
                 y: defaults.y + (doc.overlays.filter((o) => o.pageIndex === pIdx).length % 5) * 28,
                 fontSize,
-                ...(type==="Text"?{width:Math.min(textWidth,Math.max(40,(doc.pageSizes[pIdx]?.width||595)-defaults.x-12))}:{}),
-                width: type === "VisualSignature" ? 310 : undefined,
+                width: type === "VisualSignature" ? 310 :
+                  type === "Text" ? Math.min(textWidth,Math.max(40,(doc.pageSizes[pIdx]?.width||595)-defaults.x-12)) : undefined,
                 height: type === "VisualSignature" ? 65 : undefined,
                 color,
                 bgColor: defaults.bg,
