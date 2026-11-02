@@ -6,16 +6,16 @@
 - OCR(USR-20) 제외. 기능 완료·자동 검사·현장 수용·운영 배포는 별도 기록한다.
 
 ## 실행 방식
-`.github/workflows/production-release.yml`은 **workflow_dispatch 수동 호출 전용**이며 **main** 브랜치에서만 실행된다. 별도 예약 실행이나 PR 자동 배포를 지원하지 않는다.
+`.github/workflows/manual-production-release.yml`은 **workflow_dispatch 수동 호출 전용**이며 **main** 브랜치에서만 실행된다. 별도 예약 실행이나 PR 자동 배포를 지원하지 않는다.
 
 1. `docs/development-progress.json`의 미완 항목과 안전 경고를 검토하고 실제 출시 범위를 승인한다. 36개 전체가 완성되지 않았다면 전체 기능 출시로 표시하지 않는다.
 2. 운영 D1 SQL 백업을 GitHub 저장소 바깥의 접근 통제된 보관소에 확보하고 SHA-256을 확인한다. 원본 개인정보를 이슈·PR·로그에 기록하지 않는다.
 3. 해당 백업을 **빈 격리 시험 D1**에 복원하고 무결성·핵심 조회를 확인한 뒤 복원 확인 기록을 보관한다. 백업 성공만으로 복원 검증을 통과 처리하지 않는다.
 4. GitHub production 환경에서 `CLOUDFLARE_API_TOKEN`과 `CLOUDFLARE_ACCOUNT_ID`를 구성하고 환경 승인 보호 정책을 적용한다. Worker 비밀값/계정 접근도 별도 확인한다.
 5. 검증된 릴리스 코드를 main에 병합하고 **해당 main SHA에 대한 push 전체 CI PASS**를 확보한다. PR CI 성공만으로 대체하지 않는다.
-6. GitHub Actions에서 `Sunrise PDF Editor production release`의 `Run workflow`를 **main**으로 호출한다. `approved_sha`는 정확한 main SHA, `private_backup_sha256`은 백업 증거, `isolated_restore_receipt`는 격리 복원 기록을 제공한다.
+6. GitHub Actions에서 기존 `Manual production release`의 `Run workflow`를 **main**으로 호출한다. `confirmed_release=true`, `validated_commit`은 정확한 main SHA, `private_backup_sha256`은 백업 증거, `isolated_restore_receipt`는 격리 복원 기록을 제공한다. 다른 운영 배포 워크플로를 병행 실행하지 않는다.
 7. Workflow가 Node 전체 계약/프로덕션 빌드, GitHub CI SHA 게이트, 운영 D1 읽기 전용 스키마 사전검사, Wrangler 번들 확인 후에만 Worker+정적 에셋을 배포하도록 한다.
-8. 배포 후 공개 편집기 페이지와 D1 기반 `/api/site-updates` 및 비로그인 관리자 API 접근 차단을 자동 확인한다. 실제 관리자 로그인·파일 편집 수용은 추가로 확인한다.
+8. 배포 후 공개 편집기 페이지와 D1 기반 `/api/site-updates` 및 비로그인 관리자 API 접근 차단을 자동 확인하고, 기존 서명된 `report-deployment.cjs`로 배포+스모크 성공/실패를 보고한다. 실제 관리자 로그인·파일 편집 수용은 추가로 확인한다.
 9. 실패 시 배포 성공으로 표시하지 않는다. 이전 정상 Worker 버전과 소스 SHA를 확인하여 **별도 승인된 복구 절차**로 롤백한다. 이 워크플로는 자동 DB 복원을 하지 않는다.
 
 ## 출고 차단 조건
