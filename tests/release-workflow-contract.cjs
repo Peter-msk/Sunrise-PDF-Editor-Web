@@ -9,7 +9,8 @@ for(const text of [
  'environment: production','private_backup_sha256','isolated_restore_receipt',
  'BACKUP_HASH','RESTORE_RECEIPT','DEPLOYMENT_EVENT_SECRET',
  'node scripts/check-release-ci-gate.cjs','npm test','npm run progress:check','npm run build',
- 'npm run release:schema','wrangler deploy --dry-run','wrangler deploy',
+ 'npm run release:schema','wrangler secret list --name sunrise-pdf-editor --format json',
+ 'DEPLOYMENT_EVENT_SECRET 바인딩이 없어 배포를 차단','wrangler deploy --dry-run','wrangler deploy',
  '/editor/','/api/site-updates','/api/admin/health',
  'node scripts/report-deployment.cjs succeeded','node scripts/report-deployment.cjs failed'
 ])assert(workflow.includes(text),'Release workflow missing: '+text);
@@ -17,7 +18,8 @@ assert(!/\n\s+push:|\n\s+schedule:|\n\s+pull_request:/.test(workflow),
  'Production deployment must not run automatically on push, schedule or PR');
 const positions=[
  'node scripts/check-release-ci-gate.cjs','npm test','npm run progress:check',
- 'npm run build','npm run release:schema','wrangler deploy --dry-run',
+ 'npm run build','npm run release:schema',
+ 'wrangler secret list --name sunrise-pdf-editor --format json','wrangler deploy --dry-run',
  'run: ./node_modules/.bin/wrangler deploy\n','Smoke-test public editor'
 ].map(x=>workflow.indexOf(x));
 assert(positions.every(x=>x>=0),'Release verification stage missing');
