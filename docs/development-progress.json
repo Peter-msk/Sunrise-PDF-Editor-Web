@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-02",
-  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시.",
+  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시. 2026-11-02 USR-11 병합 메모리 구조 개선: 원본 PDFPage 문서 참조를 경량 페이지 박스/회전값으로 치환하고 복사가 완료된 PDF 소스 참조를 즉시 해제. 실제 240쪽 합성 병합·RSS 관측 테스트로 검증하며 절대 메모리 상한이나 현장 파일 대응을 주장하지 않음.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -212,7 +212,7 @@
       "automated": 98,
       "practical": 0,
       "deployment": 0,
-      "note": "PDF 일괄 압축·표시·분할·병합 코드, 최대 50개 출력/분할 입력당 150쪽·병합 250쪽, 고정 MB 제한 없는 안전정수 바이트 검증, 원본 구조 위험 검출, 120쪽 분할 실기 자동회귀. PR #37에서 병합 시 8쪽마다 UI 이벤트 양보·취소 점검, 분할/병합 페이지 진행률, 실제 36쪽 병합 중 타이머 취소 시 부분 결과 0건 검증, Node/Linux Chromium/Windows Chrome·Edge CI PASS. 실사용 고용량 메모리 실측, 실제 업무 파일 및 모바일/운영 배포는 미완료."
+      "note": "PDF 일괄 분할·병합·압축 및 안전한 출력 제한/원본 보호. PR #37에서 8쪽 단위 병합 취소 경계·페이지 진행률을 도입하고 36쪽 실기 CI 통과. 이번 개선에서는 병합 검증용 원본 PDFPage 보관을 수치 좌표 스냅샷으로 대체하고, 복사 완료 원본의 문서 참조를 해제하여 장시간 다중파일 병합 메모리 보유 구조를 경량화. 실제 PDF 엔진의 240쪽 합성 병합·회전/박스 검증 및 메모리 RSS 관측 회귀 추가. 메모리 성능 절대 상한 및 실제 고객 파일·모바일·운영 배포 수용은 미검증."
     },
     {
       "id": "USR-18",
