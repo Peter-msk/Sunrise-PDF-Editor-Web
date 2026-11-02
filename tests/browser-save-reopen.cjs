@@ -7,6 +7,7 @@ const http=require('node:http');
 const {chromium}=require('playwright');
 const PDFLib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const editState=require('../src/assets/sunrise-edit-state.js');
+const outlineTransfer=require('../src/assets/sunrise-outline-transfer.js');
 const baseDir=path.resolve(__dirname,'../dist');
 const telemetryEvents=[];
 const mime={
@@ -52,6 +53,43 @@ async function fixture(){
  check.addToPage(first,{x:35,y:440,width:18,height:18});check.check();
  return Buffer.from(await pdf.save());
 }
+// Synthetic six-page office-style fixture: two-level native outlines and mixed page geometry.
+async function complexSplitFixture(){
+ const pdf=await PDFLib.PDFDocument.create();
+ pdf.setTitle('검토보고서 분할 무결성 시험');
+ const sizes=[[420,595],[595,842],[480,640],[612,792],[360,520],[500,700]];
+ for(let i=0;i<sizes.length;i++){
+  const page=pdf.addPage(sizes[i]);
+  page.drawText('Chapter page '+(i+1),{x:40,y:sizes[i][1]-70,size:12});
+  if(i===1)page.setRotation(PDFLib.degrees(90));
+  if(i===4)page.setCropBox(12,16,300,460);
+ }
+ const n=PDFLib.PDFName.of,context=pdf.context;
+ const root=context.obj({Type:'Outlines',Count:4});
+ const rootRef=context.register(root);
+ const entry=(title,pageIndex,parent)=>context.obj({
+  Title:PDFLib.PDFHexString.fromText(title),Parent:parent,
+  Dest:context.obj([pdf.getPage(pageIndex).ref,n('Fit')])
+ });
+ const chapter1=entry('제1장 사업 개요',0,rootRef),chapter1Ref=context.register(chapter1);
+ const detail1=entry('1.1 현황 분석',1,chapter1Ref),detail1Ref=context.register(detail1);
+ const chapter2=entry('제2장 검토 결론',4,rootRef),chapter2Ref=context.register(chapter2);
+ const detail2=entry('2.1 후속 대책',5,chapter2Ref),detail2Ref=context.register(detail2);
+ root.set(n('First'),chapter1Ref);root.set(n('Last'),chapter2Ref);
+ chapter1.set(n('First'),detail1Ref);chapter1.set(n('Last'),detail1Ref);
+ chapter1.set(n('Count'),PDFLib.PDFNumber.of(1));chapter1.set(n('Next'),chapter2Ref);
+ chapter2.set(n('First'),detail2Ref);chapter2.set(n('Last'),detail2Ref);
+ chapter2.set(n('Count'),PDFLib.PDFNumber.of(1));chapter2.set(n('Prev'),chapter1Ref);
+ pdf.catalog.set(n('Outlines'),rootRef);
+ const bytes=Buffer.from(await pdf.save());
+ const reopened=await PDFLib.PDFDocument.load(bytes);
+ assert.deepEqual(outlineTransfer.read(reopened,PDFLib).map(x=>[x.title,x.page,x.level]),[
+  ['제1장 사업 개요',0,0],['1.1 현황 분석',1,1],
+  ['제2장 검토 결론',4,0],['2.1 후속 대책',5,1]
+ ]);
+ return bytes;
+}
+
 async function main(){
  const downloadDir=fs.mkdtempSync(path.join(os.tmpdir(),'sunrise-chromium-e2e-'));
  const server=http.createServer(serve);
@@ -270,6 +308,60 @@ async function main(){
    assert.equal(resultPart.getPageCount(),1);
    assert((part.suggestedFilename()||'').includes('_p4-4.pdf'));
    await page.locator('#splitCloseBtn').click();
+   // USR-02/18: mixed page geometry, nested original bookmarks, separate
+   // on-demand downloads, byte-for-byte source immutability, and stale plans.
+   const officeBytes=await complexSplitFixture(),officeOriginal=Buffer.from(officeBytes);
+   await page.locator('#openPdfInput').setInputFiles({
+     name:'현장_검토보고서.PDF',mimeType:'application/pdf',buffer:officeBytes
+   });
+   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('현장_검토보고서.PDF'),
+     null,{timeout:40000});
+   await page.evaluate(()=>executeCommand('splitPages'));
+   await page.locator('#splitPrepareBtn').waitFor({state:'visible'});
+   await page.locator('#splitRangeInput').fill('1-6');
+   await page.locator('#splitSizeInput').fill('3');
+   await page.locator('#splitPrepareBtn').click();
+   const officeResults=page.locator('#splitReadyResults button');
+   await officeResults.nth(1).waitFor({state:'visible',timeout:60000});
+   assert.equal(await officeResults.count(),2,'six pages must yield two separate three-page results');
+   const expectedNames=['현장_검토보고서_part_001_p1-3.pdf','현장_검토보고서_part_002_p4-6.pdf'];
+   const expectedOutlines=[
+     [['제1장 사업 개요',0,0],['1.1 현황 분석',1,1]],
+     [['제2장 검토 결론',1,0],['2.1 후속 대책',2,1]]
+   ];
+   for(let index=0;index<2;index++){
+     const pending=page.waitForEvent('download',{timeout:60000});
+     await officeResults.nth(index).click();
+     const event=await pending;
+     assert.equal(event.suggestedFilename(),expectedNames[index]);
+     const pathname=path.join(downloadDir,'complex-split-'+index+'.pdf');
+     await event.saveAs(pathname);
+     const output=await PDFLib.PDFDocument.load(fs.readFileSync(pathname));
+     assert.equal(output.getPageCount(),3);
+     assert.deepEqual(outlineTransfer.read(output,PDFLib).map(x=>[x.title,x.page,x.level]),expectedOutlines[index],
+       'split must map original hierarchical bookmarks into each saved PDF');
+     if(index===0){
+       assert.equal(output.getPage(1).getRotation().angle,90);
+       assert.equal(output.getPage(1).getMediaBox().width,595);
+     }else{
+       assert.deepEqual(output.getPage(1).getCropBox(),
+         {x:12,y:16,width:300,height:460},'asymmetric crop box must be retained');
+     }
+     assert.equal(await officeResults.count(),2,'saving a part must leave later on-demand results available');
+   }
+   assert(officeBytes.equals(officeOriginal),'splitting must not mutate original file input');
+
+   // Simulate a document edit while a split plan is open. A stale prepared
+   // result must be discarded instead of publishing another download.
+   await page.evaluate(()=>{
+     activeDoc().metadata.splitConcurrencyRegression='changed after plan';
+   });
+   await officeResults.first().click();
+   assert((await page.locator('#splitPlanStatus').innerText()).includes('문서 상태가 변경'),
+     'prepared PDF must reject changes to the editable document state');
+   assert.equal(await officeResults.count(),0,'invalidated split plan must discard result buttons');
+   await page.locator('#splitCloseBtn').click();
+
    // USR-13: the only exported material must be masked raster pixels.
    const privacySource=await PDFLib.PDFDocument.create();
    privacySource.addPage([400,600]).drawText('Sensitive Secret 123',{x:80,y:480,size:15});
@@ -326,7 +418,7 @@ async function main(){
    }
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, multi-page masked raster export, embedded PNG, quality reports and range split');
+   console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split with mixed geometry and stale-plan protection; raster masking, embedded PNG and reports');
    await context.close();
  }finally{
    if(browser)await browser.close();
