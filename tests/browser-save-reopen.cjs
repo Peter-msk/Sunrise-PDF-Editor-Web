@@ -418,8 +418,66 @@ async function main(){
    }
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split with mixed geometry and stale-plan protection; raster masking, embedded PNG and reports');
+   console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split, stale-plan protection, raster masking, embedded PNG/reports, mobile touch save/reopen');
    await context.close();
+
+   // USR-19: real touch-enabled Chromium context (mobile emulation, not an
+   // Android/iOS hardware acceptance test) must support page navigation,
+   // responsive drawers, Save As and disk PDF roundtrip.
+   const mobile=await browser.newContext({
+     acceptDownloads:true,viewport:{width:390,height:844},deviceScaleFactor:2,
+     isMobile:true,hasTouch:true
+   });
+   try{
+     const touch=await mobile.newPage(),mobileErrors=[];
+     touch.on('pageerror',error=>mobileErrors.push(error.message));
+     await touch.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
+     await touch.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseEditState),
+       null,{timeout:40000});
+     await touch.locator('#openPdfInput').setInputFiles({
+       name:'mobile-touch.pdf',mimeType:'application/pdf',buffer:await fixture()
+     });
+     await touch.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('mobile-touch.pdf'),
+       null,{timeout:40000});
+     await touch.locator('#mobileBottomNav').waitFor({state:'visible',timeout:15000});
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
+       null,{timeout:30000});
+     await touch.locator('#mobNextPageBtn').tap();
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='2 / 2',
+       null,{timeout:30000});
+     await touch.locator('#mobPrevPageBtn').tap();
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
+       null,{timeout:30000});
+     await touch.locator('#mobLeftPaneBtn').tap();
+     await touch.locator('#mobileDrawerBackdrop').waitFor({state:'visible'});
+     await touch.locator('#mobileDrawerBackdrop').tap();
+     await touch.locator('#mobileDrawerBackdrop').waitFor({state:'hidden'});
+     await touch.locator('#quickSaveBtn').tap();
+     await touch.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:20000});
+     const modal=await touch.locator('#modalBox').boundingBox();
+     assert(modal&&modal.x>=-1&&modal.x+modal.width<=391,
+       'Mobile Save As modal must fit without horizontal clipping');
+     await touch.locator('#saveAsConfirmBtn').tap();
+     const saveLink=touch.locator('#saveAsDownloadLink');
+     await saveLink.waitFor({state:'visible',timeout:60000});
+     const downloadPromise=touch.waitForEvent('download',{timeout:45000});
+     await saveLink.tap();
+     const saved=await downloadPromise;
+     const mobilePath=path.join(downloadDir,'mobile-roundtrip.pdf');
+     await saved.saveAs(mobilePath);
+     const mobileBytes=fs.readFileSync(mobilePath);
+     const mobileDoc=await PDFLib.PDFDocument.load(mobileBytes);
+     assert.equal(mobileDoc.getPageCount(),2);
+     assert.equal(mobileDoc.getPage(1).getRotation().angle,90);
+     assert.equal(mobileDoc.getForm().getTextField('employee').getText(),'Sample Person');
+     await touch.locator('#saveAsDownloadedBtn').tap();
+     await touch.locator('#openPdfInput').setInputFiles({
+       name:'mobile-reopened.pdf',mimeType:'application/pdf',buffer:mobileBytes
+     });
+     await touch.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('mobile-reopened.pdf'),
+       null,{timeout:40000});
+     assert.equal(mobileErrors.length,0,'Mobile touch context runtime errors: '+mobileErrors.join(' | '));
+   }finally{await mobile.close();}
  }finally{
    if(browser)await browser.close();
    await new Promise(resolve=>server.close(resolve));
