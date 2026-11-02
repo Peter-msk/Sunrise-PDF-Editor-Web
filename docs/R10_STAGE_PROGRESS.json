@@ -1,0 +1,63 @@
+{
+  "release": "R10",
+  "source_base": "Sunrise-PDF-Editor-Web-R09-Stage2-Integrated-Source.zip",
+  "phase1": {
+    "name": "GitHub candidate source + LOCAL integration",
+    "percent": 100,
+    "status": "complete"
+  },
+  "phase2": {
+    "name": "integrated verification",
+    "percent": 67,
+    "status": "partial",
+    "passedAreas": [
+      "G01 source structure",
+      "G03 LOCAL 12 principal UI workflows",
+      "G04 mock SQLite restore",
+      "G05 admin scrolling independent Chromium"
+    ],
+    "remainingAreas": [
+      "G02 full npm contract suite blocked at build-line-endings with missing terser",
+      "G06 formal npm ci + npm run build and hosted preview checks not executed"
+    ],
+    "percentDefinition": "4/6 validation domains passed; remaining 2 domains not counted; not percentage of all possible individual test cases"
+  },
+  "phase3": {
+    "name": "GitHub commit + Cloudflare deployment",
+    "percent": 0,
+    "status": "not_started"
+  },
+  "changedSourcePaths": [
+    "src/assets/sunrise-images-to-pdf-ui.js",
+    "src/assets/sunrise-pdf-overlay-ui.js",
+    "src/assets/sunrise-pdf-page-geometry-ui.js",
+    "src/assets/sunrise-pdf-to-images-ui.js",
+    "src/assets/sunrise-pdf-visual-compare-ui.js"
+  ],
+  "newTestCases": {
+    "r10-editor-ui-results": {
+      "pass": 16,
+      "errors": 0
+    },
+    "r10-extra-ui-results": {
+      "pass": 4,
+      "errors": 0
+    },
+    "r10-pdfjs-ui-results": {
+      "pass": 2,
+      "errors": 0
+    },
+    "r10-remaining-ui-results": {
+      "pass": 4,
+      "errors": 0
+    }
+  },
+  "limitations": [
+    "Chromium editor scripts loaded into isolated DOM, not hosted authenticated route",
+    "formal terser minification/build not passed due offline npm registry and missing dependency",
+    "Cloudflare Worker/D1 migration and production service not tested",
+    "some cancellation/error/mobile save workflows remain for dedicated acceptance testing"
+  ],
+  "productionChanged": false,
+  "githubChanged": false
+}

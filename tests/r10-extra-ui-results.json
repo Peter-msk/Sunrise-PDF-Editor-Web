@@ -1,0 +1,73 @@
+{
+  "runs": [
+    {
+      "id": "crop",
+      "status": "PASS",
+      "file": "sample_cropped.pdf",
+      "bytes": 1288,
+      "details": {
+        "pages": 4,
+        "metadataTitle": "",
+        "box": [
+          0.0,
+          0.0,
+          566.653564453125,
+          813.653564453125
+        ],
+        "text": "Sunrise R10 sample 1\n"
+      }
+    },
+    {
+      "id": "resize",
+      "status": "PASS",
+      "file": "sample_resized.pdf",
+      "bytes": 3532,
+      "details": {
+        "pages": 4,
+        "metadataTitle": "",
+        "box": [
+          0.0,
+          0.0,
+          595.2755737304688,
+          841.8897705078125
+        ],
+        "text": "Sunrise R10 sample 1\n"
+      }
+    },
+    {
+      "id": "metadata",
+      "status": "PASS",
+      "file": "sample_properties.pdf",
+      "bytes": 1327,
+      "details": {
+        "pages": 4,
+        "metadataTitle": "R10 metadata validated",
+        "box": [
+          0.0,
+          0.0,
+          595.0,
+          842.0
+        ],
+        "text": "Sunrise R10 sample 1\n"
+      }
+    },
+    {
+      "id": "stamp",
+      "status": "PASS",
+      "file": "sample_marked.pdf",
+      "bytes": 2420,
+      "details": {
+        "pages": 4,
+        "metadataTitle": "",
+        "box": [
+          0.0,
+          0.0,
+          595.0,
+          842.0
+        ],
+        "text": "Sunrise R10 sample 1\nDRAFT\n"
+      }
+    }
+  ],
+  "errors": []
+}

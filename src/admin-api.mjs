@@ -5,6 +5,8 @@ import {readDeploymentReports} from './admin-deployments.mjs';
 import {recordOperation,operationSummary,saveSummary,operationScope,workerVersion} from './operation-metrics.mjs';
 import {readRetentionExecution} from './admin-retention.mjs';
 import {adminReadiness} from './admin-readiness.mjs';
+import {toAdminCsv} from './admin-csv.mjs';
+import {handlePublicationRestore} from './admin-publication-restore.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
@@ -65,6 +67,7 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path.startsWith('/api/admin/publication-restore/'))return handlePublicationRestore(request,env,url);
   if(path==='/api/admin/security-events'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     try{const result=await db.prepare('SELECT kind,happened_ms FROM admin_security_events ORDER BY happened_ms DESC,id DESC LIMIT 30').all();return response({items:result.results||[],retentionDays:30})}catch{return response({error:'Security history unavailable'},503)}
@@ -109,7 +112,7 @@ export async function adminApi(request,env,url,identity){
         const settled=item.succeeded+item.failed;
         rows.push([scope.days,scope.version||'all',item.feature,item.attempts,item.succeeded,item.failed,item.cancelled,item.pending,settled?(item.failed/settled*100).toFixed(1):'']);
       }
-      const csv='\ufeff'+rows.map(row=>row.map(value=>'"'+String(value).replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
+      const csv=toAdminCsv(rows);
       return new Response(csv,{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="sunrise-operations-${today}.csv"`,'cache-control':'no-store','x-content-type-options':'nosniff'}});
     }catch{return response({error:'Operation statistics unavailable'},503)}
   }
@@ -182,7 +185,7 @@ export async function adminApi(request,env,url,identity){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day))throw new Error('Invalid aggregate date');
       rows.push([row.day,number(row.visits),number(row.editor_seconds)]);
     }
-    const csv='\ufeff'+rows.map(row=>row.map(value=>'"'+value.replaceAll('"','""')+'"').join(',')).join('\r\n')+'\r\n';
+    const csv=toAdminCsv(rows);
     return new Response(csv,{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':`attachment; filename="sunrise-statistics-${today}.csv"`,'cache-control':'no-store','x-content-type-options':'nosniff'}});
   }
   if(path==='/api/admin/site-updates'&&request.method==='GET'){

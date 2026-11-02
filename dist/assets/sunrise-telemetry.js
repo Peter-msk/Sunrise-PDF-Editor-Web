@@ -96,7 +96,7 @@
  };
  let operationQueue=Promise.resolve();
  window.sunriseTelemetryOperationStart=feature=>{
-   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete'].includes(feature))return ()=>{};
+   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete','local_page_compose','local_form_edit','local_stamp','local_metadata','local_batch_preflight','local_images_to_pdf','local_pdf_to_images','local_page_crop','local_page_resize','local_nup','local_pdf_overlay','local_visual_compare'].includes(feature))return ()=>{};
    let id;try{id=crypto.randomUUID()}catch{return ()=>{}};
    let recorded=false,ended=false;
    operationQueue=operationQueue.then(async()=>{if(await ensureVisit())recorded=await send('operation',{operationId:id,feature,stage:'started'})}).catch(()=>{});

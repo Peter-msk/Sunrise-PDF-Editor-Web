@@ -1,0 +1,65 @@
+{
+  "release": "R09",
+  "as_of": "2026-11-03",
+  "source": "R07 integrated + R08 fixes + R09 admin scroll correction",
+  "stages": [
+    {
+      "id": 1,
+      "name": "소스 통합",
+      "completed": 4,
+      "total": 4,
+      "percent": 100
+    },
+    {
+      "id": 2,
+      "name": "통합 검증",
+      "completed": 3,
+      "total": 6,
+      "percent": 50,
+      "groups": [
+        {
+          "id": "G01",
+          "status": "pass",
+          "details": "structure/javascript"
+        },
+        {
+          "id": "G02",
+          "status": "partial",
+          "details": "82 preexisting contracts passed; release build test dependency blocked"
+        },
+        {
+          "id": "G03",
+          "status": "partial",
+          "details": "11 new PDF engines core paths checked; full UI E2E pending"
+        },
+        {
+          "id": "G04",
+          "status": "pass",
+          "details": "isolated SQLite admin restore suite"
+        },
+        {
+          "id": "G05",
+          "status": "pass_isolated_browser_dom",
+          "details": "real Chromium + real HTML + mocked API, scroll/auto page/select/mobile"
+        },
+        {
+          "id": "G06",
+          "status": "blocked",
+          "details": "terser 5.51.2 unavailable, registry DNS unavailable"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "GitHub·Cloudflare",
+      "completed": 0,
+      "total": 1,
+      "percent": 0
+    }
+  ],
+  "github_writes": false,
+  "cloudflare_deployed": false,
+  "new_bugfixes": [
+    "dist/admin/index.html: preserve scroll on publication selection"
+  ]
+}
