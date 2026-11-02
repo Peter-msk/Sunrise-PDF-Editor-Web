@@ -17,6 +17,9 @@ permissions:
   contents: read
 jobs:
   admin:
+    # This isolated-scope gate applies only to admin-only release branches.
+    # Mixed editor/admin changes are instead validated by the full CI workflow.
+    if: github.event_name != 'pull_request' || startsWith(github.head_ref, 'release/admin-only-')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
