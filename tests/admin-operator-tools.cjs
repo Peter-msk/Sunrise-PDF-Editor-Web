@@ -2,7 +2,10 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawnSync}=require('node:child_process'),{createHash,randomUUID}=require('node:crypto');
 const repo=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'sunrise-operator-fixtures-'));
 const log=path.join(temp,'calls.jsonl'),source=path.join(temp,'fixture.sql'),privateSQL="CREATE TABLE fixture(value TEXT);INSERT INTO fixture VALUES('SYNTHETIC_PRIVATE_VALUE');\n";
-const run=(script,args,mode='valid')=>spawnSync(process.execPath,[path.join(repo,'scripts',script),...args],{cwd:temp,encoding:'utf8',shell:false,timeout:15000,env:{...process.env,WRANGLER_BIN:process.execPath,FIXTURE_LOG:log,FIXTURE_MODE:mode,FIXTURE_EXPORT:privateSQL}});
+const testD1Id='11111111-2222-4333-8444-555555555555';
+const rehearsalConfig=path.join(temp,'isolated-wrangler.jsonc');
+fs.writeFileSync(rehearsalConfig,JSON.stringify({d1_databases:[{binding:'REHEARSAL_DB',database_name:'sunrise-pdf-restore-test',database_id:testD1Id}]}));
+const run=(script,args,mode='valid',overrides={})=>spawnSync(process.execPath,[path.join(repo,'scripts',script),...args],{cwd:temp,encoding:'utf8',shell:false,timeout:15000,env:{...process.env,WRANGLER_BIN:process.execPath,FIXTURE_LOG:log,FIXTURE_MODE:mode,FIXTURE_EXPORT:privateSQL,WRANGLER_REHEARSAL_CONFIG:rehearsalConfig,REHEARSAL_D1_ID:testD1Id,...overrides}});
 const calls=()=>fs.existsSync(log)?fs.readFileSync(log,'utf8').trim().split('\n').filter(Boolean).map(x=>JSON.parse(x)):[];
 const reset=()=>fs.writeFileSync(log,'');
 const noPrivateOutput=result=>assert(!(result.stdout+result.stderr).includes('SYNTHETIC_PRIVATE_VALUE'));
@@ -26,8 +29,20 @@ try{
   reset();result=run('d1_restore_rehearsal.cjs',[source,'sunrise-pdf-restore-test'],mode);assert.notEqual(result.status,0,mode);noPrivateOutput(result);assert(!calls().some(x=>x.includes('--file')),mode+' must not import');
  }
  reset();result=run('d1_restore_rehearsal.cjs',[source,'production-database']);assert.notEqual(result.status,0);assert.equal(calls().length,0);
+ // Bad isolated Wrangler settings must fail before any remote D1 invocation.
+ for(const bad of [
+  {database_name:'sunrise-pdf-editor-web-contact',binding:'REHEARSAL_DB',database_id:testD1Id},
+  {database_name:'sunrise-pdf-restore-test',binding:'DB',database_id:testD1Id},
+  {database_name:'sunrise-pdf-restore-test',binding:'REHEARSAL_DB',database_id:'efaab4d4-9d79-46dd-b037-461c4cd4c683'}
+ ]){
+  const badPath=path.join(temp,'bad-isolated-config.jsonc');
+  fs.writeFileSync(badPath,JSON.stringify({d1_databases:[bad]}));
+  reset();result=run('d1_restore_rehearsal.cjs',[source,'sunrise-pdf-restore-test'],'valid',{WRANGLER_REHEARSAL_CONFIG:badPath,REHEARSAL_D1_ID:bad.database_id});
+  assert.notEqual(result.status,0,'Unsafe isolated D1 config must be rejected');assert.equal(calls().length,0);
+ }
+ reset();result=run('d1_restore_rehearsal.cjs',[source,'sunrise-pdf-restore-test'],'valid',{WRANGLER_REHEARSAL_CONFIG:''});assert.notEqual(result.status,0);assert.equal(calls().length,0);
  reset();result=run('d1_restore_rehearsal.cjs',[source,'sunrise-pdf-restore-test']);assert.equal(result.status,0,result.stderr);noPrivateOutput(result);
- const restore=JSON.parse(result.stdout);assert.equal(restore.productionModified,false);assert.equal(restore.fullAcceptanceVerified,false);assert.equal(Object.keys(restore.counts).length,6);assert.equal(calls().filter(x=>x.includes('--file')).length,1);
+ const restore=JSON.parse(result.stdout);assert.equal(restore.productionModified,false);assert.equal(restore.fullAcceptanceVerified,false);assert.equal(Object.keys(restore.counts).length,6);assert.equal(restore.backupSha256,createHash('sha256').update(privateSQL).digest('hex'));assert.match(restore.receipt,/^r12:[a-f0-9]{64}:[0-9a-z]+(?:,[0-9a-z]+){5}$/);assert.equal(calls().filter(x=>x.includes('--file')).length,1);assert(calls().every(x=>x.includes('--config')&&x.includes(rehearsalConfig)),'All remote D1 calls must use the isolated config');
  const python=process.env.SUNRISE_PYTHON||(process.platform==='win32'?'python':'python3');
  const db=path.join(temp,'private source.sqlite'),backup=path.join(temp,'new backup.sqlite');
  let py=spawnSync(python,['-c',"import sqlite3,sys;c=sqlite3.connect(sys.argv[1]);c.execute('CREATE TABLE inquiries(message TEXT)');c.execute('INSERT INTO inquiries VALUES (?)',('SYNTHETIC_PRIVATE_VALUE',));c.commit();c.close()",db],{encoding:'utf8',shell:false});assert.equal(py.status,0,py.stderr);
