@@ -16,7 +16,7 @@ on:
         required: true
         type: string
       isolated_restore_receipt:
-        description: Verifiable receipt from isolated D1 restore rehearsal
+        description: R12 receipt from private SQL import into sunrise-pdf-restore-test
         required: true
         type: string
 permissions:
@@ -59,10 +59,7 @@ jobs:
           const assert=require('node:assert/strict');
           assert(/^[a-f0-9]{64}$/i.test(process.env.BACKUP_HASH||''),
             'Private D1 backup SHA-256 evidence is required');
-          const receipt=(process.env.RESTORE_RECEIPT||'').trim();
-          assert(receipt.length>=12&&receipt.length<=256,
-            'Verified isolated restoration receipt is required');
-          console.log('Backup/restoration evidence format checked; operator must retain the private records');
+          console.log('Backup hash format checked; operator must retain the private SQL outside GitHub');
           NODE
       - run: npm ci --ignore-scripts
       - name: Revalidate source contracts and tracked development progress
@@ -73,10 +70,48 @@ jobs:
         run: npm run build
       - name: Install pinned Wrangler for D1 preflight and release
         run: npm install --no-save --package-lock=false --ignore-scripts wrangler@4.156.0
+      - name: Prepare isolated D1 verification config (not production)
+        env:
+          REHEARSAL_D1_ID: ${{ secrets.CLOUDFLARE_REHEARSAL_D1_DATABASE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$REHEARSAL_D1_ID"
+          umask 077
+          node - <<'NODE'
+          const fs=require('node:fs'),path=require('node:path');
+          const id=process.env.REHEARSAL_D1_ID;
+          if(!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id))
+            throw Error('Approved rehearsal D1 identifier missing or invalid');
+          const config={name:'sunrise-pdf-restore-review',compatibility_date:'2026-10-30',
+            d1_databases:[{binding:'REHEARSAL_DB',database_name:'sunrise-pdf-restore-test',database_id:id}]};
+          fs.writeFileSync(path.join(process.env.RUNNER_TEMP,'sunrise-rehearsal-d1.jsonc'),JSON.stringify(config),{mode:0o600,flag:'wx'});
+          NODE
+      - name: Verify isolated D1 restore receipt against remote counts (read-only)
+        env:
+          WRANGLER_BIN: ./node_modules/.bin/wrangler
+          WRANGLER_REHEARSAL_CONFIG: ${{ runner.temp }}/sunrise-rehearsal-d1.jsonc
+          REHEARSAL_D1_ID: ${{ secrets.CLOUDFLARE_REHEARSAL_D1_DATABASE_ID }}
+        run: node scripts/check-release-recovery-evidence.cjs
       - name: Verify remote production D1 schema (read-only)
         env:
           WRANGLER_BIN: ./node_modules/.bin/wrangler
         run: npm run release:schema
+      - name: Verify publication restore audit migration on production D1 (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/wrangler d1 execute sunrise-pdf-editor-web-contact --remote --command "SELECT name FROM sqlite_master WHERE name IN ('admin_publication_restore_runs','admin_publication_restore_steps','admin_publication_restore_recent') ORDER BY name" --json > /tmp/sunrise-release-migration-check.json
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const data=JSON.parse(fs.readFileSync('/tmp/sunrise-release-migration-check.json','utf8'));
+          const items=data?.[0]?.results;
+          const actual=new Set(Array.isArray(items)?items.map(x=>x.name):[]);
+          const required=['admin_publication_restore_runs','admin_publication_restore_steps','admin_publication_restore_recent'];
+          if(data?.[0]?.success!==true||required.some(x=>!actual.has(x)))
+            throw Error('0016 publication restoration audit migration must be applied with separate approval before production release');
+          console.log('Publication restore audit schema present');
+          NODE
       - name: Require existing production Worker secret binding
         shell: bash
         run: |
@@ -85,9 +120,11 @@ jobs:
           node - <<'NODE'
           const fs=require('node:fs');
           const names=JSON.parse(fs.readFileSync('/tmp/sunrise-worker-secret-names.json','utf8'));
-          if(!Array.isArray(names)||!names.some(x=>x?.name==='DEPLOYMENT_EVENT_SECRET'))
-            throw new Error('운영 Worker에 DEPLOYMENT_EVENT_SECRET 바인딩이 없어 배포를 차단합니다.');
-          console.log('Production Worker deployment event secret binding is present');
+          const required=['DEPLOYMENT_EVENT_SECRET','PUBLICATION_RESTORE_SIGNING_KEY'];
+          for(const secret of required)
+            if(!Array.isArray(names)||!names.some(x=>x?.name===secret))
+              throw new Error('운영 Worker에 '+secret+' 바인딩이 없어 배포를 차단합니다.');
+          console.log('Production Worker required secret binding names are present');
           NODE
       - name: Verify Worker bundle without publishing
         run: ./node_modules/.bin/wrangler deploy --dry-run
