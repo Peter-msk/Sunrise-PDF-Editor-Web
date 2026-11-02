@@ -1584,6 +1584,8 @@
         pointer-events: auto;
       }
       .download-fallback a { color: var(--primary); text-decoration: underline; font-weight: 700; }
+      .mobile-file-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+      .mobile-file-actions .dialog-btn { min-height: 48px; white-space: normal; }
 
       #modalBackdrop .modal-footer { padding: 8px; }
       #modalBackdrop .modal-footer-right { width: 100%; justify-content: flex-end; }
@@ -1841,9 +1843,9 @@
           <i class="fa-solid fa-chevron-right"></i>
         </button>
       </div>
-      <button type="button" class="mobile-nav-btn" id="mobMergeBtn">
-        <i class="fa-solid fa-object-group"></i>
-        <span>PDF병합</span>
+      <button type="button" class="mobile-nav-btn" id="mobFileBtn" aria-label="PDF 열기·저장·병합">
+        <i class="fa-solid fa-folder-open"></i>
+        <span>파일</span>
       </button>
       <button type="button" class="mobile-nav-btn" id="mobRightPaneBtn">
         <i class="fa-solid fa-sliders"></i>
@@ -9619,6 +9621,36 @@
       return true;
     }
 
+    // Touch-friendly file actions are always reachable without horizontal
+    // scrolling the desktop command bar. Keep the existing command dispatcher
+    // as the only implementation of PDF open, save and merge.
+    function openMobileFileActionsModal() {
+      const canSave=Boolean(activeDoc()&&!activeDoc().operationBusy);
+      openModal({
+        title:"PDF 파일 작업",icon:"fa-folder-open",width:"360px",
+        bodyHtml:`<div class="mobile-file-actions">
+          <button type="button" id="mobileFileOpen" class="dialog-btn primary">PDF 열기</button>
+          <button type="button" id="mobileFileSave" class="dialog-btn" ${canSave?"":"disabled"}>다른 이름으로 저장</button>
+          <button type="button" id="mobileFileMerge" class="dialog-btn">PDF 병합</button>
+        </div>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button id="mobileFileCancel" class="dialog-btn" type="button">닫기</button>
+        </div>`,
+        onMount:()=>{
+          const action=(id,command)=>document.getElementById(id).addEventListener("click",()=>{
+            closeModal();
+            // Called directly from the user's tap; PDF file picker must keep
+            // user activation on mobile browsers.
+            executeCommand(command);
+          });
+          action("mobileFileOpen","openPdf");
+          action("mobileFileSave","saveAs");
+          action("mobileFileMerge","mergePdf");
+          document.getElementById("mobileFileCancel").addEventListener("click",closeModal);
+        }
+      });
+    }
+
     function wireEvents() {
       // Top quick bar buttons
       document.getElementById("quickOpenBtn").addEventListener("click", () => executeCommand("openPdf"));
@@ -9680,7 +9712,7 @@
       document.getElementById("mobLeftPaneBtn").addEventListener("click", () => toggleLeftPane());
       document.getElementById("mobRightPaneBtn").addEventListener("click", () => toggleRightPane());
       document.getElementById("mobRibbonBtn").addEventListener("click", () => toggleRibbonVisibility());
-      document.getElementById("mobMergeBtn").addEventListener("click", () => openMergePdfModal());
+      document.getElementById("mobFileBtn").addEventListener("click", openMobileFileActionsModal);
       document.getElementById("mobPrevPageBtn").addEventListener("click", () => {
         const doc = activeDoc();
         if (doc && doc.currentPage > 0) {
