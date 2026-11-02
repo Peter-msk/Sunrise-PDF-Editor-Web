@@ -12,6 +12,7 @@ el('splitRangeInput').value='1-2';
 el('splitSizeInput').value='1';
 el('splitReadyResults').isConnected=true;
 el('splitReadyResults').replaceChildren=()=>{};
+el('splitReadyResults').querySelectorAll=()=>[];
 el('modalBackdrop').classList={contains:()=>true};
 el('reorderInput').value='2, 1';el('blankPosSelect').value='after';el('blankSizeSelect').value='a4p';el('blankCountInput').value='1';
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseEditState:{},SunriseKoreanFont:{}},state,Set,Array,JSON,Uint8Array,
