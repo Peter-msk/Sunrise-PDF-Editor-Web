@@ -1,7 +1,7 @@
 // Medium-sized workload, deterministic cancellation, and safe byte accounting.
 const assert=require('node:assert/strict');
 const PDFLib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
-const {process:processBatch,reserveOutputBytes}=require('../src/assets/sunrise-batch-pages.js');
+const {process:processBatch,reserveOutputBytes,verifyPages}=require('../src/assets/sunrise-batch-pages.js');
 const MiB=1024*1024;
 async function main(){
  assert.equal(reserveOutputBytes(0,1),1);
@@ -107,11 +107,62 @@ async function main(){
  assert.equal(cancelledMergeResults.length,0,'mid-merge cancellation must not publish a partial document');
  assert.equal(cancelledMergeErrors.length,0,'cancellation must not be reported as PDF corruption');
 
+ // Geometry snapshots must be validated just as strictly as live pages.
+ // A merged PDF may drop its source document references before final reopen.
+ const snapPage=verifiedMerge.getPage(0);
+ const boxMethods=['getMediaBox','getCropBox','getBleedBox','getTrimBox','getArtBox'];
+ const geometry={
+   rotation:snapPage.getRotation().angle,
+   boxes:Object.fromEntries(boxMethods.map(method=>{
+     const box=snapPage[method]();
+     return [method,{x:box.x,y:box.y,width:box.width,height:box.height}];
+   }))
+ };
+ assert.doesNotThrow(()=>verifyPages([[geometry]],[snapPage]));
+ assert.throws(()=>verifyPages([[{...geometry,rotation:90}]],[snapPage]),/회전/);
+ assert.throws(()=>verifyPages([[{
+   ...geometry,boxes:{...geometry.boxes,getCropBox:{...geometry.boxes.getCropBox,width:100}}
+ }]],[snapPage]),/getCropBox/);
+
+ // Sustained real-pdf-lib 240-page merge, with sampled RSS/array buffers.
+ // These observations are diagnostic, never a brittle fixed memory cap.
+ const big=await PDFLib.PDFDocument.create();
+ for(let i=0;i<120;i++){
+   const p=big.addPage([420+(i%2)*100,595+(i%3)*25]);
+   p.drawText('Appendix '+i,{x:35,y:520,size:12});
+   if(i%7===0)p.setRotation(PDFLib.degrees(90));
+ }
+ const bigBytes=await big.save();
+ const largeInput={name:'appendix.pdf',size:bigBytes.byteLength,bytes:bigBytes};
+ let observedRss=0,observedArrayBuffers=0,observedCount=0,largeResult=null;
+ const sample=()=>{
+   const usage=process.memoryUsage();
+   observedRss=Math.max(observedRss,usage.rss);
+   observedArrayBuffers=Math.max(observedArrayBuffers,usage.arrayBuffers||0);
+   observedCount++;
+ };
+ const largeStart=Date.now(),largeErrors=[];
+ await processBatch([input,largeInput],{mode:'merge'},{
+   cancelled:()=>false,progress:sample,pageProgress:sample,
+   result:item=>{sample();largeResult=item},
+   error:item=>largeErrors.push(item)
+ },options);
+ const largeElapsed=Date.now()-largeStart;
+ assert.equal(largeErrors.length,0,JSON.stringify(largeErrors));
+ assert(largeResult?.bytes?.byteLength>0,'large merge must provide exactly one valid output');
+ const largeSaved=await PDFLib.PDFDocument.load(largeResult.bytes);
+ assert.equal(largeSaved.getPageCount(),240);
+ assert.equal(largeSaved.getPage(120).getMediaBox().width,420);
+ assert.equal(largeSaved.getPage(127).getRotation().angle,90);
+ assert(observedCount>=30,'long merge must emit repeated observable checkpoints');
+ assert(Number.isFinite(observedRss)&&observedRss>0);
+ assert(Number.isFinite(observedArrayBuffers)&&observedArrayBuffers>=0);
+
  // Fail-fast when result count would be greater than the allowed 50 files.
  outcomes.length=0;failures.length=0;
  await processBatch([input],{mode:'split',pagesPerFile:2},handlers,options);
  assert.equal(outcomes.length,0);
  assert.match(failures[0]?.message||'',/50개/);
- console.log('PASS: 120-page split workload, safe output byte accounting, timer-driven split/merge cancellation without partial files, page progress, output count cap; elapsed='+elapsed+'ms');
+ console.log('PASS: split 120 pages, merge 240 pages, numeric geometry snapshots, atomic cancellation, safe byte accounting; split='+elapsed+'ms merge='+largeElapsed+'ms sampled peak RSS MiB='+Math.round(observedRss/MiB)+' arrayBuffers MiB='+Math.round(observedArrayBuffers/MiB));
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

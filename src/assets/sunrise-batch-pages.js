@@ -56,16 +56,32 @@
     }
     return pages;
   }
+  const PAGE_BOX_METHODS=['getMediaBox','getCropBox','getBleedBox','getTrimBox','getArtBox'];
+  // Store only numeric page geometry for merging. Retaining source PDFPage
+  // objects through output verification would also retain entire source PDF
+  // contexts, even after that source has been copied into the target.
+  function snapshotPageGeometry(page){
+    const boxes={};
+    for(const method of PAGE_BOX_METHODS){
+      const box=page[method]();
+      boxes[method]={x:box.x,y:box.y,width:box.width,height:box.height};
+    }
+    return {rotation:page.getRotation().angle,boxes};
+  }
   function verifyPages(sources,actual){
     const expected=sources.flat();
     if(actual.length!==expected.length)throw new Error('저장한 PDF의 페이지 수가 일치하지 않습니다.');
     for(let index=0;index<expected.length;index++){
-      const before=expected[index],after=actual[index];
-      if(before.getRotation().angle!==after.getRotation().angle)
+      // Existing page-object callers remain supported; merge supplies small
+      // snapshots so source PDF contexts need not survive until verification.
+      const before=typeof expected[index]?.getRotation==='function'
+        ? snapshotPageGeometry(expected[index]):expected[index];
+      const after=snapshotPageGeometry(actual[index]);
+      if(before?.rotation!==after.rotation)
         throw new Error('결과 '+(index+1)+'쪽의 회전이 달라졌습니다.');
-      for(const method of ['getMediaBox','getCropBox','getBleedBox','getTrimBox','getArtBox']){
-        const a=before[method](),b=after[method]();
-        if(!['x','y','width','height'].every(k=>Number.isFinite(a[k])&&Number.isFinite(b[k])&&Math.abs(a[k]-b[k])<.01))
+      for(const method of PAGE_BOX_METHODS){
+        const a=before?.boxes?.[method],b=after.boxes[method];
+        if(!a||!['x','y','width','height'].every(k=>Number.isFinite(a[k])&&Number.isFinite(b[k])&&Math.abs(a[k]-b[k])<.01))
           throw new Error('결과 '+(index+1)+'쪽 '+method+' 위치·크기가 달라졌습니다.');
       }
     }
@@ -153,8 +169,10 @@
       if(cancelled())return;
       try{
         const loaded=await readSource(file,opts);
-        sources.push(loaded);expected.push(...loaded.pages);
-        if(expected.length>MAX_MERGED_PAGES)throw new Error('병합 결과는 250쪽을 초과할 수 없습니다.');
+        if(expected.length+loaded.pages.length>MAX_MERGED_PAGES)
+          throw new Error('병합 결과는 250쪽을 초과할 수 없습니다.');
+        expected.push(...loaded.pages.map(snapshotPageGeometry));
+        sources.push({pdf:loaded.pdf,pageCount:loaded.pages.length,name:loaded.name});
       }catch(e){if(cancelled())return;error({index:i,name:file.name,message:e?.message||'입력 PDF 검증에 실패했습니다.'});return}
     }
     if(cancelled())return;
@@ -162,9 +180,10 @@
       const merged=await pdfCtor.create();
       merged.setTitle('Sunrise PDF Editor - Merged PDF');
       let added=0;
-      for(const input of sources){
+      for(let sourceIndex=0;sourceIndex<sources.length;sourceIndex++){
         if(cancelled())return;
-        const indices=Array.from({length:input.pages.length},(_,i)=>i);
+        const input=sources[sourceIndex];
+        const indices=Array.from({length:input.pageCount},(_,i)=>i);
         // Copy each source once: splitting the copy into multiple calls would
         // duplicate shared PDF resources and could increase output size.
         const copied=await merged.copyPages(input.pdf,indices);
@@ -177,6 +196,9 @@
           // Give the UI a chance to process a Cancel click after each group.
           await yieldToBrowser();
         }
+        // The merged document now owns the copied pages. Release the
+        // processed source's PDF context before moving to the next file.
+        sources[sourceIndex]=null;
       }
       if(cancelled())return;
       const bytes=await verifyResult(merged,expected,opts);
