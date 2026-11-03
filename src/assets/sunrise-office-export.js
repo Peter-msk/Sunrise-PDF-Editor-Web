@@ -113,29 +113,128 @@
    ['word/document.xml',doc]
   ]);
  }
- function xlsx(rawPages){
-  const pages=normalizePages(rawPages),rows=[['페이지','텍스트']];
-  pages.forEach((text,i)=>{
-   for(const line of text.replace(/\r\n?/g,'\n').split('\n'))rows.push([String(i+1),line]);
-  });
+ // Keep every exported cell as a literal string: formula-like PDF text
+ // must not execute as an Excel formula.
+ function xlsxMatrix(rows,sheetName){
   if(rows.length>30000)throw Error('Excel 변환 결과가 3만 행을 초과합니다.');
-  const cell=(col,r,value)=>{
-   if(value.length>32767)throw Error('Excel 한 셀에 32,767자를 초과했습니다. 내용을 자르지 않고 변환을 중단합니다.');
-   return '<c r="'+col+r+'" t="inlineStr"><is><t xml:space="preserve">'+
-    escapeXml(value)+'</t></is></c>';
+  const column=idx=>{
+   let n=idx+1,out='';
+   while(n>0){out=String.fromCharCode(65+(n-1)%26)+out;n=Math.floor((n-1)/26)}
+   return out;
+  };
+  const cell=(col,row,value)=>{
+   const text=String(value??'');
+   if(text.length>32767)throw Error('Excel 한 셀에 32,767자를 초과했습니다. 내용을 자르지 않고 변환을 중단합니다.');
+   return '<c r="'+column(col)+row+'" t="inlineStr"><is><t xml:space="preserve">'+
+    escapeXml(text)+'</t></is></c>';
   };
   const sheet=header+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
-   rows.map((row,i)=>'<row r="'+(i+1)+'">'+cell('A',i+1,row[0])+cell('B',i+1,row[1])+'</row>').join('')+
+   rows.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((v,j)=>v===null?'':cell(j,i+1,v)).join('')+'</row>').join('')+
    '</sheetData></worksheet>';
   return zip([
    ['[Content_Types].xml',header+ct+ctRels+ctXml+
     '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
     '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'],
    ['_rels/.rels',header+relHead+'<Relationship Id="rId1" Type="'+relType+'officeDocument" Target="xl/workbook.xml"/></Relationships>'],
-   ['xl/workbook.xml',header+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="PDF Text" sheetId="1" r:id="rId1"/></sheets></workbook>'],
+   ['xl/workbook.xml',header+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'+sheetName+'" sheetId="1" r:id="rId1"/></sheets></workbook>'],
    ['xl/_rels/workbook.xml.rels',header+relHead+'<Relationship Id="rId1" Type="'+relType+'worksheet" Target="worksheets/sheet1.xml"/></Relationships>'],
    ['xl/worksheets/sheet1.xml',sheet]
   ]);
  }
- return {docx,xlsx,normalizePages,pageTextFromItems};
+ function xlsx(rawPages){
+  const pages=normalizePages(rawPages),rows=[['페이지','텍스트']];
+  pages.forEach((text,i)=>{
+   for(const line of text.replace(/\r\n?/g,'\n').split('\n'))rows.push([String(i+1),line]);
+  });
+  return xlsxMatrix(rows,'PDF Text');
+ }
+
+ // Opt-in Excel export for PDF pages with a *regular* multi-column text grid.
+ // No claim of recovering original borders, merged cells or source spreadsheets.
+ // Irregular/rotated text fails rather than silently shifting data between cells.
+ function xlsxColumns(rawPages){
+  if(!Array.isArray(rawPages)||rawPages.length<1||rawPages.length>MAX_PAGES)
+   throw Error('최대 120페이지까지 변환합니다.');
+  // Reuse strict Unicode/text-size and per-page text limits.
+  normalizePages(rawPages.map(items=>pageTextFromItems(items)));
+  const exported=[],columnCounts=[];
+  let detected=false;
+  for(let pageIndex=0;pageIndex<rawPages.length;pageIndex++){
+   // PDF.js emits synthetic space-only text items across wide column gaps.
+   // They are layout separators, not table cells: preserve the adjacent text
+   // while using each real item's X coordinate for column placement.
+   const items=rawPages[pageIndex].filter(item=>item&&typeof item.str==='string'&&item.str.trim().length);
+   const lines=[];
+   for(const item of items){
+    const v=item.transform;
+    if(!Array.isArray(v)||v.length<6||!Number.isFinite(item.width)||item.width<0||
+       ![v[0],v[1],v[2],v[3],v[4],v[5]].every(Number.isFinite)||
+       Math.abs(v[1])>0.1||Math.abs(v[2])>0.1||v[0]<=0||v[3]<=0)
+     throw Error((pageIndex+1)+'쪽에 회전 또는 위치 미확인 텍스트가 있어 표 열을 안전하게 추정할 수 없습니다.');
+    const x=v[4],y=v[5],tolerance=Math.max(2,Math.abs(v[3])*0.28);
+    let line=lines.find(row=>Math.abs(row.y-y)<=tolerance);
+    if(!line){line={y,entries:[]};lines.push(line)}
+    line.entries.push({x,width:item.width,font:Math.abs(v[3]),text:item.str.normalize('NFC')});
+   }
+   lines.sort((a,b)=>b.y-a.y);
+   const rows=lines.map(line=>{
+    const sorted=line.entries.sort((a,b)=>a.x-b.x),cells=[];
+    for(const entry of sorted){
+     const last=cells[cells.length-1];
+     if(!last){cells.push({x:entry.x,right:entry.x+entry.width,text:entry.text});continue;}
+     const gap=entry.x-last.right;
+     if(gap< -2)throw Error('PDF 텍스트가 서로 겹쳐 표 열을 안전하게 분리할 수 없습니다.');
+     if(gap>Math.max(16,entry.font*1.7)){
+      cells.push({x:entry.x,right:entry.x+entry.width,text:entry.text});
+     }else{
+      last.text+=(gap>1.5&&!/\s$/.test(last.text)&&!/^\s/.test(entry.text)?' ':'')+entry.text;
+      last.right=entry.x+entry.width;
+     }
+    }
+    return cells;
+   });
+   const aligned=rows.filter(row=>row.length>=2);
+   let anchors=[];
+   if(aligned.length>=2){
+    const reference=aligned.reduce((a,b)=>b.length>a.length?b:a,aligned[0]);
+    if(reference.length>10)throw Error('한 페이지의 표 열은 최대 10개까지 추정합니다.');
+    anchors=reference.map(cell=>cell.x);
+    let confirmed=0;
+    for(const row of aligned){
+     if(row.length!==anchors.length)continue;
+     const match=row.every((cell,j)=>Math.abs(cell.x-anchors[j])<=18);
+     if(match)confirmed++;
+    }
+    if(confirmed>=2)detected=true;
+    else anchors=[];
+   }
+   if(!anchors.length){
+    // Non-table pages remain readable as one-column text in the same export.
+    // A document with no recognized table at all is rejected below.
+    for(const row of rows)exported.push([String(pageIndex+1),row.map(cell=>cell.text).join(' ')]);
+    columnCounts.push(1);
+    continue;
+   }
+   columnCounts.push(anchors.length);
+   for(const row of rows){
+    const values=Array(anchors.length).fill(null);
+    for(const cell of row){
+     let best=0,dist=Infinity;
+     anchors.forEach((a,i)=>{const dx=Math.abs(cell.x-a);if(dx<dist){best=i;dist=dx}});
+     if(dist>18){
+      if(row.length===1)best=0; // heading or note, kept as text
+      else throw Error('표의 열 좌표가 불규칙하여 원문을 잘못 배치할 수 있습니다.');
+     }
+     if(values[best]!==null)throw Error('여러 텍스트가 동일 Excel 셀에 충돌합니다.');
+     values[best]=cell.text;
+    }
+    exported.push([String(pageIndex+1),...values]);
+   }
+  }
+  if(!detected)throw Error('규칙적인 다열 PDF 표를 찾지 못했습니다. 기존 Excel 텍스트 출력을 이용해 주세요.');
+  const cols=Math.max(...columnCounts);
+  const headerRow=['페이지',...Array.from({length:cols},(_,i)=>'열 '+(i+1))];
+  return xlsxMatrix([headerRow,...exported],'PDF Columns');
+ }
+ return {docx,xlsx,xlsxColumns,normalizePages,pageTextFromItems};
 });
