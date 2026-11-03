@@ -121,22 +121,42 @@
       }
     }
   }
-  async function readSource(file,opts){
+  function stopIfCancelled(cancelled){
+    if(cancelled?.()){
+      const error=new Error('일괄 PDF 작업이 취소되었습니다.');
+      error.name='AbortError';
+      throw error;
+    }
+  }
+  async function readSource(file,opts,cancelled){
+    stopIfCancelled(cancelled);
     const bytes=await opts.readFile(file);
+    // A pending browser File.arrayBuffer() read cannot be interrupted. Avoid
+    // expensive parsing if the user cancelled before the read resolved.
+    stopIfCancelled(cancelled);
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||
        !bytes.byteLength||bytes.byteLength!==file.size)
       throw new Error('입력 PDF의 실제 읽은 바이트 수가 파일 크기와 일치하지 않습니다.');
     const pdf=await opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
+    stopIfCancelled(cancelled);
     const pages=checkSource(pdf,opts.PDFLib);
+    stopIfCancelled(cancelled);
     return {pdf,pages,name:file.name};
   }
-  async function verifyResult(pdf,expectedPages,opts){
+  async function verifyResult(pdf,expectedPages,opts,cancelled){
+    stopIfCancelled(cancelled);
     const bytes=await pdf.save({updateFieldAppearances:false});
+    // Serialization is not cancellable once started; do not parse a result
+    // which the caller has already discarded.
+    stopIfCancelled(cancelled);
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength)
       throw new Error('저장 결과의 바이트를 읽을 수 없거나 비어 있습니다.');
     const restored=await opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
+    stopIfCancelled(cancelled);
     checkSource(restored,opts.PDFLib,MAX_MERGED_PAGES);
+    stopIfCancelled(cancelled);
     verifyPages([expectedPages],restored.getPages());
+    stopIfCancelled(cancelled);
     return bytes;
   }
   async function process(files,settings,handlers,opts){
@@ -162,7 +182,7 @@
         await yieldToBrowser();
         if(cancelled())break;
         try{
-          const source=await readSource(file,opts);
+          const source=await readSource(file,opts,cancelled);
           const chunkCount=Math.ceil(source.pages.length/perFile);
           if(emitted+chunkCount>MAX_OUTPUTS)throw new Error('이번 작업의 결과 파일 수가 최대 50개를 초과합니다. 출력당 페이지 수를 늘려 주세요.');
           const staged=[];
@@ -179,8 +199,9 @@
               if(typeof value==='string'&&value)pdf[setter](value);
             }
             const copied=await pdf.copyPages(source.pdf,range);
+            stopIfCancelled(cancelled);
             copied.forEach(page=>pdf.addPage(page));
-            const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts);
+            const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts,cancelled);
             reserveOutputBytes(emittedBytes+stagedBytes,bytes.byteLength);
             stagedBytes+=bytes.byteLength;
             staged.push({index:i,part:chunk+1,startPage:start+1,endPage:end,totalParts:chunkCount,name:file.name,bytes});
@@ -203,7 +224,7 @@
       await yieldToBrowser();
       if(cancelled())return;
       try{
-        const loaded=await readSource(file,opts);
+        const loaded=await readSource(file,opts,cancelled);
         if(expected.length+loaded.pages.length>MAX_MERGED_PAGES)
           throw new Error('병합 결과는 250쪽을 초과할 수 없습니다.');
         expected.push(...loaded.pages.map(snapshotPageGeometry));
@@ -222,6 +243,7 @@
         // Copy each source once: splitting the copy into multiple calls would
         // duplicate shared PDF resources and could increase output size.
         const copied=await merged.copyPages(input.pdf,indices);
+        stopIfCancelled(cancelled);
         for(let first=0;first<copied.length;first+=PAGE_YIELD_INTERVAL){
           if(cancelled())return;
           const last=Math.min(first+PAGE_YIELD_INTERVAL,copied.length);
@@ -236,7 +258,7 @@
         sources[sourceIndex]=null;
       }
       if(cancelled())return;
-      const bytes=await verifyResult(merged,expected,opts);
+      const bytes=await verifyResult(merged,expected,opts,cancelled);
       if(!cancelled())result({index:0,name:'Sunrise_batch_merged.pdf',bytes,startPage:1,endPage:expected.length,totalParts:1,part:1});
     }catch(e){if(!cancelled())error({index:-1,name:'병합 결과',message:e?.message||'병합 결과 검증에 실패했습니다.'})}
   }
