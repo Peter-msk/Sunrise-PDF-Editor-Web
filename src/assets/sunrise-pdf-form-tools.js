@@ -23,6 +23,58 @@
     supportsDigitalSignatures: false
   });
   const specialCatalogNames = ['Perms', 'DSS'];
+  const PAGE_BOX_GETTERS = Object.freeze([
+    'getMediaBox', 'getCropBox', 'getBleedBox', 'getTrimBox', 'getArtBox'
+  ]);
+
+  // A form-only edit must never alter any page's rotation or printable boxes.
+  // This snapshot is independent of the original mutable PDFPage objects.
+  function snapshotPageGeometry(page) {
+    const rotation = page.getRotation().angle;
+    if (!Number.isFinite(rotation)) throw new Error('원본 페이지 회전값이 잘못되었습니다.');
+    const boxes = PAGE_BOX_GETTERS.map(getter => {
+      const box = page[getter]();
+      const values = ['x', 'y', 'width', 'height'].map(key => box[key]);
+      if (!values.every(Number.isFinite) || values[2] <= 0 || values[3] <= 0) {
+        throw new Error('원본 페이지의 MediaBox·CropBox 등 구조가 잘못되었습니다.');
+      }
+      return values;
+    });
+    return { rotation, boxes };
+  }
+  function verifyPageGeometry(expected, savedPages) {
+    if (expected.length !== savedPages.length) {
+      throw new Error('양식 저장 중 PDF 페이지 수가 변경되었습니다.');
+    }
+    for (const [index, page] of savedPages.entries()) {
+      const actual = snapshotPageGeometry(page);
+      if (Math.abs(actual.rotation - expected[index].rotation) > 0.01) {
+        throw new Error(`양식 저장 후 ${index + 1}쪽 회전값이 변경되었습니다.`);
+      }
+      for (let b = 0; b < PAGE_BOX_GETTERS.length; b++) {
+        if (actual.boxes[b].some((value, n) =>
+          Math.abs(value - expected[index].boxes[b][n]) > 0.01)) {
+          throw new Error(`양식 저장 후 ${index + 1}쪽 ${PAGE_BOX_GETTERS[b]} 구조가 변경되었습니다.`);
+        }
+      }
+    }
+  }
+  function snapshotFormFields(form, lib) {
+    return form.getFields().map(field => fieldState(field, lib));
+  }
+  function verifyFormFields(expected, savedForm, lib) {
+    const actual = snapshotFormFields(savedForm, lib);
+    if (expected.length !== actual.length) {
+      throw new Error('저장 후 양식 필드 수가 일치하지 않습니다.');
+    }
+    for (let i = 0; i < expected.length; i++) {
+      // Compare all field names, types, values, dropdown choices and readonly flags.
+      // Values stay in local memory; never disclose form data in error messages.
+      if (JSON.stringify(expected[i]) !== JSON.stringify(actual[i])) {
+        throw new Error(`저장 후 ${i + 1}번째 양식 필드 값·속성이 일치하지 않습니다.`);
+      }
+    }
+  }
 
   function abortIfRequested(cancelled) {
     if (cancelled?.()) {
@@ -226,6 +278,7 @@
       throw new Error(`양식 수정 작업은 1~${MAX_OPERATIONS}개여야 합니다.`);
     }
     const { pdf, pages, lib } = await loadSource(file, opts);
+    const originalGeometry = pages.map(snapshotPageGeometry);
     const form = pdf.getForm();
     const font = await selectAppearanceFont(pdf, lib, opts);
     const hasCustomFont = Boolean(opts.fontBytes);
@@ -250,18 +303,15 @@
       if ((i + 1) % 5 === 0) await yieldToUI();
     }
     abortIfRequested(opts?.cancelled);
-    const expectedNames = form.getFields().map(f => f.getName());
+    const expectedFields = snapshotFormFields(form, lib);
     const bytes = await pdf.save({ updateFieldAppearances: false });
     abortIfRequested(opts?.cancelled);
     const saved = await lib.PDFDocument.load(bytes, { updateMetadata: false });
-    if (saved.getPageCount() !== pages.length) throw new Error('양식 저장 중 PDF 페이지 수가 변경되었습니다.');
-    const restoredNames = saved.getForm().getFields().map(f => f.getName());
-    if (expectedNames.length !== restoredNames.length ||
-        expectedNames.some((name, i) => name !== restoredNames[i])) {
-      throw new Error('저장 후 양식 필드 목록이 일치하지 않습니다.');
-    }
     abortIfRequested(opts?.cancelled);
-    return { bytes, pageCount: pages.length, fieldCount: expectedNames.length };
+    verifyPageGeometry(originalGeometry, saved.getPages());
+    verifyFormFields(expectedFields, saved.getForm(), lib);
+    abortIfRequested(opts?.cancelled);
+    return { bytes, pageCount: pages.length, fieldCount: expectedFields.length };
   }
   return { inspect, apply, MAX_OPERATIONS, FORM_SCOPE,
     SUPPORTED_FIELD_TYPES: Object.freeze([...SAFE_FIELD_TYPES]) };
