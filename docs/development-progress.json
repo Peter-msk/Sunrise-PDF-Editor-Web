@@ -288,11 +288,11 @@
       "id": "USR-19",
       "name": "모바일 UX",
       "phase": 3,
-      "implementation": 65,
-      "automated": 65,
+      "implementation": 68,
+      "automated": 70,
       "practical": 10,
       "deployment": 35,
-      "note": "모바일 하단 파일 메뉴를 추가해 PDF 열기·다른 이름으로 저장·병합을 터치로 실행, 문서 미개방 시 저장 버튼 비활성화. 실제 모바일 터치 에뮬레이션의 브라우저 FileChooser 호출·2쪽 페이지 이동·서랍 닫기·Save As 다운로드/디스크 PDF 재열기·병합 창 진입을 Linux Chromium/Windows Chrome·Edge에서 검증(PR #41, Actions #41407776399 전체 4/4 PASS). iOS Safari/Android 실기기와 외부 고객 PDF·운영 수용은 여전히 미완료."
+      "note": "모바일 하단 파일 메뉴를 추가해 PDF 열기·다른 이름으로 저장·병합을 터치로 실행, 문서 미개방 시 저장 버튼 비활성화. 실제 모바일 터치 에뮬레이션의 브라우저 FileChooser 호출·2쪽 페이지 이동·서랍 닫기·Save As 다운로드/디스크 PDF 재열기·병합 창 진입을 Linux Chromium/Windows Chrome·Edge에서 검증(PR #41, Actions #41407776399 전체 4/4 PASS). iOS Safari/Android 실기기와 외부 고객 PDF·운영 수용은 여전히 미완료. R21: 모바일 하단 쪽 표시를 터치 가능한 직접 페이지 이동 버튼으로 확장, 1~전체 쪽 정수 검사·기존 페이지 선택/렌더 경로 재사용·Enter/취소/문서 변경 보호. PR #52에서 390px 터치 에뮬레이션의 잘못된 번호 차단, Enter/버튼 이동, 취소 시 상태 유지와 기존 저장/재열기를 Linux Chromium·Windows Chrome/Edge에서 검사. 실제 Android/iOS 기기 및 실무 PDF 수용은 미검증."
     },
     {
       "id": "USR-05",
