@@ -225,7 +225,9 @@
           <legend><label><input type="checkbox" id="sunStampNumberOn" checked> 페이지 번호</label></legend>
           <div class="dialog-form-grid">
             <label for="sunStampTemplate">번호 표시 형식</label><input id="sunStampTemplate" class="dialog-input" value="{page} / {total}">
-            <label for="sunStampNumberStart">시작 번호</label><input id="sunStampNumberStart" class="dialog-input" type="number" min="0" value="1">
+            <label for="sunStampFromPage">삽입 시작 페이지</label><input id="sunStampFromPage" class="dialog-input" type="number" min="1" value="1">
+            <label for="sunStampSkipPages">번호 숨길 페이지</label><input id="sunStampSkipPages" class="dialog-input" placeholder="예: 1-2,5">
+            <label for="sunStampNumberStart">첫 표시 번호</label><input id="sunStampNumberStart" class="dialog-input" type="number" min="0" value="1">
             <label for="sunStampPosition">표시 위치</label><select id="sunStampPosition" class="dialog-select">
               <option value="bottom-center">아래 가운데</option><option value="bottom-left">아래 왼쪽</option>
               <option value="bottom-right">아래 오른쪽</option><option value="top-center">위 가운데</option>
@@ -272,7 +274,9 @@
             pages: $('sunStampRange').value.trim(),
             number: {
               enabled: $('sunStampNumberOn').checked, template: $('sunStampTemplate').value,
-              startAt: Number($('sunStampNumberStart').value), position: $('sunStampPosition').value,
+              startAt: Number($('sunStampNumberStart').value),
+              fromPage: Number($('sunStampFromPage').value), skipPages: $('sunStampSkipPages').value.trim(),
+              position: $('sunStampPosition').value,
               fontSize: Number($('sunStampNumberSize').value), margin: Number($('sunStampMargin').value)
             },
             watermark: {

@@ -936,6 +936,9 @@
     /* Grid tracks take the widest page; center smaller pages within those tracks. */
     #pagesFlow { display: grid; gap: 16px; align-items: start; justify-items: center; flex: none; padding-bottom: 20px; margin-inline: auto; }
     .page-slot { position: relative; background: white; box-shadow: 0 6px 24px rgba(0,0,0,.18); flex: none; }
+    .page-orientation-row { display:grid; grid-auto-flow:column; grid-auto-columns:max-content;
+      align-items:start; justify-items:center; justify-content:center; gap:16px; margin-inline:auto; }
+
     .page-slot > canvas { display: block; width: 100%; height: 100%; }
     .page-preview-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
     .page-preview-overlay * { pointer-events: none !important; }
@@ -1326,12 +1329,22 @@
 
     .modal-body {
       padding: 14px 16px;
+      min-height: 0;
       overflow-y: auto;
+      overflow-x: hidden;
       display: flex;
       flex-direction: column;
       gap: 10px;
       -webkit-overflow-scrolling: touch;
     }
+    /* Flex children must scroll with the modal rather than collapsing to one line. */
+    #modalBody > * { flex-shrink: 0; min-width: 0; }
+    #modalBody textarea.dialog-textarea, #modalBody #maskPlanLines {
+      min-height: 106px; max-width: 100%; resize: vertical; overflow: auto;
+    }
+    #modalBody .dialog-form-grid > input, #modalBody .dialog-form-grid > select { min-width: 0; }
+    #maskPlanPreview { min-width: 0; overflow-wrap: anywhere; }
+
 
     .dialog-info-box {
       padding: 9px 12px;
@@ -3638,6 +3651,22 @@
     }
 
     function viewColumns() { return state.viewMode === "2" ? 2 : state.viewMode === "3" ? 3 : 1; }
+    // Never put landscape and portrait sheets in the same spread row.
+    // Preserve source order; consecutive sheets of the same orientation share rows.
+    function orientationRows(pageSizes, columns) {
+      const rows = [];
+      let row = [], orientation = null;
+      for (let i = 0; i < pageSizes.length; i++) {
+        const size = pageSizes[i] || {width:595.28,height:841.89};
+        const direction = size.width > size.height ? "landscape" : "portrait";
+        if (row.length && (orientation !== direction || row.length >= columns)) {
+          rows.push({orientation, pages:row}); row = [];
+        }
+        orientation = direction; row.push(i);
+      }
+      if (row.length) rows.push({orientation,pages:row});
+      return rows;
+    }
     let flowDoc = null, flowBytes = null, flowKey = "", flowObserver = null, flowEpoch = 0;
     let displayReader = null;
     let flowQueue = [], flowRunning = 0, flowScrollFrame = 0, flowFromScroll = false;
@@ -3707,10 +3736,8 @@
         flowEpoch++; flowQueue = []; flowObserver?.disconnect(); flowVisibleSlots.clear();
         flowDoc = doc; flowBytes = doc.bytes; flowKey = key;
         stage.remove(); flow.replaceChildren();
-        flow.style.gridTemplateColumns = `repeat(${viewColumns()}, max-content)`;
-        const count = state.viewMode === "single" ? 1 : doc.pageCount;
-        for (let n = 0; n < count; n++) {
-          const i = state.viewMode === "single" ? pageIdx : n;
+        flow.style.gridTemplateColumns = "max-content";
+        const makeSlot = i => {
           const size = doc.pageSizes[i] || {width:595.28,height:841.89};
           const slot = document.createElement("div"); slot.className = "page-slot"; slot.dataset.pageIndex = String(i);
           slot.style.width = `${Math.round(size.width * scale)}px`; slot.style.height = `${Math.round(size.height * scale)}px`;
@@ -3719,7 +3746,19 @@
             doc.currentPage = i; doc.selectedPages = new Set([i]); state.selectedInsertId = null;
             renderCurrentPageCanvas();
           });
-          flow.appendChild(slot);
+          return slot;
+        };
+        if (viewColumns() > 1) {
+          for (const group of orientationRows(doc.pageSizes, viewColumns())) {
+            const row = document.createElement("div");
+            row.className = "page-orientation-row";
+            row.dataset.orientation = group.orientation;
+            for (const i of group.pages) row.appendChild(makeSlot(i));
+            flow.appendChild(row);
+          }
+        } else {
+          const count = state.viewMode === "single" ? 1 : doc.pageCount;
+          for (let n = 0; n < count; n++) flow.appendChild(makeSlot(state.viewMode === "single" ? pageIdx : n));
         }
         if (state.viewMode !== "single") {
           const epoch = flowEpoch;
@@ -3730,7 +3769,7 @@
             }
             if (!flowScrollFrame) flowScrollFrame = requestAnimationFrame(syncPageFromScroll);
           }, {root:vp, rootMargin:"250px"});
-          for (const slot of flow.children) flowObserver.observe(slot);
+          for (const slot of flow.querySelectorAll(".page-slot")) flowObserver.observe(slot);
         }
       }
       if (state.viewMode === "single" && flow.firstElementChild?.dataset.pageIndex !== String(pageIdx)) {
@@ -3878,6 +3917,9 @@
       syncThumbnailSelection(doc);
     }
 
+    function visualSignatureLabel(name) {
+      return `[전자서명 : ${String(name || '').trim()}]`;
+    }
     function renderOverlayItems(doc, pageIdx, scale, previewContainer = null) {
       const container = previewContainer || document.getElementById("annotationOverlay");
       container.innerHTML = "";
@@ -3904,7 +3946,12 @@
 
         if (item.type === "Watermark") {
           el.style.fontWeight = "800";
-          el.style.transform = `rotate(${itemRotation}deg) translate(50%, 50%) rotate(-24deg) translate(-50%, -50%)`;
+          el.style.transformOrigin = "center center";
+          el.style.transform = `rotate(${itemRotation - 24}deg)`;
+          el.style.display = "flex";
+          el.style.alignItems = "center";
+          el.style.justifyContent = "center";
+          el.style.textAlign = "center";
           el.style.letterSpacing = "2px";
           el.textContent = item.text;
         } else if (item.type === "VisualSignature") {
@@ -3913,7 +3960,7 @@
           el.style.fontWeight = "600";
           el.style.padding = "5px";
           el.style.whiteSpace = "pre-wrap";
-          el.textContent = String(item.text || "") + "\n[전자서명·인증서 서명 아님]";
+          el.textContent = visualSignatureLabel(item.text);
         } else if (item.type === "Stamp") {
           el.style.border = `2px solid ${item.color || "#1F6F9F"}`;
           el.style.fontWeight = "700";
@@ -4950,7 +4997,7 @@
         const octx = offCanvas.getContext("2d");
         const fontSize = item.fontSize || 13;
         const rawText = item.type === "Note" ? `💬 ${item.text || ""}` :
-          item.type === "VisualSignature" ? String(item.text || "") + "\n[전자서명·인증서 서명 아님]" :
+          item.type === "VisualSignature" ? visualSignatureLabel(item.text) :
           String(item.text || "");
         const lines = rawText.split(/\r?\n/);
 
@@ -7849,7 +7896,7 @@
           <small>이미지 위에서 드래그하면 사각형이 좌표 목록에 추가됩니다. 가릴 부분만 검정 영역으로 출력됩니다. 정확한 좌표가 필요하면 아래 숫자 입력을 수정하세요.</small>
         </div>
         <label for="maskPlanLines">마스킹 영역 목록 (한 줄 = 한 영역)</label>
-        <textarea class="dialog-textarea" id="maskPlanLines" rows="5" maxlength="5000" style="width:100%;font-family:monospace" spellcheck="false" placeholder="예시: ${index+1},70,100,180,40"></textarea>
+        <textarea class="dialog-textarea" id="maskPlanLines" rows="5" maxlength="5000" style="width:100%;min-height:118px;max-height:260px;flex-shrink:0;font-family:monospace;overflow:auto" spellcheck="false" placeholder="예시: ${index+1},70,100,180,40"></textarea>
         <div style="display:flex;gap:8px;margin:8px 0">
           <button type="button" id="maskPlanCheck" class="dialog-btn">대상 페이지·영역 검증</button>
           <span id="maskPlanPreview" style="font-size:12px;color:var(--muted)" role="status">아직 검증하지 않았습니다.</span>
@@ -8156,6 +8203,7 @@
         icon: "fa-pen-nib",
         width: "480px",
         bodyHtml: `
+          ${type === "VisualSignature" ? '<p class="dialog-info-box">표시는 [전자서명 : 이름] 형식입니다. 화면 표시용이며 전자서명·인증서 서명 아님.</p>' : ''}
           <div class="dialog-form-grid">
             <label for="insTextInput">표시 문구:</label>
             ${type==="Text" ? `<textarea id="insTextInput" class="dialog-input" rows="4" maxlength="4000" style="width:100%;white-space:pre-wrap">${escapeHtml(defaultText)}</textarea>` : `<input type="text" id="insTextInput" class="dialog-input" maxlength="4000" value="${escapeHtml(defaultText)}" />`}
@@ -8215,17 +8263,23 @@
             targetPages.forEach((pIdx) => {
               const id = `ov_${overlayIdCounter++}`;
               lastId = id;
+              const size = doc.pageSizes[pIdx] || {width:595.28,height:841.89};
+              const markFontSize = type === "Watermark" ?
+                Math.min(fontSize, Math.max(8, size.width * 0.76 / Math.max(1, text.length * 0.66))) : fontSize;
+              const markWidth = Math.min(Math.max(44, text.length * markFontSize * 0.66 + 16), size.width * 0.86);
+              const markHeight = Math.min(markFontSize * 1.6 + 12, size.height * 0.3);
               doc.overlays.push({
                 id,
                 pageIndex: pIdx,
                 type,
                 text,
-                x: defaults.x,
-                y: defaults.y + (doc.overlays.filter((o) => o.pageIndex === pIdx).length % 5) * 28,
-                fontSize,
-                width: type === "VisualSignature" ? 310 :
+                x: type === "Watermark" ? Math.round((size.width - markWidth) / 2) : defaults.x,
+                y: type === "Watermark" ? Math.round((size.height - markHeight) / 2) :
+                  defaults.y + (doc.overlays.filter((o) => o.pageIndex === pIdx).length % 5) * 28,
+                fontSize: type === "Watermark" ? markFontSize : fontSize,
+                width: type === "Watermark" ? markWidth : type === "VisualSignature" ? 310 :
                   type === "Text" ? Math.min(textWidth,Math.max(40,(doc.pageSizes[pIdx]?.width||595)-defaults.x-12)) : undefined,
-                height: type === "VisualSignature" ? 65 : undefined,
+                height: type === "Watermark" ? markHeight : type === "VisualSignature" ? 65 : undefined,
                 color,
                 bgColor: defaults.bg,
                 opacity: type === "Watermark" ? 0.35 : 0.96,
@@ -8410,7 +8464,14 @@
           <div class="dialog-form-grid">
             <label for="pgNumFormatInput">번호 서식:</label>
             <input type="text" id="pgNumFormatInput" class="dialog-input" value="- {page} / {total} -" />
+            <label for="pgNumFromPage">삽입 시작 페이지:</label>
+            <input type="number" min="1" max="${doc.pageCount}" value="1" id="pgNumFromPage" class="dialog-input" />
+            <label for="pgNumFirstValue">첫 표시 번호:</label>
+            <input type="number" min="0" max="999999" value="1" id="pgNumFirstValue" class="dialog-input" />
+            <label for="pgNumSkipPages">번호 숨길 페이지:</label>
+            <input type="text" id="pgNumSkipPages" class="dialog-input" placeholder="예: 1-2,5,7-9 (없으면 빈칸)" />
           </div>
+          <p style="font-size:12px">지정 페이지부터 번호를 연속으로 붙입니다. 제외한 페이지는 번호를 표시하지 않고 번호도 증가하지 않습니다.</p>
         `,
         footerHtml: `
           <div></div>
@@ -8425,10 +8486,26 @@
             const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
             try {
             const tpl = document.getElementById("pgNumFormatInput").value || "- {page} / {total} -";
+            const from = Number(document.getElementById("pgNumFromPage").value);
+            const first = Number(document.getElementById("pgNumFirstValue").value);
+            if (!Number.isSafeInteger(from) || from < 1 || from > doc.pageCount ||
+                !Number.isSafeInteger(first) || first < 0 || first > 999999) {
+              showToast("시작 페이지와 첫 번호를 확인해 주세요.", "fa-triangle-exclamation"); return;
+            }
+            const skippedText = document.getElementById("pgNumSkipPages").value.trim();
+            const skipped = skippedText ? parseRangeInput(skippedText, doc.pageCount) : [];
+            if (skippedText && (!skipped.length || skippedText.length > 4096)) {
+              showToast("제외할 페이지는 예: 1-2,5 형식으로 입력해 주세요.", "fa-triangle-exclamation"); return;
+            }
+            const excluded = new Set(skipped);
+            const eligible = [];
+            for (let i = from - 1; i < doc.pageCount; i++) if (!excluded.has(i)) eligible.push(i);
+            if (!eligible.length) { showToast("번호를 표시할 페이지가 없습니다.", "fa-triangle-exclamation"); return; }
             saveUndoSnapshot(doc, "페이지 번호 일괄 삽입");
-            for (let i = 0; i < doc.pageCount; i++) {
+            for (let n = 0; n < eligible.length; n++) {
+              const i = eligible[n];
               const sz = doc.pageSizes[i] || { width: 595, height: 842 };
-              const label = tpl.replace("{page}", String(i + 1)).replace("{total}", String(doc.pageCount));
+              const label = tpl.replaceAll("{page}", String(first + n)).replaceAll("{total}", String(eligible.length));
               doc.overlays.push({
                 id: `ov_${overlayIdCounter++}`,
                 pageIndex: i,
@@ -8444,7 +8521,7 @@
             }
             closeModal();
             renderCurrentPageCanvas();
-            showToast(`전체 ${doc.pageCount}쪽에 페이지 번호를 삽입했습니다.`, "fa-list-ol");
+            showToast(`${eligible.length}쪽에 페이지 번호를 삽입했습니다.`, "fa-list-ol");
             metricOutcome='succeeded';
             } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
           });

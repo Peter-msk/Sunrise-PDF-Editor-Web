@@ -116,7 +116,10 @@
    *           position:'bottom-center', fontSize:11, margin:24 }
    * watermark: {enabled, text:'DRAFT', fontSize:65,
    *             opacity:0.15, angle:-30 }
-   * pages: '*' or '1-3,5'. The numbering index follows physical PDF order.
+   * pages: '*' or '1-3,5'; number.fromPage: physical starting page (1-based),
+   * number.skipPages: pages whose printed numbers are suppressed.
+   * Explicit fromPage/skipPages uses contiguous visible numbering; legacy calls
+   * without those options retain their original physical numbering.
    */
   async function apply(file, settings, opts) {
     const lib = opts?.PDFLib;
@@ -135,7 +138,8 @@
     const font = await fontFor(pdf, lib, opts);
     const customFont = Boolean(opts.fontBytes);
     let numberSize = 11, margin = 24, position = 'bottom-center';
-    let numberTemplate = '', startAt = 1;
+    let numberTemplate = '', startAt = 1, numberFromPage = 1, numberSkips = new Set();
+    let useCustomSequence = false;
     if (number.enabled) {
       numberSize = limit(Number(number.fontSize ?? 11), 6, 64, '페이지 번호 글자 크기는 6~64pt입니다.');
       margin = limit(Number(number.margin ?? 24), 0, 300, '페이지 번호 여백은 0~300pt입니다.');
@@ -145,6 +149,12 @@
       if (!numberTemplate || numberTemplate.length > 120) throw new Error('페이지 번호 형식을 확인해 주세요.');
       startAt = Number(number.startAt ?? 1);
       if (!Number.isSafeInteger(startAt) || startAt < 0 || startAt > 999999) throw new Error('페이지 번호 시작값이 올바르지 않습니다.');
+      numberFromPage = Number(number.fromPage ?? 1);
+      if (!Number.isSafeInteger(numberFromPage) || numberFromPage < 1 || numberFromPage > pdf.getPageCount())
+        throw new Error('번호를 시작할 PDF 페이지가 올바르지 않습니다.');
+      if (String(number.skipPages ?? '').trim())
+        numberSkips = new Set(parsePageSelection(String(number.skipPages).trim(), pdf.getPageCount()));
+      useCustomSequence = number.fromPage !== undefined || !!numberSkips.size;
     }
     let markText = '', markSize = 65, markOpacity = 0.15, markAngle = -30;
     if (watermark.enabled) {
@@ -155,22 +165,36 @@
       markAngle = limit(Number(watermark.angle ?? -30), -65, 65, '워터마크 각도는 -65~65도입니다.');
       asPdfText(markText, font, customFont);
     }
+    const printable = selected.filter(i => i + 1 >= numberFromPage && !numberSkips.has(i));
+    if (number.enabled && !printable.length && !watermark.enabled)
+      throw new Error('번호를 표시할 페이지가 없습니다. 시작 페이지와 제외 페이지를 확인해 주세요.');
+    const printedIndex = new Map(printable.map((pageIndex, n) => [pageIndex, n]));
     for (let at = 0; at < selected.length; at++) {
       abort(opts.cancelled);
       const index = selected[at];
       const page = pdf.getPage(index), vp = viewport(page);
       if (watermark.enabled) {
-        const width = font.widthOfTextAtSize(markText, markSize);
-        const origin = toPage(vp, (vp.width - width) / 2, vp.height / 2);
+        // Center the rotated text's bounding rectangle in the displayed crop box,
+        // including for landscape or /Rotate=90,270 pages.
+        const theta = markAngle * Math.PI / 180;
+        const cos = Math.cos(theta), sin = Math.sin(theta);
+        const baseWidth = font.widthOfTextAtSize(markText, 1);
+        const fittedSize = Math.min(markSize,
+          vp.width * 0.84 / Math.max(0.01, Math.abs(baseWidth * cos) + Math.abs(sin)),
+          vp.height * 0.84 / Math.max(0.01, Math.abs(baseWidth * sin) + Math.abs(cos)));
+        if (!Number.isFinite(fittedSize) || fittedSize < 2) throw new Error('용지에 맞는 워터마크 크기를 계산할 수 없습니다.');
+        const width = font.widthOfTextAtSize(markText, fittedSize);
+        const x = vp.width / 2 - (width * cos - fittedSize * sin) / 2;
+        const y = vp.height / 2 - (width * sin + fittedSize * cos) / 2;
         page.drawText(markText, {
-          ...origin, size: markSize, font,
-          rotate: lib.degrees((vp.rotation + markAngle) % 360),
+          ...toPage(vp, x, y), size: fittedSize, font,
+          rotate: lib.degrees((vp.rotation + markAngle + 360) % 360),
           opacity: markOpacity, color: lib.rgb(0.55, 0.58, 0.63)
         });
       }
-      if (number.enabled) {
+      if (number.enabled && printedIndex.has(index)) {
         const text = asPdfText(numberTemplate
-          .replaceAll('{page}', String(startAt + index))
+          .replaceAll('{page}', String(useCustomSequence ? startAt + printedIndex.get(index) : startAt + index))
           .replaceAll('{total}', String(pdf.getPageCount())), font, customFont);
         const width = font.widthOfTextAtSize(text, numberSize);
         const point = pageNumberPosition(vp, width, numberSize, position, margin);
@@ -189,7 +213,8 @@
     const reopened = await lib.PDFDocument.load(result, { updateMetadata: false });
     if (reopened.getPageCount() !== pdf.getPageCount()) throw new Error('저장 후 PDF 페이지 수가 일치하지 않습니다.');
     abort(opts.cancelled);
-    return { bytes: result, pageCount: pdf.getPageCount(), affectedPages: selected.length };
+    return { bytes: result, pageCount: pdf.getPageCount(),
+      affectedPages: watermark.enabled ? selected.length : printable.length };
   }
   return { apply, parsePageSelection, MAX_PAGES };
 });
