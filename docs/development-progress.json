@@ -298,11 +298,11 @@
       "id": "USR-05",
       "name": "원문 직접 수정",
       "phase": 4,
-      "implementation": 15,
-      "automated": 60,
+      "implementation": 32,
+      "automated": 82,
       "practical": 10,
       "deployment": 0,
-      "note": "PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완"
+      "note": "PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완 R24: 신규 '원문 직접 수정' 명령에서 실제 PDF 내용 스트림의 단일 Tj 원문(표준 Base14 Type1/ASCII, 동길이)을 고유 일치 확인 후 교체. 원본 유지, PDF.js 변경된 검색 텍스트 확인, Undo/저장·다운로드·재열기. Node 실제 pdf-lib/브라우저 Linux Chromium·Windows Chrome·Edge의 합성 PDF에서 직접 수정 기능 성공(PR #56). UTF/한글·임베디드 폰트·TJ 다중 조합·텍스트 길이 변경 및 실무 파일 검증 미지원; 민감정보 제거 아님."
     },
     {
       "id": "USR-13",
