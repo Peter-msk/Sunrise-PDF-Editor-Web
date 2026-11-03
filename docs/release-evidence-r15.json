@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "release": "R15",
+  "recordedAtKst": "2026-11-03",
+  "releaseCommit": "b9ae7327a27286d62cffbbf9777041a0a628de3f",
+  "ci": {
+    "runId": 41553363192,
+    "requiredJobsPassed": 4,
+    "requiredJobsTotal": 4,
+    "completedAtUtc": "2026-11-03T00:32:19Z"
+  },
+  "deployment": {
+    "id": "13061e31-3c03-4c7e-8269-9c51df8588ee",
+    "workerVersion": "6963d244-7a11-4c86-9d93-2310d795fb40",
+    "deployedAtUtc": "2026-11-03T00:31:26.161528Z",
+    "trafficPercent": 100
+  },
+  "scope": "Historical R15 release snapshot only. Does not attest to external customer PDF acceptance, latest HEAD or future deployments.",
+  "operationalAcceptance": "unverified"
+}
