@@ -2058,6 +2058,7 @@
             actions: [
               { id: "insertText", label: "텍스트 삽입", icon: "fa-font", shortcut: "Ctrl+T", docReq: true },
               { id: "visualTextCorrection", label: "텍스트 시각 교정 (원문 유지)", icon: "fa-pen", docReq: true },
+              { id: "directSourceText", label: "원문 직접 수정 (표준 영문/숫자 한정)", icon: "fa-file-pen", docReq: true },
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
               { id: "fillAllFormFields", label: "PDF 양식 여러 칸 한번에 입력", icon: "fa-list-check", docReq: true },
@@ -5649,6 +5650,10 @@
           if (!doc) return;
           await openVisualTextCorrectionModal(doc);
           break;
+        case "directSourceText":
+          if (!doc) return;
+          openDirectSourceTextModal(doc);
+          break;
 
         case "insertTable":
           if (!doc) return;
@@ -7781,6 +7786,111 @@
         }});
     }
 
+
+
+    // USR-05: a deliberately narrow *real* text-stream edit, distinct from
+    // visual correction. Refuse unsupported fonts/encodings instead of faking it.
+    function openDirectSourceTextModal(doc) {
+      const source=doc.bytes,reader=doc.pdfJsDoc,pageNumber=doc.currentPage+1;
+      if(!window.SunriseSpecialPdf?.replaceSimpleSourceText){
+        showToast("원문 직접 수정 엔진을 찾을 수 없습니다.","fa-circle-exclamation");return;
+      }
+      openModal({
+        title:"PDF 원문 직접 수정 · 표준 영문/숫자",
+        icon:"fa-file-pen",width:"610px",
+        bodyHtml:'<div class="dialog-info-box"><strong>실제 PDF 텍스트 스트림을 변경합니다.</strong> '+
+          '표준 Type1 글꼴의 단일 ASCII 문자열만 지원하며, 원문과 수정문은 글자 수가 같아야 합니다. '+
+          '한글·임베디드 글꼴·서명·양식·여러 위치의 동일 문구는 거부합니다. '+
+          '새 문구의 글자 너비에 따라 배열이 달라질 수 있습니다. '+
+          '<strong>복원 가능한 흔적이 남을 수 있어 개인정보 완전 삭제에는 사용하면 안 됩니다.</strong></div>'+
+          '<p id="directTextStatus" role="status">현재 페이지의 텍스트를 확인하는 중입니다.</p>'+
+          '<div class="dialog-form-grid">'+
+          '<label for="directTextOriginal">수정할 원문 텍스트</label>'+
+          '<select id="directTextOriginal" class="dialog-select" disabled><option>검색 중…</option></select>'+
+          '<label for="directTextReplacement">새 텍스트 (동일 길이)</label>'+
+          '<input id="directTextReplacement" class="dialog-input" type="text" maxlength="120" spellcheck="false">'+
+          '</div>',
+        footerHtml:'<div></div><div class="modal-footer-right">'+
+          '<button type="button" class="dialog-btn primary" id="directTextApply" disabled>원문 직접 수정</button>'+
+          '<button type="button" class="dialog-btn" id="directTextCancel">취소</button></div>',
+        onMount:async()=>{
+          const select=document.getElementById("directTextOriginal"),
+            field=document.getElementById("directTextReplacement"),
+            apply=document.getElementById("directTextApply"),
+            status=document.getElementById("directTextStatus");
+          const valid=()=>activeDoc()===doc&&doc.bytes===source&&
+            doc.pdfJsDoc===reader&&doc.currentPage+1===pageNumber&&select.isConnected;
+          document.getElementById("directTextCancel").addEventListener("click",closeModal);
+          let candidates=[];
+          apply.addEventListener("click",async()=>{
+            if(!valid()||doc.operationBusy)return;
+            const original=candidates[Number(select.value)],replacement=field.value;
+            if(!original||!replacement||original===replacement||
+               original.length!==replacement.length||!/^[\x20-\x7e]{1,120}$/.test(replacement)){
+              status.textContent="기존 글자와 길이가 같은 영문·숫자·기본 ASCII 문구를 입력하세요.";
+              return;
+            }
+            doc.operationBusy=true;apply.disabled=true;
+            const finish=beginOperationMetric("source_text_replace");let outcome="failed",info=null;
+            try{
+              const output=await window.SunriseSpecialPdf.replaceSimpleSourceText({
+                bytes:source,pageNumber,original,replacement,PDFLib:window.PDFLib
+              });
+              if(!valid())return;
+              // Independently verify what PDF.js *actually extracts* after
+              // parsing the output; a syntactically valid PDF is not enough.
+              info=await parsePageCountAndMeta(output.bytes);
+              const verifyPage=await info.pdfJsDoc.getPage(pageNumber);
+              const items=(await verifyPage.getTextContent()).items.map(item=>item.str);
+              if(!items.includes(replacement)||items.includes(original))
+                throw Error("저장 후 검색 가능한 텍스트 검증에 실패했습니다.");
+              if(!valid())return;
+              saveUndoSnapshot(doc,"PDF 원문 텍스트 직접 수정");
+              doc.bytes=output.bytes;
+              await reloadDocPdfJs(doc,{info});
+              info=null;
+              closeModal();await refreshAllViews();
+              showToast("실제 원문 텍스트를 수정했습니다. 새 PDF로 저장해 주세요.","fa-file-pen");
+              outcome="succeeded";
+            }catch(error){
+              if(valid())status.textContent="원문 직접 수정 중단: "+String(error?.message||error);
+            }finally{
+              if(info)info.pdfJsDoc.destroy().catch(()=>{});
+              doc.operationBusy=false;
+              if(apply.isConnected)apply.disabled=false;
+              finish(outcome);
+            }
+          });
+          try{
+            const page=await reader.getPage(pageNumber);
+            const layer=await page.getTextContent();
+            if(!valid())return;
+            const seen=new Set();
+            candidates=layer.items.map(item=>item.str)
+              .filter(value=>typeof value==="string"&&/^[\x20-\x7e]{1,120}$/.test(value))
+              .filter(value=>{if(seen.has(value))return false;seen.add(value);return true;})
+              .slice(0,100);
+            select.replaceChildren();
+            for(let i=0;i<candidates.length;i++){
+              const option=document.createElement("option");
+              option.value=String(i);option.textContent=(i+1)+". "+candidates[i].slice(0,90);
+              select.appendChild(option);
+            }
+            if(!candidates.length){
+              status.textContent="현재 페이지에 지원하는 기본 ASCII 텍스트 조각이 없습니다.";
+              return;
+            }
+            select.disabled=false;apply.disabled=false;field.value=candidates[0];
+            select.addEventListener("change",()=>{
+              const chosen=candidates[Number(select.value)];if(chosen)field.value=chosen;
+            });
+            status.textContent=candidates.length+"개 후보를 찾았습니다. 지원 불가한 PDF는 원문을 변경하지 않고 거부합니다.";
+          }catch(error){
+            if(valid())status.textContent="페이지 텍스트 판독 실패: "+String(error?.message||error);
+          }
+        }
+      });
+    }
 
     // USR-05: appearance-only correction. Original text stays searchable.
     async function openVisualTextCorrectionModal(doc) {
