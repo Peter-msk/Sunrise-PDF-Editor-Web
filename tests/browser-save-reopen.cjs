@@ -606,7 +606,7 @@ async function main(){
    });
    console.log('R23 browser PDF table diagnostics:',JSON.stringify(diagnostics));
    const tableFile=await tableDownload;
-   assert.match(tableFile.suggestedFilename(),/_columns\\.xlsx$/);
+   assert.match(tableFile.suggestedFilename(),/_columns\.xlsx$/);
    const tablePath=path.join(downloadDir,'real-columns.xlsx');
    await tableFile.saveAs(tablePath);
    const sheetBytes=fs.readFileSync(tablePath);
