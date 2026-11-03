@@ -160,7 +160,10 @@
   const exported=[],columnCounts=[];
   let detected=false;
   for(let pageIndex=0;pageIndex<rawPages.length;pageIndex++){
-   const items=rawPages[pageIndex].filter(item=>item&&typeof item.str==='string'&&item.str.length);
+   // PDF.js emits synthetic space-only text items across wide column gaps.
+   // They are layout separators, not table cells: preserve the adjacent text
+   // while using each real item's X coordinate for column placement.
+   const items=rawPages[pageIndex].filter(item=>item&&typeof item.str==='string'&&item.str.trim().length);
    const lines=[];
    for(const item of items){
     const v=item.transform;
