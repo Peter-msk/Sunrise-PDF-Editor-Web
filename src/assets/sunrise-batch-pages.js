@@ -57,6 +57,35 @@
     return pages;
   }
   const PAGE_BOX_METHODS=['getMediaBox','getCropBox','getBleedBox','getTrimBox','getArtBox'];
+  // Fingerprint only encoded page content streams (not entire PDF images or
+  // resources). PDF page copying should preserve these bytes exactly. This
+  // catches dropped/truncated/replaced text and drawing streams without
+  // retaining source page objects or cloning their content into memory.
+  function pageContentFingerprint(page){
+    const contents=page.node.Contents();
+    if(!contents)return {streams:0,bytes:0,hash:0};
+    const isArray=typeof contents.size==='function'&&typeof contents.get==='function';
+    const streams=isArray
+      ? Array.from({length:contents.size()},(_,i)=>page.doc.context.lookup(contents.get(i)))
+      : [contents];
+    let hash=2166136261>>>0,bytes=0;
+    const mix=value=>{hash=Math.imul(hash^(value&255),16777619)>>>0;};
+    for(const stream of streams){
+      const raw=stream?.getContents?.();
+      if(!ArrayBuffer.isView(raw)||raw.BYTES_PER_ELEMENT!==1){
+        throw new Error('검증할 수 없는 PDF 페이지 내용 스트림입니다.');
+      }
+      if(!Number.isSafeInteger(bytes+raw.byteLength)){
+        throw new Error('PDF 페이지 내용 스트림의 크기를 안전하게 계산할 수 없습니다.');
+      }
+      bytes+=raw.byteLength;
+      for(let offset=0;offset<raw.byteLength;offset++)mix(raw[offset]);
+      // Preserve stream boundaries so concatenated content cannot masquerade
+      // as the same sequence with different PDF stream array structure.
+      for(let byte=0;byte<4;byte++)mix((raw.byteLength>>>(byte*8))&255);
+    }
+    return {streams:streams.length,bytes,hash};
+  }
   // Store only numeric page geometry for merging. Retaining source PDFPage
   // objects through output verification would also retain entire source PDF
   // contexts, even after that source has been copied into the target.
@@ -66,7 +95,7 @@
       const box=page[method]();
       boxes[method]={x:box.x,y:box.y,width:box.width,height:box.height};
     }
-    return {rotation:page.getRotation().angle,boxes};
+    return {rotation:page.getRotation().angle,boxes,content:pageContentFingerprint(page)};
   }
   function verifyPages(sources,actual){
     const expected=sources.flat();
@@ -79,6 +108,12 @@
       const after=snapshotPageGeometry(actual[index]);
       if(before?.rotation!==after.rotation)
         throw new Error('결과 '+(index+1)+'쪽의 회전이 달라졌습니다.');
+      // Legacy numeric snapshots without `content` retain their documented
+      // geometry-only contract, while actual processing provides fingerprints.
+      if(before?.content && (before.content.streams!==after.content.streams||
+         before.content.bytes!==after.content.bytes||
+         before.content.hash!==after.content.hash))
+        throw new Error('결과 '+(index+1)+'쪽의 PDF 내용 스트림이 변경되거나 누락되었습니다.');
       for(const method of PAGE_BOX_METHODS){
         const a=before?.boxes?.[method],b=after.boxes[method];
         if(!a||!['x','y','width','height'].every(k=>Number.isFinite(a[k])&&Number.isFinite(b[k])&&Math.abs(a[k]-b[k])<.01))
@@ -89,8 +124,8 @@
   async function readSource(file,opts){
     const bytes=await opts.readFile(file);
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||
-       !bytes.byteLength)
-      throw new Error('입력 PDF 크기 또는 바이트를 확인할 수 없습니다.');
+       !bytes.byteLength||bytes.byteLength!==file.size)
+      throw new Error('입력 PDF의 실제 읽은 바이트 수가 파일 크기와 일치하지 않습니다.');
     const pdf=await opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
     const pages=checkSource(pdf,opts.PDFLib);
     return {pdf,pages,name:file.name};
