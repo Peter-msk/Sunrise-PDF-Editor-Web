@@ -52,7 +52,7 @@ async function fixture(){
   ['field-flag',doc=>doc.getForm().getTextField('lock').disableReadOnly(),/필드 값·속성/],
   ['dropdown',doc=>doc.getForm().getDropdown('region').select('North'),/필드 값·속성/],
   ['field-count',doc=>doc.getForm().removeField(doc.getForm().getCheckBox('approved')),/필드 수/],
-  ['page-count',doc=>doc.removePage(1),/페이지 수/],
+  ['page-count',doc=>{const pages=doc.getPages();doc.getPages=()=>pages.slice(0,1);},/페이지 수/],
   ['cropbox',doc=>doc.getPage(0).setCropBox(12,16,386,550),/getCropBox/],
   ['trimbox',doc=>doc.getPage(0).setTrimBox(12,22,380,538),/getTrimBox/],
   ['rotation',doc=>doc.getPage(1).setRotation(lib.degrees(180)),/회전값/]
