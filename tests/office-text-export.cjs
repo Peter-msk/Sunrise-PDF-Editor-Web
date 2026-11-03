@@ -94,6 +94,37 @@ assert.throws(()=>office.xlsxColumns([[{str:'회전',width:50,transform:[0,10,-1
 assert.throws(()=>office.xlsxColumns([tabular,tabular.map(it=>({...it,str:'\ud800'}))]),/Unicode/);
 assert.throws(()=>office.xlsxColumns(Array(121).fill(tabular)),/120/);
 
+// R26: stable global columns, notes and large-table performance.
+const sparsePage=[
+ entry('사업',40,700),entry('금액',340,700),
+ entry('A사업',40,676),entry('1000',340,676)
+];
+const richPage=[
+ entry('사업',40,700),entry('단위',190,700),entry('금액',340,700),
+ entry('B사업',40,676),entry('건',190,676),entry('=2+3',340,676),
+ entry('검토 안내',270,650)
+];
+const schemaXml=readZip(office.xlsxColumns([sparsePage,richPage]))['xl/worksheets/sheet1.xml'];
+assert(schemaXml.includes('<c r="D2" t="inlineStr"><is><t xml:space="preserve">금액'));
+assert(!schemaXml.includes('<c r="C2"'),'blank middle column must remain blank');
+assert(schemaXml.includes('<c r="C4" t="inlineStr"><is><t xml:space="preserve">단위'));
+assert(schemaXml.includes('<c r="D5" t="inlineStr"><is><t xml:space="preserve">=2+3'));
+assert(schemaXml.includes('<c r="E6" t="inlineStr"><is><t xml:space="preserve">검토 안내'));
+assert(schemaXml.includes('비정렬 원문'),'off-grid text must have its own column');
+assert(!schemaXml.includes('<f>'),'formula-like PDF strings must remain inert');
+const plainXml=readZip(office.xlsxColumns([sparsePage,[entry('일반 설명',100,700)]]))['xl/worksheets/sheet1.xml'];
+assert(plainXml.includes('일반 설명'),'plain-page text must survive');
+assert(!plainXml.includes('<c r="B4"'),'plain text must not move to table column one');
+assert.throws(()=>office.xlsxColumns([richPage.slice(0,6),[
+ entry('사업',40,700),entry('단위',216,700),entry('금액',340,700),
+ entry('C사업',40,676),entry('건',216,676),entry('3000',340,676)
+]]),/열 배치/,'incompatible page schemas must be rejected');
+const highVolume=[];
+for(let i=0;i<1800;i++)highVolume.push(entry('A'+i,40,40000-i*18),entry('B'+i,340,40000-i*18));
+const highVolumeXml=readZip(office.xlsxColumns([highVolume]))['xl/worksheets/sheet1.xml'];
+assert.equal((highVolumeXml.match(/<row r=/g)||[]).length,1801,'large table rows');
+assert(highVolumeXml.includes('A1799')&&highVolumeXml.includes('B1799'),'large table content');
+
 const editor=fs.readFileSync('src/editor/index.html','utf8');
 const build=fs.readFileSync('scripts/build-release.cjs','utf8');
 for(const id of ['exportWordText','exportExcelText'])assert(editor.includes('case "'+id+'":'));

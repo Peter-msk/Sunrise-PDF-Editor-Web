@@ -155,31 +155,33 @@
  function xlsxColumns(rawPages){
   if(!Array.isArray(rawPages)||rawPages.length<1||rawPages.length>MAX_PAGES)
    throw Error('최대 120페이지까지 변환합니다.');
-  // Reuse strict Unicode/text-size and per-page text limits.
   normalizePages(rawPages.map(items=>pageTextFromItems(items)));
-  const exported=[],columnCounts=[];
-  let detected=false;
+  const pages=[];
   for(let pageIndex=0;pageIndex<rawPages.length;pageIndex++){
-   // PDF.js emits synthetic space-only text items across wide column gaps.
-   // They are layout separators, not table cells: preserve the adjacent text
-   // while using each real item's X coordinate for column placement.
-   const items=rawPages[pageIndex].filter(item=>item&&typeof item.str==='string'&&item.str.trim().length);
+   const entries=rawPages[pageIndex].filter(item=>item&&typeof item.str==='string'&&item.str.trim().length)
+    .map(item=>{
+     const v=item.transform;
+     if(!Array.isArray(v)||v.length<6||!Number.isFinite(item.width)||item.width<0||
+        ![v[0],v[1],v[2],v[3],v[4],v[5]].every(Number.isFinite)||
+        Math.abs(v[1])>0.1||Math.abs(v[2])>0.1||v[0]<=0||v[3]<=0)
+      throw Error((pageIndex+1)+'쪽에 회전 또는 위치 미확인 텍스트가 있어 표 열을 안전하게 추정할 수 없습니다.');
+     return {x:v[4],y:v[5],width:item.width,font:Math.abs(v[3]),text:item.str.normalize('NFC')};
+    });
+   // Sort once, then group adjacent baselines instead of repeated line scans.
+   entries.sort((a,b)=>b.y-a.y||a.x-b.x);
    const lines=[];
-   for(const item of items){
-    const v=item.transform;
-    if(!Array.isArray(v)||v.length<6||!Number.isFinite(item.width)||item.width<0||
-       ![v[0],v[1],v[2],v[3],v[4],v[5]].every(Number.isFinite)||
-       Math.abs(v[1])>0.1||Math.abs(v[2])>0.1||v[0]<=0||v[3]<=0)
-     throw Error((pageIndex+1)+'쪽에 회전 또는 위치 미확인 텍스트가 있어 표 열을 안전하게 추정할 수 없습니다.');
-    const x=v[4],y=v[5],tolerance=Math.max(2,Math.abs(v[3])*0.28);
-    let line=lines.find(row=>Math.abs(row.y-y)<=tolerance);
-    if(!line){line={y,entries:[]};lines.push(line)}
-    line.entries.push({x,width:item.width,font:Math.abs(v[3]),text:item.str.normalize('NFC')});
+   for(const entry of entries){
+    let line=lines[lines.length-1];
+    const tolerance=Math.max(2,Math.min(line?.font||entry.font,entry.font)*0.28);
+    if(!line||Math.abs(line.y-entry.y)>tolerance){
+     line={y:entry.y,font:entry.font,entries:[]};lines.push(line);
+    }
+    line.entries.push(entry);
    }
-   lines.sort((a,b)=>b.y-a.y);
    const rows=lines.map(line=>{
-    const sorted=line.entries.sort((a,b)=>a.x-b.x),cells=[];
-    for(const entry of sorted){
+    const cells=[];
+    line.entries.sort((a,b)=>a.x-b.x);
+    for(const entry of line.entries){
      const last=cells[cells.length-1];
      if(!last){cells.push({x:entry.x,right:entry.x+entry.width,text:entry.text});continue;}
      const gap=entry.x-last.right;
@@ -188,53 +190,76 @@
       cells.push({x:entry.x,right:entry.x+entry.width,text:entry.text});
      }else{
       last.text+=(gap>1.5&&!/\s$/.test(last.text)&&!/^\s/.test(entry.text)?' ':'')+entry.text;
-      last.right=entry.x+entry.width;
+      last.right=Math.max(last.right,entry.x+entry.width);
      }
     }
     return cells;
    });
-   const aligned=rows.filter(row=>row.length>=2);
+   const multi=rows.filter(row=>row.length>=2);
    let anchors=[];
-   if(aligned.length>=2){
-    const reference=aligned.reduce((a,b)=>b.length>a.length?b:a,aligned[0]);
+   if(multi.length>=2){
+    const reference=multi.reduce((a,b)=>b.length>a.length?b:a,multi[0]);
     if(reference.length>10)throw Error('한 페이지의 표 열은 최대 10개까지 추정합니다.');
-    anchors=reference.map(cell=>cell.x);
-    let confirmed=0;
-    for(const row of aligned){
-     if(row.length!==anchors.length)continue;
-     const match=row.every((cell,j)=>Math.abs(cell.x-anchors[j])<=18);
-     if(match)confirmed++;
+    const proposed=reference.map(cell=>cell.x);
+    const confirmed=multi.filter(row=>row.length===proposed.length&&
+      row.every((cell,j)=>Math.abs(cell.x-proposed[j])<=18)).length;
+    if(confirmed>=2)anchors=proposed;
+   }
+   pages.push({pageIndex,rows,anchors});
+  }
+  const recognized=pages.filter(page=>page.anchors.length>=2);
+  if(!recognized.length)
+   throw Error('규칙적인 다열 PDF 표를 찾지 못했습니다. 기존 Excel 텍스트 출력을 이용해 주세요.');
+  // Stable X coordinate schema across pages prevents silent column shifts.
+  const global=recognized.reduce((best,page)=>page.anchors.length>best.length?page.anchors:best,
+    recognized[0].anchors);
+  const nearest=x=>{
+   let index=-1,distance=Infinity;
+   global.forEach((anchor,i)=>{
+    const d=Math.abs(x-anchor);
+    if(d<distance){distance=d;index=i;}
+   });
+   return {index,distance};
+  };
+  const exported=[];
+  let notesPresent=false;
+  for(const page of pages){
+   if(page.anchors.length){
+    const used=new Set();
+    for(const anchor of page.anchors){
+     const hit=nearest(anchor);
+     if(hit.distance>18||used.has(hit.index))
+      throw Error((page.pageIndex+1)+'쪽의 표 열 배치가 다른 페이지와 달라 Excel 열을 안전하게 맞출 수 없습니다.');
+     used.add(hit.index);
     }
-    if(confirmed>=2)detected=true;
-    else anchors=[];
    }
-   if(!anchors.length){
-    // Non-table pages remain readable as one-column text in the same export.
-    // A document with no recognized table at all is rejected below.
-    for(const row of rows)exported.push([String(pageIndex+1),row.map(cell=>cell.text).join(' ')]);
-    columnCounts.push(1);
-    continue;
-   }
-   columnCounts.push(anchors.length);
-   for(const row of rows){
-    const values=Array(anchors.length).fill(null);
-    for(const cell of row){
-     let best=0,dist=Infinity;
-     anchors.forEach((a,i)=>{const dx=Math.abs(cell.x-a);if(dx<dist){best=i;dist=dx}});
-     if(dist>18){
-      if(row.length===1)best=0; // heading or note, kept as text
-      else throw Error('표의 열 좌표가 불규칙하여 원문을 잘못 배치할 수 있습니다.');
+   for(const row of page.rows){
+    const values=Array(global.length).fill(null);
+    let note=null;
+    if(!page.anchors.length){
+     note=row.map(cell=>cell.text).join(' ');
+    }else{
+     for(const cell of row){
+      const hit=nearest(cell.x);
+      if(hit.distance>18){
+       if(row.length!==1)
+        throw Error((page.pageIndex+1)+'쪽의 표 열 좌표가 불규칙하여 원문을 잘못 배치할 수 있습니다.');
+       note=cell.text;
+       continue;
+      }
+      if(values[hit.index]!==null)
+       throw Error((page.pageIndex+1)+'쪽의 여러 텍스트가 동일 Excel 셀에 충돌합니다.');
+      values[hit.index]=cell.text;
      }
-     if(values[best]!==null)throw Error('여러 텍스트가 동일 Excel 셀에 충돌합니다.');
-     values[best]=cell.text;
     }
-    exported.push([String(pageIndex+1),...values]);
+    if(note!==null)notesPresent=true;
+    exported.push([String(page.pageIndex+1),...values,note]);
    }
   }
-  if(!detected)throw Error('규칙적인 다열 PDF 표를 찾지 못했습니다. 기존 Excel 텍스트 출력을 이용해 주세요.');
-  const cols=Math.max(...columnCounts);
-  const headerRow=['페이지',...Array.from({length:cols},(_,i)=>'열 '+(i+1))];
-  return xlsxMatrix([headerRow,...exported],'PDF Columns');
- }
+  const header=['페이지',...global.map((_,i)=>'열 '+(i+1))];
+  if(notesPresent)header.push('비정렬 원문');
+  return xlsxMatrix([header,...exported.map(row=>notesPresent?row:row.slice(0,-1))],'PDF Columns');
+}
+
  return {docx,xlsx,xlsxColumns,normalizePages,pageTextFromItems};
 });

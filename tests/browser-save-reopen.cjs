@@ -649,6 +649,16 @@ async function main(){
      tableSheet.drawText(left,{x:42,y,size:12});
      tableSheet.drawText(right,{x:240,y,size:12});
    }
+   // R26 multi-page table: first page omits the middle Excel column.
+   const richSheet=tableFixture.addPage([420,595]);
+   for(const [left,middle,right,y] of [
+     ['Item','Units','Amount',500],['Gamma','2','9999',470],['Delta','3','8888',440]
+   ]){
+     richSheet.drawText(left,{x:42,y,size:12});
+     richSheet.drawText(middle,{x:140,y,size:12});
+     richSheet.drawText(right,{x:240,y,size:12});
+   }
+   richSheet.drawText('REVIEW NOTE',{x:340,y:410,size:12});
    const tablePage=await context.newPage(),tableErrors=[];
    tablePage.on('pageerror',e=>tableErrors.push(e.message));
    await tablePage.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
@@ -672,11 +682,12 @@ async function main(){
    await tableFile.saveAs(tablePath);
    const sheetBytes=fs.readFileSync(tablePath);
    assert.equal(sheetBytes.readUInt32LE(0),0x04034b50,'table workbook must be an actual XLSX ZIP');
-   for(const fragment of ['Item','Amount','Alpha','1234','Beta','5678','C2','C3','C4'])
+   for(const fragment of ['Item','Amount','Units','Alpha','1234','Beta','5678',
+     'Gamma','9999','Delta','8888','REVIEW NOTE','D2','D3','D4','C5','D5','E8'])
      assert(sheetBytes.includes(Buffer.from(fragment)),'missing original table cell or column '+fragment);
    assert.equal(tableErrors.length,0,'Excel table export browser errors: '+tableErrors.join(' | '));
    await tablePage.close();
-   console.log('PASS R23: real PDF -> actual 3-row, 2-column Excel download with preserved table strings');
+   console.log('PASS R26: real two-page PDF -> stable Excel columns and off-grid note');
    console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split, stale-plan protection, raster masking, embedded PNG/reports, mobile touch save/reopen');
    await context.close();
 
