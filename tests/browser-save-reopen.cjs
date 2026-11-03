@@ -354,7 +354,9 @@ async function main(){
    const link=page.locator('#saveAsDownloadLink');
    await link.waitFor({state:'visible',timeout:60000});
    await page.waitForTimeout(1000);
-   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation');
+   // The independent R24 PDF save adds its own start/ready pair.
+   // Scope this historical retry assertion to the four most recent events.
+   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation').slice(-4);
    assert.deepEqual(saveEvents.map(x=>x.stage),['started','failed','started','ready']);
    assert.equal(saveEvents[0].operationId,saveEvents[1].operationId);
    assert.equal(saveEvents[2].retryOf,saveEvents[0].operationId);
