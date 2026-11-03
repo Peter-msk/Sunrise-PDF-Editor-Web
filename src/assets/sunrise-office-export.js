@@ -144,7 +144,7 @@
  function xlsx(rawPages){
   const pages=normalizePages(rawPages),rows=[['페이지','텍스트']];
   pages.forEach((text,i)=>{
-   for(const line of text.replace(/\\r\\n?/g,'\\n').split('\\n'))rows.push([String(i+1),line]);
+   for(const line of text.replace(/\r\n?/g,'\n').split('\n'))rows.push([String(i+1),line]);
   });
   return xlsxMatrix(rows,'PDF Text');
  }
@@ -184,7 +184,7 @@
      if(gap>Math.max(16,entry.font*1.7)){
       cells.push({x:entry.x,right:entry.x+entry.width,text:entry.text});
      }else{
-      last.text+=(gap>1.5&&!/\\s$/.test(last.text)&&!/^\\s/.test(entry.text)?' ':'')+entry.text;
+      last.text+=(gap>1.5&&!/\s$/.test(last.text)&&!/^\s/.test(entry.text)?' ':'')+entry.text;
       last.right=entry.x+entry.width;
      }
     }
