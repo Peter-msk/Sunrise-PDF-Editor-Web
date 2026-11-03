@@ -160,12 +160,12 @@ async function main(){
    await page.locator('#editItemBgInput').fill('#ffeecc');
    await page.locator('#editItemConfirmBtn').click();
 
-   // USR-15: a signature-like mark must visibly state it is not certificate signing.
+   // R15: a signature-like visual mark is compact; the modal retains the non-certificate disclosure.
    await page.evaluate(()=>executeCommand('insertVisualSignature'));
    await page.locator('#insTextInput').waitFor({state:'visible'});
    await page.locator('#insTextInput').fill('Visual QA Signer');
    await page.locator('#insConfirmBtn').click();
-   await page.locator('#annotationOverlay [data-overlay-id]',{hasText:'전자서명·인증서 서명 아님'})
+   await page.locator('#annotationOverlay [data-overlay-id]',{hasText:'[전자서명 : Visual QA Signer]'})
      .waitFor({state:'visible',timeout:30000});
 
    // USR-05: restricted editable text layer, but original must remain extractable.
@@ -443,6 +443,47 @@ async function main(){
      for(const pixel of p.masks)
        assert(pixel.slice(0,3).every(x=>x<10),'selected mask pixels must be black');
    }
+   await page.locator('#maskExportClose').click();
+
+   // R15: a mixed portrait/landscape document must form homogeneous spread rows.
+   const mixed=await PDFLib.PDFDocument.create();
+   for(const [width,height] of [[420,595],[842,595],[810,595],[860,595],[420,595],[420,595],[842,595]])
+     mixed.addPage([width,height]);
+   await page.locator('#openPdfInput').setInputFiles({name:'r15-mixed.pdf',mimeType:'application/pdf',
+     buffer:Buffer.from(await mixed.save())});
+   await page.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('r15-mixed.pdf'),
+     null,{timeout:40000});
+   for(const [mode,expected] of [['2',[[1],[2,3],[4],[5,6],[7]]],['3',[[1],[2,3,4],[5,6],[7]]]]){
+     await page.locator('#pageViewMode').selectOption(mode);
+     const groups=await page.evaluate(()=>[...document.querySelectorAll('#pagesFlow > .page-orientation-row')]
+       .map(row=>[...row.querySelectorAll('.page-slot')].map(slot=>Number(slot.dataset.pageIndex)+1)));
+     assert.deepEqual(groups,expected,'mixed orientation groups must preserve order and separate landscape rows');
+   }
+   await page.evaluate(()=>executeCommand('insertPageNumber'));
+   await page.locator('#pgNumFromPage').fill('2');
+   await page.locator('#pgNumFirstValue').fill('10');
+   await page.locator('#pgNumSkipPages').fill('3,6');
+   await page.locator('#pgNumConfirmBtn').click();
+   const numbered=await page.evaluate(()=>activeDoc().overlays.filter(x=>x.type==='PageNumber')
+     .map(x=>({page:x.pageIndex+1,text:x.text})));
+   assert.deepEqual(numbered,[
+     {page:2,text:'- 10 / 4 -'},{page:4,text:'- 11 / 4 -'},
+     {page:5,text:'- 12 / 4 -'},{page:7,text:'- 13 / 4 -'}
+   ]);
+   await page.evaluate(()=>executeCommand('insertWatermark'));
+   await page.locator('#insTextInput').fill('CONFIDENTIAL');
+   await page.locator('#insScopeSelect').selectOption('all');
+   await page.locator('#insConfirmBtn').click();
+   assert.equal(await page.evaluate(()=>activeDoc().overlays.filter(x=>x.type==='Watermark')
+     .every(x=>{
+       const size=activeDoc().pageSizes[x.pageIndex];
+       return Math.abs(x.x+x.width/2-size.width/2)<1.1 &&
+         Math.abs(x.y+x.height/2-size.height/2)<1.1;
+     })),true,'all-page watermarks should have page-specific centers');
+   await page.evaluate(()=>executeCommand('maskedPageExport'));
+   await page.locator('#maskPlanLines').waitFor({state:'visible'});
+   const maskHeight=await page.locator('#maskPlanLines').evaluate(x=>x.getBoundingClientRect().height);
+   assert(maskHeight>=105,'masking dialog textarea must not collapse under flex layout');
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
    console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split, stale-plan protection, raster masking, embedded PNG/reports, mobile touch save/reopen');
