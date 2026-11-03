@@ -18,7 +18,15 @@ for(const bad of [
 const renders=[],marks=[];
 const makeCanvas=()=>{
  const entry={page:null};
- const ctx={fillStyle:'',fillRect(x,y,w,h){marks.push({page:entry.page,fill:this.fillStyle,x,y,w,h})}};
+ const ctx={
+  fillStyle:'',
+  fillRect(x,y,w,h){marks.push({page:entry.page,fill:this.fillStyle,x,y,w,h})},
+  getImageData(x,y){
+   const covered=marks.some(m=>m.page===entry.page&&m.fill==='#000000'&&
+     x>=m.x&&y>=m.y&&x<m.x+m.w&&y<m.y+m.h);
+   return {data:Uint8ClampedArray.from(covered?[0,0,0,255]:[255,255,255,255])};
+  }
+ };
  return {get width(){return entry.width||0},set width(v){entry.width=v},
  get height(){return entry.height||0},set height(v){entry.height=v},
  getContext:()=>ctx,
@@ -49,6 +57,23 @@ const reader={numPages:3,getPage:async n=>{
  assert.deepEqual(await special.checkOutputStructure(output.bytes,PDFLib,2),{pageCount:2,sourceStreamsCopied:false});
  for(const key of ['AcroForm','Outlines','Names','Perms','Metadata','SunriseWebEdits'])
   assert.equal(pdf.catalog.get(PDFLib.PDFName.of(key)),undefined);
+ // Fractional box positions must cover the right/bottom edge as well as
+ // the top/left. A width-only ceil would miss those final pixels.
+ const fractional=special.parseMaskPlan('1,10.25,20.25,4.3,5.3',dims);
+ const before=marks.length;
+ await special.exportMaskedPages({reader,plan:fractional,PDFLib,makeCanvas});
+ const painted=marks.slice(before).find(x=>x.fill==='#000000');
+ assert.deepEqual([painted.x,painted.y,painted.w,painted.h],[20,40,10,12]);
+ // No PDF may be issued if the renderer's readback shows an uncovered pixel.
+ const faultyCanvas=()=>{
+  const canvas=makeCanvas(),context=canvas.getContext('2d');
+  context.getImageData=()=>({data:Uint8ClampedArray.from([255,255,255,255])});
+  return canvas;
+ };
+ await assert.rejects(
+  special.exportMaskedPages({reader,plan,PDFLib,makeCanvas:faultyCanvas}),
+  /마스크가 불투명한 검은색/
+ );
  await assert.rejects(special.exportMaskedPages({reader,plan,PDFLib,makeCanvas,cancelled:()=>true}),/취소/);
  await assert.rejects(special.exportMaskedPages({reader,plan:[],PDFLib,makeCanvas}),/목록/);
  await assert.rejects(special.checkOutputStructure(output.bytes,PDFLib,3),/페이지 수/);
