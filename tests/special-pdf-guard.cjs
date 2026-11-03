@@ -49,11 +49,14 @@ const reader={numPages:1,getPage:async number=>{assert.equal(number,1);return pa
  const N=lib.PDFName.of;
  for(const key of ['AcroForm','Outlines','Names','Perms','SunriseWebEdits'])
   assert.equal(pdf.catalog.get(N(key)),undefined,'fresh raster PDF should not copy '+key);
- const invalidCtx={...ctx,getImageData:()=>({data:Uint8ClampedArray.from([255,255,255,255])})};
- await assert.rejects(special.exportMaskedPage({reader,pageNumber:1,rectangle:{x:10,y:20,width:50,height:40},
-  PDFLib:lib,makeCanvas:()=>({width:0,height:0,getContext:()=>invalidCtx,
-   toBlob:callback=>callback({size:fixture.byteLength,arrayBuffer:async()=>Uint8Array.from(fixture).buffer})})}),
-  /마스크가 불투명한 검은색/);
+ const validGetImageData=ctx.getImageData;
+ ctx.getImageData=()=>({data:Uint8ClampedArray.from([255,255,255,255])});
+ try {
+  await assert.rejects(special.exportMaskedPage({
+   reader,pageNumber:1,rectangle:{x:10,y:20,width:50,height:40},
+   PDFLib:lib,makeCanvas
+  }),/마스크가 불투명한 검은색/);
+ } finally { ctx.getImageData=validGetImageData; }
  await assert.rejects(special.exportMaskedPage({reader,pageNumber:1,rectangle:{x:10,y:20,width:50,height:40},
   PDFLib:lib,makeCanvas,cancelled:()=>true}),/취소/);
  const doc=await lib.PDFDocument.create();const p=doc.addPage([300,400]),stream=p.getContentStream(false);
