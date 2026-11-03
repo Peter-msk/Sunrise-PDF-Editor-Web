@@ -2105,7 +2105,8 @@
               { id: "imageToPdf", label: "이미지로 PDF 만들기", icon: "fa-file-image" },
               { id: "extractText", label: "텍스트 추출", icon: "fa-file-lines", shortcut: "Ctrl+Shift+X", docReq: true },
               { id: "exportWordText", label: "Word 문서 (텍스트 전용)", icon: "fa-file-word", docReq: true },
-              { id: "exportExcelText", label: "Excel 표 (페이지/텍스트)", icon: "fa-file-excel", docReq: true },
+              { id: "exportExcelText", label: "Excel 텍스트 (페이지/텍스트)", icon: "fa-file-excel", docReq: true },
+              { id: "exportExcelColumns", label: "Excel 표 열 추정 (정렬된 표)", icon: "fa-table-columns", docReq: true },
               { id: "exportCurrentImage", label: "현재 페이지 이미지 저장", icon: "fa-image", shortcut: "Ctrl+I", docReq: true },
               { id: "exportAllImages", label: "페이지 이미지 일괄 변환", icon: "fa-images", shortcut: "Ctrl+Shift+I", docReq: true },
               { id: "extractEmbeddedImages", label: "내장 이미지 추출", icon: "fa-photo-film", docReq: true },
@@ -5757,6 +5758,10 @@
           if (!doc) return;
           await exportOfficeText(doc,"xlsx");
           break;
+        case "exportExcelColumns":
+          if (!doc) return;
+          await exportOfficeText(doc,"xlsx-columns");
+          break;
 
         case "exportCurrentImage":
           if (!doc) return;
@@ -9006,7 +9011,7 @@
     }
 
     async function exportOfficeText(doc,format) {
-      if(!["docx","xlsx"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
+      if(!["docx","xlsx","xlsx-columns"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
       if(!window.SunriseOfficeExport?.pageTextFromItems) {
         showToast("Office 텍스트 변환 모듈을 불러오지 못했습니다.","fa-triangle-exclamation");return;
       }
@@ -9018,7 +9023,7 @@
       try {
         if(doc.pageCount>120)throw Error("Office 텍스트 변환은 최대 120쪽까지 지원합니다.");
         showToast("페이지별 줄바꿈을 판독합니다. 스캔 이미지 OCR은 지원하지 않습니다.","fa-file-lines");
-        const pages=[];
+        const pages=[],columnPages=[];
         for(let i=0;i<doc.pageCount;i++){
           if(!unchanged()){outcome="cancelled";return;}
           let content;
@@ -9031,16 +9036,21 @@
           }
           if(!unchanged()){outcome="cancelled";return;}
           pages.push(window.SunriseOfficeExport.pageTextFromItems(content?.items));
+          if(format==="xlsx-columns")columnPages.push(content?.items);
         }
         if(!pages.some(text=>text.trim()))throw Error("PDF 텍스트 레이어가 없습니다. 이미지 기반 문서의 OCR은 지원하지 않습니다.");
-        const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):window.SunriseOfficeExport.xlsx(pages);
+        const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):
+          format==="xlsx-columns"?window.SunriseOfficeExport.xlsxColumns(columnPages):
+          window.SunriseOfficeExport.xlsx(pages);
         if(!unchanged()){outcome="cancelled";return;}
         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
-        downloadBytes(bytes,stem+"_text_only."+format,
+        downloadBytes(bytes,stem+(format==="xlsx-columns"?"_columns.xlsx":"_text_only."+format),
           format==="docx"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         showToast(format==="docx"?
           "줄 구분을 유지한 텍스트 Word를 저장합니다. 원래 PDF의 서식·이미지는 변환되지 않습니다.":
+          format==="xlsx-columns"?
+          "정렬된 PDF 텍스트의 열 좌표를 기준으로 Excel을 저장합니다. 원래 표의 선·병합 셀은 복원하지 않습니다.":
           "줄 구분을 유지한 Excel을 저장합니다. 원래 PDF의 표 구조는 복원하지 않습니다.",
           format==="docx"?"fa-file-word":"fa-file-excel");
         outcome="succeeded";

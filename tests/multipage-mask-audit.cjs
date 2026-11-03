@@ -42,6 +42,14 @@ const reader={numPages:3,getPage:async n=>{
  assert.equal(marks.filter(x=>x.fill==='#000000').length,3);
  assert(marks.some(x=>x.fill==='#000000'&&x.page===1&&x.x===140&&x.y===320));
  assert(marks.some(x=>x.fill==='#000000'&&x.page===2&&x.x===210&&x.y===200));
+ const fractionalPlan=special.parseMaskPlan('1,11.35,20.45,50.85,40.65',dims);
+ const fractional=await special.exportMaskedPages({reader,plan:fractionalPlan,PDFLib,makeCanvas});
+ assert.equal(fractional.pages,1);
+ assert.deepEqual(
+   marks.filter(x=>x.fill==='#000000').at(-1),
+   {page:1,fill:'#000000',x:22,y:40,w:103,h:83},
+   'fractional right/bottom edges must be fully covered in document-mode masks'
+ );
  const pdf=await PDFLib.PDFDocument.load(output.bytes);
  assert.equal(pdf.getPageCount(),2);
  assert.equal(pdf.getPage(0).getWidth(),400);
