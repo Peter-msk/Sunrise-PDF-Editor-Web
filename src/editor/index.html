@@ -9069,10 +9069,12 @@
         title: "PDF 내장 이미지 추출",
         icon: "fa-photo-film",
         width: "650px",
-        bodyHtml: '<div class="dialog-info-box">PDF의 이미지 객체를 찾아 PNG로 추출합니다. 페이지 전체 캡처와 다르며, 마스크·색공간에 따라 원본 표시와 차이가 있을 수 있습니다. OCR·서버 업로드는 하지 않습니다.</div>' +
+        bodyHtml: '<div class="dialog-info-box">일반 이미지 PNG 추출 또는 PDF에 내장된 표준 JPEG 원본 바이트 추출을 선택할 수 있습니다. JPG 원본은 재압축하지 않지만, 마스크·특수 필터·복잡한 색공간의 시각적 일치까지 보증하지 않습니다. OCR·서버 업로드는 하지 않습니다.</div>' +
           '<label for="embeddedImageScope">분석 범위</label> ' +
           '<select id="embeddedImageScope" class="dialog-input"><option value="current">현재 페이지</option><option value="all">전체 문서 (최대 100쪽)</option></select>' +
-          '<p style="font-size:12px;margin:8px 0">최대 20개 · 이미지당 1,677만 화소 · 총 PNG 60 MiB. 결과에서 각각 다운로드하세요.</p>' +
+          '<label for="embeddedImageMode">추출 방식</label> ' +
+          '<select id="embeddedImageMode" class="dialog-input"><option value="png">일반 이미지 · PNG로 변환</option><option value="jpeg">원본 JPEG · JPG 그대로 추출</option></select>' +
+          '<p style="font-size:12px;margin:8px 0">최대 20개 · 이미지당 1,677만 화소 · 총 60 MiB. JPEG 원본 추출은 직접 DCTDecode 이미지 자원만 지원하며 마스크·추가 필터·Form 내부 이미지는 제외합니다.</p>' +
           '<p id="embeddedImageStatus" role="status" aria-live="polite">분석할 범위를 선택해 추출을 시작하세요.</p>' +
           '<div id="embeddedImageResults" style="max-height:38vh;overflow:auto;display:grid;gap:6px"></div>',
         footerHtml: '<button type="button" class="dialog-btn" id="embeddedImageCancel" disabled>중단</button>' +
@@ -9083,10 +9085,13 @@
           const cancel = document.getElementById("embeddedImageCancel");
           const close = document.getElementById("embeddedImageClose");
           const scope = document.getElementById("embeddedImageScope");
+          const mode = document.getElementById("embeddedImageMode");
+          const originalBytes = doc.bytes;
           const status = document.getElementById("embeddedImageStatus");
           const results = document.getElementById("embeddedImageResults");
           let stopped = false;
           const valid = () => !stopped && activeDoc() === doc && doc.pdfJsDoc === reader &&
+            doc.bytes === originalBytes &&
             results.isConnected && document.getElementById("modalBackdrop").classList.contains("open");
           cancel.addEventListener("click", () => {
             stopped = true;
@@ -9096,21 +9101,20 @@
           start.addEventListener("click", async () => {
             start.disabled = true;
             scope.disabled = true;
+            mode.disabled = true;
             cancel.disabled = false;
             results.replaceChildren();
             const finish = beginOperationMetric("extract_images");
             let outcome = "failed";
             try {
-              const summary = await window.SunriseEmbeddedImages.extract(reader, {
-                OPS: window.pdfjsLib.OPS,
-                ImageKind: window.pdfjsLib.ImageKind,
+              const options = {
                 currentPage: scope.value === "current" ? doc.currentPage + 1 : undefined,
                 cancelled: () => !valid(),
                 onProgress: progress => {
                   if (valid()) status.textContent = progress.pages + "/" + progress.total +
                     "쪽 검사 · 이미지 " + progress.images + "개 · 건너뜀 " + progress.skipped + "개";
                 },
-                onImage: ({page, index, width, height, bytes}) => {
+                onImage: ({page, index, width, height, bytes, format}) => {
                   if (!valid()) throw Error("이미지 추출이 취소되었습니다.");
                   const row = document.createElement("div");
                   row.className = "list-row-item";
@@ -9120,19 +9124,30 @@
                   const button = document.createElement("button");
                   button.type = "button";
                   button.className = "dialog-btn";
-                  button.textContent = "PNG 저장";
+                  const jpeg = format === "jpeg";
+                  button.textContent = jpeg ? "원본 JPG 저장" : "PNG 저장";
                   button.addEventListener("click", () => {
                     downloadBytes(bytes, doc.name.replace(/\.pdf$/i, "").slice(0, 80) +
-                      "_p" + page + "_image" + index + ".png", "image/png");
+                      "_p" + page + "_image" + index + (jpeg ? ".jpg" : ".png"),
+                      jpeg ? "image/jpeg" : "image/png");
                   });
                   row.append(description, button);
                   results.appendChild(row);
                 }
-              });
+              };
+              const summary = mode.value === "jpeg"
+                ? await window.SunriseEmbeddedImages.extractOriginalJpegs(originalBytes, {
+                    ...options, PDFLib: window.PDFLib
+                  })
+                : await window.SunriseEmbeddedImages.extract(reader, {
+                    ...options, OPS: window.pdfjsLib.OPS, ImageKind: window.pdfjsLib.ImageKind
+                  });
               if (!valid()) throw Error("이미지 추출이 취소되었습니다.");
               status.textContent = summary.images + "개 추출 · " + summary.pages + "쪽 분석 · " +
                 summary.skipped + "개 건너뜀" + (summary.limited ? " (안전 한도 도달, 일부만 분석)" : "");
-              if (!summary.images) status.textContent += " — 추출 가능한 일반 래스터 이미지가 없습니다.";
+              if (!summary.images) status.textContent += mode.value === "jpeg"
+                ? " — 추출 가능한 표준 원본 JPEG가 없습니다. 일반 PNG 추출을 선택해 보세요."
+                : " — 추출 가능한 일반 래스터 이미지가 없습니다.";
               outcome = "succeeded";
             } catch (error) {
               const cancelled = stopped || !results.isConnected || activeDoc() !== doc ||
