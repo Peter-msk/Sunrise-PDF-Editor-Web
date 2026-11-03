@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
-  "asOf": "2026-11-03",
+  "asOf": "2026-11-04",
   "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시. 2026-11-02 USR-11 병합 메모리 구조 개선: 원본 PDFPage 문서 참조를 경량 페이지 박스/회전값으로 치환하고 복사가 완료된 PDF 소스 참조를 즉시 해제. 실제 240쪽 합성 병합·RSS 관측 테스트로 검증하며 절대 메모리 상한이나 현장 파일 대응을 주장하지 않음. 2026-11-02 PR #41: 모바일 파일 메뉴(열기·저장·병합), 터치 기반 브라우저 파일 선택·저장 다운로드/재열기 및 병합 창 실기 브라우저 E2E, Linux Chromium/Windows Chrome·Edge+Node 빌드 4/4 PASS(Actions #41407776399). USR-19 소스/자동검증 점수만 근거에 따라 갱신하며 실제 모바일 기기·운영 점수는 유지.",
   "excluded": [
     "USR-20 (OCR)"
@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 55,
-      "automated": 87,
+      "implementation": 62,
+      "automated": 92,
       "practical": 20,
       "deployment": 0,
-      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외."
+      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외. R23: 기존 Excel 페이지/텍스트 내보내기 유지, PDF.js 가로 열 좌표 기반 Excel 다열 표 추정 별도 명령 추가. 2행 이상 반복 정렬 좌표만 인식, PDF.js 넓은 공백 항목은 열 구분자로 처리, 불규칙/회전/충돌 셀 거부. 합성 PDF 브라우저 파일 다운로드 회귀. 테두리·병합 셀·실무 문서 전체 복원은 미완. R25: R23-A의 Excel 열 추정 기능을 R24 원문 직접수정·마스킹 검증과 함께 통합. 새 통합 브랜치 CI 및 현장 Office 검증은 별도 판정."
     },
     {
       "id": "TECH-01",

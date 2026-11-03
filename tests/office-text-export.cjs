@@ -56,11 +56,52 @@ assert.throws(()=>office.xlsx(['\ud800']),/Unicode/,'lone surrogate may not sile
 assert(readZip(office.docx(['줄1\r줄2']))['word/document.xml'].includes('줄2'));
 assert.equal((readZip(office.xlsx(['줄1\r줄2']))['xl/worksheets/sheet1.xml'].match(/<row r=/g)||[]).length,3);
 
+// R23: opt-in geometric table export keeps actual Excel columns, page
+// numbering, missing columns and literal formula-like values.
+const entry=(str,x,y,width=26)=>({str,width,transform:[10,0,0,10,x,y],hasEOL:false});
+const tabular=[
+ entry('사업명',40,700,50),entry('계약금액',220,700,70),
+ entry('A구역',40,677,55),entry('1000',220,677,45),
+ entry('B구역',40,654,55),entry('=2+3',220,654,45)
+];
+// PDF.js inserts space-only, wide text spans between text columns.
+const spaced=readZip(office.xlsxColumns([[
+ ...tabular,entry(' ',90,700,130),entry(' ',95,677,125),entry(' ',95,654,125)
+]]))['xl/worksheets/sheet1.xml'];
+assert(spaced.includes('<c r="C4" t="inlineStr"><is><t xml:space="preserve">=2+3'));
+assert(!spaced.includes('<c r="D4"'),'large PDF.js spaces cannot create extra Excel columns');
+const table=readZip(office.xlsxColumns([tabular]))['xl/worksheets/sheet1.xml'];
+assert(table.includes('<c r="A2" t="inlineStr">'),'page number column must persist');
+assert(table.includes('<c r="B2" t="inlineStr"><is><t xml:space="preserve">사업명'));
+assert(table.includes('<c r="C2" t="inlineStr"><is><t xml:space="preserve">계약금액'));
+assert(table.includes('<c r="C4" t="inlineStr"><is><t xml:space="preserve">=2+3'));
+assert(!table.includes('<f>'),'PDF text must not execute Excel formulas');
+const partial=readZip(office.xlsxColumns([[
+ ...tabular,entry('검토',40,630,30)
+]]))['xl/worksheets/sheet1.xml'];
+assert(partial.includes('<c r="B5" t="inlineStr"><is><t xml:space="preserve">검토'));
+assert(!partial.includes('<c r="C5"'),'single-column note must not shift');
+const withPlain=readZip(office.xlsxColumns([
+ tabular,[entry('본문 설명',40,700,70)]
+]))['xl/worksheets/sheet1.xml'];
+assert(withPlain.includes('본문 설명'),'non-table pages must still be included');
+for(const items of [
+ [entry('혼자',50,700)],
+ [entry('한줄',40,700,30),entry('끝',230,700,30)],
+ [entry('가',40,700),entry('나',220,700),entry('다',40,678),entry('라',275,678)]
+])assert.throws(()=>office.xlsxColumns([items]),/표|열/);
+assert.throws(()=>office.xlsxColumns([[{str:'회전',width:50,transform:[0,10,-10,0,50,700]},...tabular]]),/회전/);
+assert.throws(()=>office.xlsxColumns([tabular,tabular.map(it=>({...it,str:'\ud800'}))]),/Unicode/);
+assert.throws(()=>office.xlsxColumns(Array(121).fill(tabular)),/120/);
+
 const editor=fs.readFileSync('src/editor/index.html','utf8');
 const build=fs.readFileSync('scripts/build-release.cjs','utf8');
 for(const id of ['exportWordText','exportExcelText'])assert(editor.includes('case "'+id+'":'));
 assert(editor.includes('window.SunriseOfficeExport.docx(pages)'));
 assert(editor.includes('window.SunriseOfficeExport.xlsx(pages)'));
+assert(editor.includes('case "exportExcelColumns":'));
+assert(editor.includes('window.SunriseOfficeExport.xlsxColumns(columnPages)'));
+assert(editor.includes('Excel 표 열 추정'));
 assert(editor.includes('window.SunriseOfficeExport.pageTextFromItems(content?.items)'));
 assert(editor.includes('불완전한 Office 파일을 생성하지 않았습니다'));
 assert(editor.includes('원래 PDF의 서식·이미지는 변환되지 않습니다'));

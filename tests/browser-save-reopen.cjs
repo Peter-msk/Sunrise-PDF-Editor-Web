@@ -639,6 +639,44 @@ async function main(){
    assert(maskHeight>=105,'masking dialog textarea must not collapse under flex layout');
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
+   // R23: exercise the new explicit Excel-column command in a real browser.
+   // Keep the original text-only Excel route unchanged.
+   const tableFixture=await PDFLib.PDFDocument.create();
+   const tableSheet=tableFixture.addPage([420,595]);
+   for(const [left,right,y] of [
+     ['Item','Amount',500],['Alpha','1234',470],['Beta','5678',440]
+   ]){
+     tableSheet.drawText(left,{x:42,y,size:12});
+     tableSheet.drawText(right,{x:240,y,size:12});
+   }
+   const tablePage=await context.newPage(),tableErrors=[];
+   tablePage.on('pageerror',e=>tableErrors.push(e.message));
+   await tablePage.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
+   await tablePage.waitForFunction(()=>Boolean(window.SunriseOfficeExport&&window.pdfjsLib),null,{timeout:40000});
+   await tablePage.locator('#openPdfInput').setInputFiles({
+     name:'columns-sample.pdf',mimeType:'application/pdf',buffer:Buffer.from(await tableFixture.save())
+   });
+   await tablePage.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('columns-sample.pdf'),null,{timeout:40000});
+   const tableDownload=tablePage.waitForEvent('download',{timeout:30000});
+   await tablePage.evaluate(()=>executeCommand('exportExcelColumns'));
+   const diagnostics=await tablePage.evaluate(async()=>{
+     const info=await activeDoc().pdfJsDoc.getPage(1).then(p=>p.getTextContent());
+     return {text:info.items.map(x=>({str:x.str,x:x.transform?.[4],y:x.transform?.[5],width:x.width,hasEOL:x.hasEOL})),
+       toast:document.getElementById('toastContainer')?.textContent,
+       module:typeof window.SunriseOfficeExport?.xlsxColumns};
+   });
+   console.log('R23 browser PDF table diagnostics:',JSON.stringify(diagnostics));
+   const tableFile=await tableDownload;
+   assert.match(tableFile.suggestedFilename(),/_columns\.xlsx$/);
+   const tablePath=path.join(downloadDir,'real-columns.xlsx');
+   await tableFile.saveAs(tablePath);
+   const sheetBytes=fs.readFileSync(tablePath);
+   assert.equal(sheetBytes.readUInt32LE(0),0x04034b50,'table workbook must be an actual XLSX ZIP');
+   for(const fragment of ['Item','Amount','Alpha','1234','Beta','5678','C2','C3','C4'])
+     assert(sheetBytes.includes(Buffer.from(fragment)),'missing original table cell or column '+fragment);
+   assert.equal(tableErrors.length,0,'Excel table export browser errors: '+tableErrors.join(' | '));
+   await tablePage.close();
+   console.log('PASS R23: real PDF -> actual 3-row, 2-column Excel download with preserved table strings');
    console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split, stale-plan protection, raster masking, embedded PNG/reports, mobile touch save/reopen');
    await context.close();
 
