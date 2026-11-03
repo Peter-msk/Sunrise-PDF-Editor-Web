@@ -1240,6 +1240,22 @@
       margin: 4px 2px;
     }
 
+    #mobPageIndicator {
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 11.5px;
+      font-weight: 700;
+      min-width: 56px;
+      min-height: 40px;
+      padding: 2px;
+      border-radius: 5px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    #mobPageIndicator:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    #mobPageIndicator:disabled { opacity: .55; cursor: default; }
+
     #mobileDrawerBackdrop {
       display: none;
       position: fixed;
@@ -1878,7 +1894,7 @@
         <button type="button" class="quick-icon-btn" id="mobPrevPageBtn" title="이전 쪽">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
-        <span id="mobPageIndicator" style="font-size:11.5px;font-weight:700;min-width:44px;text-align:center">1 / 1</span>
+        <button type="button" id="mobPageIndicator" title="페이지 번호를 눌러 이동" aria-label="페이지 번호 입력해 이동" disabled>- / -</button>
         <button type="button" class="quick-icon-btn" id="mobNextPageBtn" title="다음 쪽">
           <i class="fa-solid fa-chevron-right"></i>
         </button>
@@ -3591,7 +3607,13 @@
       const mobInd = document.getElementById("mobPageIndicator");
       if (mobPrev) mobPrev.disabled = !(hasDoc && doc.currentPage > 0);
       if (mobNext) mobNext.disabled = !(hasDoc && doc.currentPage < doc.pageCount - 1);
-      if (mobInd) mobInd.textContent = hasDoc ? `${doc.currentPage + 1} / ${doc.pageCount}` : "- / -";
+      if (mobInd) {
+        mobInd.textContent = hasDoc ? `${doc.currentPage + 1} / ${doc.pageCount}` : "- / -";
+        mobInd.disabled = !hasDoc || Boolean(doc.operationBusy);
+        mobInd.setAttribute("aria-label", hasDoc
+          ? `${doc.currentPage + 1} / ${doc.pageCount}쪽 · 누르면 페이지 번호 입력`
+          : "PDF를 연 뒤 페이지 번호 입력");
+      }
 
       const zoomSlider = document.getElementById("zoomSlider");
       zoomSlider.disabled = !hasDoc;
@@ -9765,6 +9787,47 @@
       return true;
     }
 
+    // Mobile long-document navigation: tap the visible page counter to jump
+    // directly to a numbered page. Reuse the desktop page-number validation.
+    function openMobilePageJumpModal() {
+      const doc = activeDoc();
+      if (!doc || doc.operationBusy) return;
+      openModal({
+        title: "페이지 바로 이동", icon: "fa-arrow-right-to-bracket", width: "360px",
+        bodyHtml: `<label for="mobilePageJumpTarget">이동할 페이지 (1~${doc.pageCount})</label>
+          <input id="mobilePageJumpTarget" type="number" class="dialog-input"
+            inputmode="numeric" min="1" max="${doc.pageCount}" step="1"
+            value="${doc.currentPage+1}" style="width:100%;min-height:44px">
+          <p id="mobilePageJumpFeedback" role="status" aria-live="polite"></p>`,
+        footerHtml: `<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn" id="mobilePageJumpCancel">취소</button>
+          <button type="button" class="dialog-btn primary" id="mobilePageJumpGo">이동</button>
+        </div>`,
+        onMount: () => {
+          const input = document.getElementById("mobilePageJumpTarget");
+          const feedback = document.getElementById("mobilePageJumpFeedback");
+          const apply = () => {
+            if (activeDoc() !== doc || doc.operationBusy) {
+              feedback.textContent = "활성 문서가 변경되었거나 처리 중입니다. 다시 열어 주세요.";
+              return;
+            }
+            // Avoid a stale desktop spinner draft blocking this new input.
+            pageJumpDraftDoc = null;
+            if (!applyPageJump(doc, input)) {
+              feedback.textContent = `1~${doc.pageCount} 사이의 정수 페이지를 입력하세요.`;
+              return;
+            }
+            closeModal();
+          };
+          document.getElementById("mobilePageJumpGo").addEventListener("click", apply);
+          document.getElementById("mobilePageJumpCancel").addEventListener("click", closeModal);
+          input.addEventListener("keydown", event => {
+            if (event.key === "Enter") { event.preventDefault(); apply(); }
+          });
+        }
+      });
+    }
+
     // Touch-friendly file actions are always reachable without horizontal
     // scrolling the desktop command bar. Keep the existing command dispatcher
     // as the only implementation of PDF open, save and merge.
@@ -9857,6 +9920,7 @@
       document.getElementById("mobRightPaneBtn").addEventListener("click", () => toggleRightPane());
       document.getElementById("mobRibbonBtn").addEventListener("click", () => toggleRibbonVisibility());
       document.getElementById("mobFileBtn").addEventListener("click", openMobileFileActionsModal);
+      document.getElementById("mobPageIndicator").addEventListener("click", openMobilePageJumpModal);
       document.getElementById("mobPrevPageBtn").addEventListener("click", () => {
         const doc = activeDoc();
         if (doc && doc.currentPage > 0) {
