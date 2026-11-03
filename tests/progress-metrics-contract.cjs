@@ -11,11 +11,11 @@ const all=data.features.filter(x=>/^(ADM|USR)-/.test(x.id)),mean=arr=>
  Math.round(10*arr.reduce((sum,x)=>sum+x.implementation,0)/arr.length)/10;
 assert.equal(data.features.length,36);
 assert.equal(all.length,33);
-assert.equal(mean(all),80.7);
+assert.equal(mean(all),80.8);
 assert.equal(summary.productImplementation,mean(all));
 assert.equal(summary.generalImplementation,mean(all.filter(x=>[1,2,3].includes(x.phase))));
 assert.equal(summary.specialistImplementation,mean(all.filter(x=>x.phase===4)));
-assert.equal(summary.generalImplementation,89.2);
+assert.equal(summary.generalImplementation,89.3);
 assert.equal(summary.specialistImplementation,33);
 assert.equal(summary.overall,47);
 assert.equal(release.ci.requiredJobsPassed,4);

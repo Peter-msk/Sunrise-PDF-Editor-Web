@@ -258,11 +258,11 @@
       "id": "USR-09",
       "name": "PDF 압축",
       "phase": 3,
-      "implementation": 75,
-      "automated": 85,
+      "implementation": 78,
+      "automated": 90,
       "practical": 0,
       "deployment": 30,
-      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요"
+      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요 R22: 브라우저 JPEG 재인코딩 출력의 유효한 JPEG 헤더·색상 및 예상 해상도 일치 검사를 저장 전 적용, 불일치 시 PDF 다운로드 차단. 실제 Linux Chromium·Windows Chrome/Edge 합성 사진 PDF에서 강도 20/60/90 압축·이미지 실디코딩·검색 가능한 PDF 텍스트·픽셀 크기 및 PSNR 표본 측정·오염 JPEG 주입 fail-closed 검증(PR #53, CI #41597409431 4/4 PASS). Chromium 표본의 834,452바이트 원본에서 204,499/111,678/11,406바이트 결과와 PSNR 22.3/21.5/20.1dB는 이 합성 문서 한정. 실무 스캔·도면의 글자 가독성·모바일 실기·운영 수용은 미검증."
     },
     {
       "id": "USR-12",
