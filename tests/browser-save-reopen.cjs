@@ -598,6 +598,13 @@ async function main(){
    await tablePage.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('columns-sample.pdf'),null,{timeout:40000});
    const tableDownload=tablePage.waitForEvent('download',{timeout:30000});
    await tablePage.evaluate(()=>executeCommand('exportExcelColumns'));
+   const diagnostics=await tablePage.evaluate(async()=>{
+     const info=await activeDoc().pdfJsDoc.getPage(1).then(p=>p.getTextContent());
+     return {text:info.items.map(x=>({str:x.str,x:x.transform?.[4],y:x.transform?.[5],width:x.width,hasEOL:x.hasEOL})),
+       toast:document.getElementById('toastContainer')?.textContent,
+       module:typeof window.SunriseOfficeExport?.xlsxColumns};
+   });
+   console.log('R23 browser PDF table diagnostics:',JSON.stringify(diagnostics));
    const tableFile=await tableDownload;
    assert.match(tableFile.suggestedFilename(),/_columns\\.xlsx$/);
    const tablePath=path.join(downloadDir,'real-columns.xlsx');
