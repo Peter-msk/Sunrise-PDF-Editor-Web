@@ -85,7 +85,7 @@ for(const items of [
  [entry('가',40,700),entry('나',220,700),entry('다',40,678),entry('라',275,678)]
 ])assert.throws(()=>office.xlsxColumns([items]),/표|열/);
 assert.throws(()=>office.xlsxColumns([[{str:'회전',width:50,transform:[0,10,-10,0,50,700]},...tabular]]),/회전/);
-assert.throws(()=>office.xlsxColumns([tabular,tabular.map(it=>({...it,str:'\\ud800'}))]),/Unicode/);
+assert.throws(()=>office.xlsxColumns([tabular,tabular.map(it=>({...it,str:'\ud800'}))]),/Unicode/);
 assert.throws(()=>office.xlsxColumns(Array(121).fill(tabular)),/120/);
 
 const editor=fs.readFileSync('src/editor/index.html','utf8');
