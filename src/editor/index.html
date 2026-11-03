@@ -6092,6 +6092,15 @@
           const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', settings.quality / 100));
           if (!blob || blob.type !== 'image/jpeg') throw new Error('JPEG 인코딩을 지원하지 않습니다.');
           const jpeg = new Uint8Array(await blob.arrayBuffer());
+          // A PDF parser can open a document without decoding its image XObjects.
+          // Verify the actual browser-encoded JPEG before publishing a PDF:
+          // corrupted output and mismatched pixel dimensions must fail closed.
+          let encoded;
+          try { encoded = await window.PDFLib.JpegEmbedder.for(jpeg); }
+          catch { throw new Error('압축 결과 JPEG 이미지가 손상되어 저장을 중단했습니다.'); }
+          if (encoded.width !== canvas.width || encoded.height !== canvas.height ||
+              encoded.colorSpace !== 'DeviceRGB')
+            throw new Error('압축 결과 JPEG 이미지의 크기·색상 형식이 올바르지 않습니다.');
           if (jpeg.length + 64 >= object.getContents().length) { skipped++; continue; }
           const updated = dict.clone(); updated.set(n('Filter'), n('DCTDecode')); updated.delete(n('DecodeParms'));
           updated.set(n('ColorSpace'), n('DeviceRGB')); updated.set(n('BitsPerComponent'), PDFNumber.of(8));
