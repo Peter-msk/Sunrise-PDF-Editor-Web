@@ -107,5 +107,87 @@
     }
     return result;
   }
-  return {extract,pixelsToRgba,validateImage};
+
+  // Export unchanged JPEG stream bytes from /Resources/XObject. Unlike the
+  // PDF.js PNG path, this does not render, recompress or flatten pixels.
+  // Deliberately limited to direct DCTDecode image streams without masks,
+  // auxiliary filters or Decode parameters; nested Form XObjects are not
+  // traversed. Unused resource images may be found as well.
+  async function extractOriginalJpegs(pdfBytes,options){
+    const opt=options||{},lib=opt.PDFLib;
+    if(!lib?.PDFDocument?.load||!lib?.PDFName?.of||typeof opt.onImage!=='function')
+      throw Error('PDF 원본 JPEG 추출 엔진 또는 출력 기능이 없습니다.');
+    const bytes=pdfBytes instanceof Uint8Array?pdfBytes:
+      pdfBytes instanceof ArrayBuffer?new Uint8Array(pdfBytes):null;
+    if(!bytes?.byteLength)throw Error('원본 PDF 바이트가 비어 있거나 올바르지 않습니다.');
+    const cancelled=()=>{if(opt.cancelled?.())throw Error('이미지 추출이 취소되었습니다.');};
+    const taskYield=opt.yieldTask||(()=>new Promise(resolve=>setTimeout(resolve,0)));
+    cancelled();
+    const pdf=await lib.PDFDocument.load(bytes,{updateMetadata:false});
+    cancelled();
+    const pages=opt.currentPage===undefined?
+      Array.from({length:Math.min(pdf.getPageCount(),MAX_PAGES)},(_,i)=>i+1):
+      [opt.currentPage];
+    if(pages.some(p=>!Number.isSafeInteger(p)||p<1||p>pdf.getPageCount()))
+      throw Error('페이지 번호가 올바르지 않습니다.');
+    const result={images:0,skipped:0,pages:0,bytes:0,
+      limited:pdf.getPageCount()>MAX_PAGES&&opt.currentPage===undefined};
+    const n=lib.PDFName.of,seen=new Set();
+    for(const number of pages){
+      cancelled();
+      const page=pdf.getPage(number-1),resources=page.node.Resources();
+      const objects=resources?.get?.(n('XObject'));
+      const dict=objects?pdf.context.lookup(objects):null;
+      if(dict?.entries){
+        for(const [resourceName,ref] of dict.entries()){
+          cancelled();
+          const image=pdf.context.lookup(ref);
+          if(image?.dict?.get?.(n('Subtype'))?.toString()!=='/Image')continue;
+          const key=ref instanceof lib.PDFRef?ref.toString():number+':'+resourceName.toString();
+          if(seen.has(key))continue;
+          seen.add(key);
+          if(result.images>=MAX_IMAGES){result.limited=true;break;}
+          const meta=image.dict;
+          // A JPEG with a transparency mask, custom Decode, or multiple
+          // filters cannot be represented faithfully by one standalone JPG.
+          if(meta.get(n('Filter'))?.toString()!=='/DCTDecode'||
+             meta.has(n('SMask'))||meta.has(n('Mask'))||
+             meta.has(n('Decode'))||meta.has(n('DecodeParms'))||
+             meta.get(n('ImageMask'))?.toString()==='true'){
+            result.skipped++;continue;
+          }
+          const width=pdf.context.lookup(meta.get(n('Width')))?.asNumber?.();
+          const height=pdf.context.lookup(meta.get(n('Height')))?.asNumber?.();
+          if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||
+             width<1||height<1||width*height>MAX_PIXELS){
+            result.skipped++;continue;
+          }
+          const raw=image.getContents?.();
+          if(!(raw instanceof Uint8Array)||raw.byteLength<4||
+             raw[0]!==255||raw[1]!==216||
+             raw[raw.length-2]!==255||raw[raw.length-1]!==217){
+            result.skipped++;continue;
+          }
+          if(result.bytes+raw.byteLength>MAX_OUTPUT){
+            result.skipped++;result.limited=true;continue;
+          }
+          // Copy only accepted JPEG bytes. Result buttons own these bytes,
+          // not a reference into the source PDF's mutable parser context.
+          const output=Uint8Array.from(raw);
+          cancelled();
+          await opt.onImage({page:number,index:result.images+1,width,height,
+            bytes:output,format:'jpeg'});
+          cancelled();
+          result.images++;result.bytes+=output.byteLength;
+        }
+      }
+      result.pages++;
+      opt.onProgress?.({...result,total:pages.length});
+      if(result.images>=MAX_IMAGES)break;
+      await taskYield();
+    }
+    cancelled();
+    return result;
+  }
+  return {extract,extractOriginalJpegs,pixelsToRgba,validateImage};
 });
