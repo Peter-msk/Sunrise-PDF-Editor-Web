@@ -212,5 +212,113 @@
    includeUnmaskedPages,inspection};
  }
 
- return {correctionCandidate,validateMaskRect,checkRasterSize,exportMaskedPage,parseMaskPlan,checkOutputStructure,exportMaskedPages};
+
+ // Narrow *source-stream* text replacement, not a white-box overlay.
+ // Only unambiguous, simple 7-bit Type1/Standard-14 text with one Tj operand
+ // is supported. Unsupported fonts, mixed operators and ambiguous hits fail
+ // closed; this is NOT a confidential-data redaction operation.
+ async function replaceSimpleSourceText({bytes,pageNumber,original,replacement,PDFLib}){
+  if(!PDFLib?.PDFDocument?.load||!PDFLib?.PDFRawStream||!PDFLib?.PDFRef||
+     !Number.isSafeInteger(pageNumber)||pageNumber<1||
+     typeof original!=='string'||typeof replacement!=='string'||
+     !/^[\x20-\x7e]{1,120}$/.test(original))
+   throw Error('원문 직접 수정 입력이 올바르지 않습니다.');
+  if(!/^[\x20-\x7e]{1,120}$/.test(replacement)||
+     original===replacement||original.length!==replacement.length)
+   throw Error('기존 문구와 새 문구는 서로 다른 동일 길이의 영문·숫자·ASCII 문자열이어야 합니다.');
+  const {PDFDocument,PDFRawStream,PDFArray,PDFRef,PDFName,PDFNumber}=PDFLib;
+  const n=PDFName.of,source=await PDFDocument.load(bytes,{updateMetadata:false});
+  if(pageNumber>source.getPageCount())throw Error('원문 수정 페이지 번호가 범위를 벗어났습니다.');
+  if(source.catalog.get(n('Perms'))||source.catalog.get(n('AcroForm')))
+   throw Error('서명·양식이 포함된 문서는 원문 직접 수정을 지원하지 않습니다.');
+  const pages=source.getPages(),page=pages[pageNumber-1],context=source.context;
+  const streamRefs=p=>{
+   const raw=p.node.get(n('Contents'));
+   if(!raw)return [];
+   const content=context.lookup(raw);
+   if(content instanceof PDFArray)return [...Array(content.size())].map((_,i)=>content.get(i));
+   return [raw];
+  };
+  const refs=streamRefs(page);
+  if(!refs.length||refs.length>40||refs.some(ref=>!(ref instanceof PDFRef)))
+   throw Error('단순 PDF 텍스트 스트림만 직접 수정할 수 있습니다.');
+  const resources=page.node.Resources()||page.node.normalizedEntries?.().Resources;
+  const fontResources=resources&&context.lookup(resources.get(n('Font')));
+  if(!fontResources?.get)
+   throw Error('표준 PDF 글꼴 정보를 확인할 수 없습니다.');
+  const bases=new Set(['Helvetica','Helvetica-Bold','Helvetica-Oblique',
+   'Helvetica-BoldOblique','Times-Roman','Times-Bold','Times-Italic',
+   'Times-BoldItalic','Courier','Courier-Bold','Courier-Oblique',
+   'Courier-BoldOblique']);
+  const safeFont=name=>{
+   const ref=fontResources.get(n(name)),font=ref&&context.lookup(ref);
+   if(!font?.get||font.get(n('Subtype'))?.toString()!=='/Type1')return false;
+   const base=font.get(n('BaseFont'))?.toString()?.slice(1);
+   const encoding=font.get(n('Encoding'));
+   return bases.has(base)&&(!encoding||encoding.toString()==='/WinAnsiEncoding')&&
+     !font.has(n('ToUnicode'))&&!font.has(n('Differences'))&&!font.has(n('Widths'));
+  };
+  const decodeBytes=buffer=>{
+   let result='';
+   for(let i=0;i<buffer.length;i+=8192)
+    result+=String.fromCharCode(...buffer.subarray(i,i+8192));
+   return result;
+  };
+  const hexToText=hex=>{
+   if(hex.length%2)return null;
+   let str='';
+   for(let i=0;i<hex.length;i+=2)str+=String.fromCharCode(parseInt(hex.slice(i,i+2),16));
+   return str;
+  };
+  const replacementHex=Array.from(replacement,ch=>ch.charCodeAt(0).toString(16).padStart(2,'0')).join('').toUpperCase();
+  const matches=[];
+  for(const ref of refs){
+   const stream=context.lookup(ref),filter=stream?.dict?.get(n('Filter'));
+   if(!(stream instanceof PDFRawStream)||
+      filter&&filter.toString()!=='/FlateDecode'||
+      stream.dict.has(n('DecodeParms'))||stream.dict.has(n('F')))
+    continue;
+   const raw=stream.getContents();
+   if(raw.length>512*1024)continue;
+   let decoded;
+   try{decoded=filter?PDFLib.decodePDFRawStream(stream).decode():raw;}
+   catch{continue;}
+   if(decoded.length>2*1024*1024)continue;
+   const script=decodeBytes(decoded),blocks=/\bBT\b([\s\S]*?)\bET\b/g;
+   for(const block of script.matchAll(blocks)){
+    const body=block[1];
+    if(/\bTJ\b/.test(body)||(body.match(/\bTj\b/g)||[]).length!==1)continue;
+    const token=/(<([0-9A-Fa-f]+)>|\(([^()\\]*)\))\s+Tj(?=\s|$)/.exec(body);
+    if(!token)continue;
+    const existing=token[2]!==undefined?hexToText(token[2]):token[3];
+    if(existing!==original)continue;
+    const fontOps=[...body.slice(0,token.index).matchAll(/\/([A-Za-z0-9._-]+)\s+(?:\d+(?:\.\d+)?)\s+Tf(?=\s|$)/g)];
+    if(fontOps.length!==1||!safeFont(fontOps[0][1]))continue;
+    const tokenStart=block.index+2+token.index;
+    const operand=token[1];
+    matches.push({ref,stream,script,decoded,tokenStart,operand});
+   }
+  }
+  if(matches.length!==1)
+   throw Error(matches.length?'같은 원문이 여러 곳에 있어 안전한 수정 위치를 확정하지 못했습니다.':
+    '원문 직접 수정 대상이 없습니다. 표준 글꼴·단일 ASCII 텍스트 조각만 지원합니다.');
+  const match=matches[0],key=match.ref.toString();
+  if(pages.some((other,i)=>i!==pageNumber-1&&streamRefs(other).some(x=>x.toString()===key)))
+   throw Error('여러 페이지가 공유하는 스트림은 직접 수정하지 않습니다.');
+  const head=match.script.slice(0,match.tokenStart),tail=match.script.slice(match.tokenStart+match.operand.length);
+  const modified=head+'<'+replacementHex+'>'+tail;
+  const data=Uint8Array.from(modified,ch=>ch.charCodeAt(0));
+  const dict=match.stream.dict.clone();
+  dict.delete(n('Filter'));dict.delete(n('DecodeParms'));
+  dict.set(n('Length'),PDFNumber.of(data.length));
+  context.assign(match.ref,PDFRawStream.of(dict,data));
+  const output=await source.save({updateFieldAppearances:false,useObjectStreams:false});
+  const check=await PDFDocument.load(output,{updateMetadata:false});
+  if(check.getPageCount()!==pages.length||
+     check.getPage(pageNumber-1).getRotation().angle!==page.getRotation().angle)
+   throw Error('원문 직접 수정 결과의 페이지 구조 검증에 실패했습니다.');
+  return {bytes:output,pageNumber,original,replacement};
+ }
+
+ return {correctionCandidate,validateMaskRect,checkRasterSize,exportMaskedPage,parseMaskPlan,checkOutputStructure,exportMaskedPages,replaceSimpleSourceText};
 });
