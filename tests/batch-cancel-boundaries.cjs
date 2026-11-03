@@ -49,7 +49,7 @@ async function run(files,settings,signal,engine,readFile){
  const output=collect(signal);
  await batch.process(files,settings,output.handlers,{
   PDFLib:engine.lib,
-  readFile:readFile||async f=>f.bytes
+  readFile:readFile || (async f=>f.bytes)
  });
  return output;
 }
