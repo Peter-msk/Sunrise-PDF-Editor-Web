@@ -64,6 +64,12 @@ const tabular=[
  entry('A구역',40,677,55),entry('1000',220,677,45),
  entry('B구역',40,654,55),entry('=2+3',220,654,45)
 ];
+// PDF.js inserts space-only, wide text spans between text columns.
+const spaced=readZip(office.xlsxColumns([[
+ ...tabular,entry(' ',90,700,130),entry(' ',95,677,125),entry(' ',95,654,125)
+]]))['xl/worksheets/sheet1.xml'];
+assert(spaced.includes('<c r="C4" t="inlineStr"><is><t xml:space="preserve">=2+3'));
+assert(!spaced.includes('<c r="D4"'),'large PDF.js spaces cannot create extra Excel columns');
 const table=readZip(office.xlsxColumns([tabular]))['xl/worksheets/sheet1.xml'];
 assert(table.includes('<c r="A2" t="inlineStr">'),'page number column must persist');
 assert(table.includes('<c r="B2" t="inlineStr"><is><t xml:space="preserve">사업명'));
