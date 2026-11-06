@@ -126,6 +126,27 @@ assert.equal((highVolumeXml.match(/<row r=/g)||[]).length,1801,'large table rows
 assert(highVolumeXml.includes('A1799')&&highVolumeXml.includes('B1799'),'large table content');
 
 const editor=fs.readFileSync('src/editor/index.html','utf8');
+// R32 DEV1: opt-in editable Word paragraphs, heading inference, regular-grid
+// table reconstruction and a strictly limited rotation/readability contract.
+const structured=readZip(office.docxLayout([{
+ items:[entry('사업 현황',40,744,90),...tabular],
+ styles:{},width:600,height:800,rotation:0
+}]));
+const wordXml=structured['word/document.xml'];
+assert(wordXml.includes('<w:tbl>'),'regular 3-row columns must become editable Word table cells');
+assert(wordXml.includes('사업명')&&wordXml.includes('계약금액')&&wordXml.includes('B구역'));
+assert(structured['word/styles.xml']?.includes('Heading1'));
+assert(structured['word/_rels/document.xml.rels']?.includes('styles.xml'));
+assert.throws(()=>office.docxLayout([{
+ items:[entry('세로쓰기',40,700)],width:600,height:800,rotation:90
+}]),/회전/,'rotated pages must fail closed rather than claiming exact layout');
+assert.throws(()=>office.docxLayout([{
+ items:[entry('정상',40,700),{...entry('불량',100,700),transform:[0,10,-10,0,100,700]}],
+ width:600,height:800,rotation:0
+}]),/회전/,'rotated text items must not be silently discarded');
+assert(editor.includes('case "exportWordLayout":'),'new Word layout command must be wired');
+assert(editor.includes('window.SunriseOfficeExport.docxLayout(layoutPages)'));
+
 const build=fs.readFileSync('scripts/build-release.cjs','utf8');
 for(const id of ['exportWordText','exportExcelText'])assert(editor.includes('case "'+id+'":'));
 assert(editor.includes('window.SunriseOfficeExport.docx(pages)'));

@@ -10,7 +10,8 @@ const elements = {
   reorderCancelBtn: {addEventListener: (type, fn) => callbacks.cancel = fn},
   reorderConfirmBtn: {addEventListener: (type, fn) => callbacks.confirm = fn},
 };
-const ctx = vm.createContext({window:{PDFLib:lib}, state, Set, Array, console,
+const ctx = vm.createContext({window:{PDFLib:lib}, state, Set, Array, console, activeDoc:()=>ctx.doc,
+  verifyPdfPageGeometry:()=>{},parsePageCountAndMeta:async()=>({pdfJsDoc:{destroy:async()=>{}}}),
   showToast: message => toast = message, saveUndoSnapshot: () => snapshots++,
   reloadDocPdfJs: async () => {}, refreshAllViews: async () => {}, closeModal: () => {},
   openModal: config => {modal = config; config.onMount();}, document: {getElementById: id => elements[id]},

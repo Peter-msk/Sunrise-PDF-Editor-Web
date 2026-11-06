@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict'),office=require('../src/assets/sunrise-office-export.js');
+const text=(str,x,y,width=35)=>({str,width,dir:'ltr',transform:[12,0,0,12,x,y]});
+const table=(left,top)=>({horizontal:[top,top-50,top-100].map(at=>({at,from:left,to:left+200})),vertical:[left,left+100,left+200].map(at=>({at,from:top-100,to:top}))});
+const a=table(20,500),b=table(20,250),rules={horizontal:[...a.horizontal,...b.horizontal],vertical:[...a.vertical,...b.vertical]};
+const page={width:400,height:600,rotation:0,items:[text('HEADER',20,550),text('TABLE_ONE',30,470),text('BETWEEN',20,330),text('TABLE_TWO',30,220),text('FOOTER',20,100)]};
+const plain={...page,items:[text('NO_TABLE_PAGE',20,450)]};
+const parts=office.splitGridPages([page,plain],[rules,{horizontal:[],vertical:[]}]);assert.equal(parts.length,3);
+assert.equal(parts.flatMap(p=>p.page.items).length,page.items.length+plain.items.length);
+const docx=Buffer.from(office.docxGrids([page,plain],[rules,{horizontal:[],vertical:[]}])).toString('utf8');
+assert.equal((docx.match(/<w:tbl>/g)||[]).length,2);
+for(const value of ['HEADER','TABLE_ONE','BETWEEN','TABLE_TWO','FOOTER','NO_TABLE_PAGE'])assert.equal((docx.match(new RegExp(value,'g'))||[]).length,1,value+' must occur once');
+assert(docx.indexOf('TABLE_ONE')<docx.indexOf('BETWEEN'));assert(docx.indexOf('BETWEEN')<docx.indexOf('TABLE_TWO'));
+const xlsx=Buffer.from(office.xlsxGrids([page,plain],[rules,{horizontal:[],vertical:[]}])).toString('utf8');assert(xlsx.includes('PDF 1 Table 1'));assert(xlsx.includes('PDF 1 Table 2'));assert(xlsx.includes('name="PDF 2"'));
+assert(!xlsx.includes('<f>'));
+console.log('R34 multiple tables: separate merged-cell tables, plain pages, text order and no duplication passed');
