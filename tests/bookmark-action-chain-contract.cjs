@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const src=fs.readFileSync('src/editor/index.html','utf8'),a=src.indexOf('    function allowPageStructureChange('),b=src.indexOf('    async function copySelectedPagesToClipboard(',a);assert(a>=0&&b>a);
-let message='';const ctx=vm.createContext({window:{PDFLib:lib},console:{warn(){}},showToast:s=>message=s});vm.runInContext(src.slice(a,b),require('./helpers/editor-metrics.cjs')(ctx));const n=lib.PDFName.of;
+let message='';const ctx=vm.createContext({window:{PDFLib:lib},console:{warn(){},error(){}},showToast:s=>message=s});vm.runInContext(src.slice(a,b),require('./helpers/editor-metrics.cjs')(ctx));const n=lib.PDFName.of;
 function allow(pdf,removed=[]){ctx.pdf=pdf;ctx.removed=removed;return vm.runInContext('allowPageStructureChange(pdf,removed)',require('./helpers/editor-metrics.cjs')(ctx));}
 async function fixture(mode){
  const pdf=await lib.PDFDocument.create();for(let i=0;i<4;i++)pdf.addPage();const c=pdf.context,pages=pdf.getPages();
@@ -30,7 +30,7 @@ async function fixture(mode){
  const f=await fixture('array');let snapshots=0,clipboard={sourceName:'unchanged'};
  const state={get pageClipboard(){return clipboard},set pageClipboard(v){clipboard=v}};
  const end=src.indexOf('    function openPastePagesModal(',a),delStart=src.indexOf('    async function deleteSelectedPagesFromDoc('),delEnd=src.indexOf('    async function rotateSelectedPages(',delStart);
- const ui=vm.createContext({window:{PDFLib:lib},state,Set,Array,console:{warn(){}},showToast:s=>message=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},remapPageItems(){}});
+ const ui=vm.createContext({window:{PDFLib:lib},state,Set,Array,activeDoc:()=>ui.doc,verifyPdfPageGeometry:()=>{},parsePageCountAndMeta:async()=>({pdfJsDoc:{destroy:async()=>{}}}),console:{warn(){},error(){}},showToast:s=>message=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},remapPageItems(){}});
  vm.runInContext(src.slice(a,end)+src.slice(delStart,delEnd),require('./helpers/editor-metrics.cjs')(ui));
  const original=await f.pdf.save();const doc={bytes:original,name:'chain.pdf',pageCount:4,currentPage:2,selectedPages:new Set([2]),overlays:[],bookmarks:[]};ui.doc=doc;
  await vm.runInContext('copySelectedPagesToClipboard(doc,true)',require('./helpers/editor-metrics.cjs')(ui));assert.equal(doc.bytes,original);assert.equal(clipboard.sourceName,'unchanged');assert.equal(snapshots,0);

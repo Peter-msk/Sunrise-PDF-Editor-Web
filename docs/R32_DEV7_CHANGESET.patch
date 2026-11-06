@@ -1,0 +1,314 @@
+--- DEV6/src/assets/sunrise-special-pdf.js
++++ DEV7/src/assets/sunrise-special-pdf.js
+@@ -180,14 +180,88 @@
+    ['사업자등록번호 형식',/(?:^|\D)\d{3}-?\d{2}-?\d{5}(?!\d)/]
+   ];
+   const seen=new Set(),affected=new Set(),skipped=[],unmasked=[];
+-  const totals={candidates:0,covered:0,outside:0,imageOnlyPages:0,skippedPages:0};
++  // Some searchable PDFs split one visible identifier into adjacent text items.
++  // Inspect only same-line, left-to-right, geometrically adjacent fragments.
++  // This remains advisory: no OCR, no hidden-layer extraction, no source PII logging.
++  const fragmentPatterns=types.map(([kind,re])=>[kind,new RegExp(re.source,re.ignoreCase?'gi':'g')]);
++  const itemBox=(item,page)=>{
++   const t=item?.transform;
++   const font=Number.isFinite(item?.height)&&item.height>0?item.height:Math.abs(t?.[3]);
++   if(!Array.isArray(t)||t.length<6||
++      ![t[0],t[1],t[2],t[3],t[4],t[5],font,item?.width].every(Number.isFinite)||
++      Math.abs(t[1])>0.1||Math.abs(t[2])>0.1||font<=0||item.width<=0)return null;
++   return {x:t[4]-1,y:page.height-t[5]-font-2,width:item.width+2,height:font+4,
++    font,baseline:t[5]};
++  };
++  const coveredByMask=(pageNumber,box)=>Boolean(box)&&
++   (masks.get(pageNumber)||[]).some(rect=>
++    box.x>=rect.x&&box.y>=rect.y&&
++    box.x+box.width<=rect.x+rect.width&&
++    box.y+box.height<=rect.y+rect.height);
++  const scanAdjacentFragments=page=>{
++   let run=[];
++   const flush=()=>{
++    if(run.length<2){run=[];return;}
++    const chunks=[];let combined='';
++    for(const part of run){
++     const begin=combined.length;
++     combined+=part.text;
++     chunks.push({...part,begin,end:combined.length});
++    }
++    for(const [kind,re] of fragmentPatterns){
++     re.lastIndex=0;
++     for(const match of combined.matchAll(re)){
++      const first=match.index,last=first+match[0].length;
++      const spans=chunks.filter(x=>x.begin<last&&x.end>first);
++      if(spans.length<2)continue; // Already handled in the per-item scan.
++      // A boundary character from a preceding item may be included by a regex.
++      // Do not count the same identifier again if a single item already matches.
++      if(spans.some(part=>new RegExp(re.source,re.ignoreCase?'i':'').test(part.text)))continue;
++      const x=Math.min(...spans.map(x=>x.box.x));
++      const y=Math.min(...spans.map(x=>x.box.y));
++      const right=Math.max(...spans.map(x=>x.box.x+x.box.width));
++      const bottom=Math.max(...spans.map(x=>x.box.y+x.box.height));
++      const bounds={x,y,width:right-x,height:bottom-y};
++      totals.candidates++;totals.fragmentedCandidates++;
++      if(coveredByMask(page.pageNumber,bounds))totals.covered++;
++      else{
++       totals.outside++;totals.fragmentedOutside++;affected.add(page.pageNumber);
++       if(unmasked.length<60)unmasked.push({pageNumber:page.pageNumber,kind,fragmented:true});
++      }
++     }
++    }
++    run=[];
++   };
++   for(const item of page.items){
++    if(typeof item?.str!=='string'||!item.str){flush();continue;}
++    const text=item.str.normalize('NFKC');
++    const box=itemBox(item,page);
++    if(!box||!text.trim()||text.length>200||item.dir&&item.dir!=='ltr'){
++     flush();continue;
++    }
++    const prev=run[run.length-1];
++    if(prev){
++     const gap=box.x-(prev.box.x+prev.box.width);
++     const tolerance=Math.max(2,Math.min(prev.box.font,box.font)*0.3);
++     if(prev.eol||Math.abs(prev.box.baseline-box.baseline)>tolerance||
++        gap< -Math.max(2,box.font*0.3)||gap>Math.max(8,box.font*0.7)||
++        run.length>=12||run.reduce((n,x)=>n+x.text.length,0)+text.length>700)flush();
++    }
++    run.push({text,box,eol:Boolean(item.hasEOL)});
++    if(item.hasEOL)flush();
++   }
++   flush();
++  };
++
++  const totals={candidates:0,covered:0,outside:0,imageOnlyPages:0,skippedPages:0,fragmentedCandidates:0,fragmentedOutside:0};
+   for(const page of pages){
+    if(!Number.isSafeInteger(page?.pageNumber)||page.pageNumber<1||seen.has(page.pageNumber))
+     throw Error('민감정보 검토 대상 페이지 번호가 중복되거나 잘못되었습니다.');
+    seen.add(page.pageNumber);
+    if(page.unreadable || (page.rotation||0)%360!==0 ||
+       !Number.isFinite(page.width)||!Number.isFinite(page.height)||
+-      page.width<=0||page.height<=0||!Array.isArray(page.items)||page.items.length>100000){
++      page.width<=0||page.height<=0||!Array.isArray(page.items)||page.items.length>100000||
++      page.items.reduce((n,item)=>n+(typeof item?.str==='string'?item.str.length:0),0)>750000){
+     skipped.push(page.pageNumber);totals.skippedPages++;continue;
+    }
+    if(!page.items.some(item=>typeof item?.str==='string'&&item.str.trim()))totals.imageOnlyPages++;
+@@ -196,21 +270,7 @@
+     const text=item.str.normalize('NFKC');
+     const matched=types.filter(([,re])=>re.test(text));
+     if(!matched.length)continue;
+-    const t=item.transform;
+-    const font=Number.isFinite(item.height)&&item.height>0?item.height:Math.abs(t?.[3]);
+-    const width=item.width;
+-    const reliable=Array.isArray(t)&&t.length>=6&&
+-     [t[0],t[1],t[2],t[3],t[4],t[5],font,width].every(Number.isFinite)&&
+-     Math.abs(t[1])<=0.1&&Math.abs(t[2])<=0.1&&font>0&&width>0;
+-    const bounds=reliable?{
+-     x:t[4]-1,y:page.height-t[5]-font-2,
+-     width:width+2,height:font+4
+-    }:null;
+-    const isCovered=Boolean(bounds)&&
+-     (masks.get(page.pageNumber)||[]).some(rect=>
+-      bounds.x>=rect.x&&bounds.y>=rect.y&&
+-      bounds.x+bounds.width<=rect.x+rect.width&&
+-      bounds.y+bounds.height<=rect.y+rect.height);
++    const isCovered=coveredByMask(page.pageNumber,itemBox(item,page));
+     for(const [kind] of matched){
+      totals.candidates++;
+      if(isCovered)totals.covered++;
+@@ -220,6 +280,7 @@
+      }
+     }
+    }
++   scanAdjacentFragments(page);
+   }
+   return {...totals,outsidePages:[...affected].sort((a,b)=>a-b),skippedPagesList:skipped,unmasked};
+  }
+--- DEV6/src/assets/sunrise-office-export.js
++++ DEV7/src/assets/sunrise-office-export.js
+@@ -268,9 +268,9 @@
+  // The plain text DOCX route remains available for ambiguous documents.
+  function docxLayout(rawPages, options={}){
+   if(options===null || typeof options!=='object' ||
+-     ![undefined,'single','two'].includes(options.columnMode))
++     ![undefined,'single','two','three'].includes(options.columnMode))
+    throw Error('Word 읽기 순서 선택값이 올바르지 않습니다.');
+-  const twoColumnMode=options.columnMode==='two';
++  const columnCount=options.columnMode==='three'?3:options.columnMode==='two'?2:1;
+   if(!Array.isArray(rawPages)||!rawPages.length||rawPages.length>MAX_PAGES)
+    throw Error('구조 추정 Word 변환은 최대 120페이지까지 지원합니다.');
+   const pageTexts=rawPages.map((page,index)=>{
+@@ -358,20 +358,23 @@
+     }
+     return lines;
+    };
+-   if(twoColumnMode){
+-    // Fail closed on headers, footers, spanning titles and uncertain gutters:
+-    // do not corrupt reading order by guessing which column owns a text item.
+-    const split=page.width/2,gutter=Math.max(8,page.width*0.015),left=[],right=[];
++   if(columnCount>1){
++    // Conservative opt-in layout: reject any text touching a gutter.
++    // This does not recover spanning headings, uneven columns or illustrations.
++    const gutter=Math.max(8,page.width*0.015);
++    const columns=Array.from({length:columnCount},()=>[]);
+     for(const item of items){
+-     if(item.x+item.width<=split-gutter)left.push(item);
+-     else if(item.x>=split+gutter)right.push(item);
+-     else throw Error((pageIndex+1)+'쪽에 단 경계를 넘는 텍스트가 있습니다. 단락·표 추정 Word를 이용해 주세요.');
+-    }
+-    const columns=[groupLines(left),groupLines(right)];
+-    if(columns.some(lines=>lines.length<3))
+-     throw Error((pageIndex+1)+'쪽은 분리 가능한 좌·우 두 단 각각 3줄 이상이어야 합니다.');
+-    columnsByPage.push(columns);
+-    linesByPage.push([...columns[0],...columns[1]]);
++     const column=columns.findIndex((_,i)=>
++      item.x >= (i===0?0:page.width*i/columnCount+gutter) &&
++      item.x+item.width <= (i===columnCount-1?page.width:page.width*(i+1)/columnCount-gutter));
++     if(column<0)throw Error((pageIndex+1)+'쪽에 단 경계를 넘거나 열 배치를 확인할 수 없는 텍스트가 있습니다. 단락·표 추정 Word를 이용해 주세요.');
++     columns[column].push(item);
++    }
++    const ordered=columns.map(groupLines);
++    if(ordered.some(lines=>lines.length<3))
++     throw Error((pageIndex+1)+'쪽의 '+columnCount+'단 각각에 3줄 이상 있어야 합니다.');
++    columnsByPage.push(ordered);
++    linesByPage.push(ordered.flat());
+    }else{
+     columnsByPage.push(null);
+     linesByPage.push(groupLines(items));
+@@ -431,9 +434,9 @@
+     }
+     return groups;
+    };
+-   if(twoColumnMode){
+-    const [left,right]=columnsByPage[pageIndex];
+-    const width=Math.round(clamp((page.width-84)*10,900,13000));
++   if(columnCount>1){
++    const columns=columnsByPage[pageIndex];
++    const width=Math.round(clamp((page.width-84)*20/columnCount,600,13000));
+     const makeCell=column=>{
+      const origin=Math.min(...column.map(line=>line.x));
+      const paragraphs=column.map((line,j)=>{
+@@ -445,14 +448,13 @@
+      return '<w:tc><w:tcPr><w:tcW w:w="'+width+'" w:type="dxa"/></w:tcPr>'+
+       paragraphs.join('')+'</w:tc>';
+     };
+-    // Two editable cells hold left and right text in independent reading
+-    // order, rather than accidentally interleaving lines on the same baseline.
+-    result.push('<w:tbl><w:tblPr><w:tblW w:w="'+(2*width)+'" w:type="dxa"/>'+
++    // Independent editable cells preserve column reading order.
++    result.push('<w:tbl><w:tblPr><w:tblW w:w="'+(columnCount*width)+'" w:type="dxa"/>'+
+      '<w:tblLayout w:type="fixed"/><w:tblBorders><w:top w:val="nil"/>'+
+      '<w:bottom w:val="nil"/><w:left w:val="nil"/><w:right w:val="nil"/>'+
+      '<w:insideH w:val="nil"/><w:insideV w:val="nil"/></w:tblBorders></w:tblPr>'+
+-     '<w:tblGrid><w:gridCol w:w="'+width+'"/><w:gridCol w:w="'+width+'"/></w:tblGrid>'+
+-     '<w:tr>'+makeCell(left)+makeCell(right)+'</w:tr></w:tbl>');
++     '<w:tblGrid>'+columns.map(()=>'<w:gridCol w:w="'+width+'"/>').join('')+'</w:tblGrid>'+
++     '<w:tr>'+columns.map(makeCell).join('')+'</w:tr></w:tbl>');
+    }else{
+    const grouped=lines.map(cellGroups);
+    let i=0;
+@@ -500,5 +502,6 @@
+  }
+ 
+  const docxTwoColumn=rawPages=>docxLayout(rawPages,{columnMode:'two'});
+- return {docx,docxLayout,docxTwoColumn,xlsx,xlsxColumns,normalizePages,pageTextFromItems};
++ const docxThreeColumn=rawPages=>docxLayout(rawPages,{columnMode:'three'});
++ return {docx,docxLayout,docxTwoColumn,docxThreeColumn,xlsx,xlsxColumns,normalizePages,pageTextFromItems};
+ });
+--- DEV6/src/editor/index.html
++++ DEV7/src/editor/index.html
+@@ -2113,6 +2113,7 @@
+               { id: "exportWordText", label: "Word 문서 (텍스트 전용)", icon: "fa-file-word", docReq: true },
+               { id: "exportWordLayout", label: "Word 단락·표 구조 추정 (실험 기능)", icon: "fa-table-list", docReq: true },
+               { id: "exportWordTwoColumns", label: "Word 좌·우 2단 읽기 순서 추정 (실험)", icon: "fa-columns", docReq: true },
++              { id: "exportWordThreeColumns", label: "Word 가로 3단 읽기 순서 추정 (실험)", icon: "fa-table-columns", docReq: true },
+               { id: "exportExcelText", label: "Excel 텍스트 (페이지/텍스트)", icon: "fa-file-excel", docReq: true },
+               { id: "exportExcelColumns", label: "Excel 표 열 추정 (정렬된 표)", icon: "fa-table-columns", docReq: true },
+               { id: "exportCurrentImage", label: "현재 페이지 이미지 저장", icon: "fa-image", shortcut: "Ctrl+I", docReq: true },
+@@ -5806,6 +5807,10 @@
+         case "exportWordTwoColumns":
+           if (!doc) return;
+           await exportOfficeText(doc,"docx-two-columns");
++          break;
++        case "exportWordThreeColumns":
++          if (!doc) return;
++          await exportOfficeText(doc,"docx-three-columns");
+           break;
+         case "exportExcelText":
+           if (!doc) return;
+@@ -8419,7 +8424,7 @@
+           <strong>가리지 않은 이미지·글자는 여전히 보입니다. 문서 전체 개인정보 자동 탐지·완전 삭제를 보장하지 않습니다.</strong>
+           지정한 사각형 내부의 모든 출력 픽셀을 확인하고 이미지 기반 PDF 구조를 검사합니다.
+           텍스트 레이어에서 주민번호·전화·이메일·사업자번호 <strong>형식</strong> 후보를 찾아 검토할 수 있지만
+-          이미지·분절된 문구·기타 개인정보는 탐지하지 못합니다. 후보 탐색 결과가 0건이어도 안전을 보장하지 않습니다.
++          이미지·일부 멀리 떨어진 분절 문구·기타 개인정보는 탐지하지 못합니다. 인접한 텍스트 조각을 이어 형식 후보를 확인하더라도 0건은 안전 보장을 의미하지 않습니다.
+           원본 PDF는 변경하지 않습니다. 서명·양식이나 편집기 삽입 항목이 있는 문서는 출력하지 않습니다.
+         </div>
+         <p style="font-size:12px;margin:8px 0">한 줄에 <strong>페이지,X,Y,너비,높이</strong> (쉼표 구분, 왼쪽 위 pt).
+@@ -8742,7 +8747,7 @@
+               const result=window.SunriseSpecialPdf.reviewSensitiveTextCandidates({pages:records,plan});
+               if(!valid()||input!==lines.value||entire!==scopeMode())return;
+               reviewed={input,entire,result};
+-              reviewStatus.textContent="형식 후보 "+result.candidates+"건 / 마스크 밖 "+result.outside+
++              reviewStatus.textContent="형식 후보 "+result.candidates+"건 (분절 텍스트 "+result.fragmentedCandidates+"건 포함) / 마스크 밖 "+result.outside+
+                 "건 ("+(result.outsidePages.length?result.outsidePages.join(", ")+"쪽":"없음")+") / 위치 전체 포함 "+result.covered+
+                 "건 / 텍스트 없는 쪽 "+result.imageOnlyPages+" / 판독 제외 "+result.skippedPages+
+                 "쪽. 실제 개인정보는 더 남을 수 있습니다.";
+@@ -9928,13 +9933,15 @@
+     }
+ 
+     async function exportOfficeText(doc,format) {
+-      if(!["docx","docx-layout","docx-two-columns","xlsx","xlsx-columns"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
++      if(!["docx","docx-layout","docx-two-columns","docx-three-columns","xlsx","xlsx-columns"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
+       if(!window.SunriseOfficeExport?.pageTextFromItems) {
+         showToast("Office 텍스트 변환 모듈을 불러오지 못했습니다.","fa-triangle-exclamation");return;
+       }
+       if(doc.officeExportBusy)return;
+       const reader=doc.pdfJsDoc,original=doc.bytes;
+-      const unchanged=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===original;
++      const captured=captureSaveState(doc,false);
++      const unchanged=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===original&&
++        saveStateIsCurrent(doc,captured);
+       const finish=beginOperationMetric("extract_text");let outcome="failed";
+       doc.officeExportBusy=true;
+       try {
+@@ -9954,7 +9961,7 @@
+           if(!unchanged()){outcome="cancelled";return;}
+           pages.push(window.SunriseOfficeExport.pageTextFromItems(content?.items));
+           if(format==="xlsx-columns")columnPages.push(content?.items);
+-          if(format==="docx-layout"||format==="docx-two-columns"){
++          if(format==="docx-layout"||format==="docx-two-columns"||format==="docx-three-columns"){
+             const viewport=(await reader.getPage(i+1)).getViewport({scale:1});
+             layoutPages.push({items:content?.items,styles:content?.styles,
+               width:viewport.width,height:viewport.height,rotation:viewport.rotation});
+@@ -9964,14 +9971,16 @@
+         const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):
+           format==="docx-layout"?window.SunriseOfficeExport.docxLayout(layoutPages):
+           format==="docx-two-columns"?window.SunriseOfficeExport.docxTwoColumn(layoutPages):
++          format==="docx-three-columns"?window.SunriseOfficeExport.docxThreeColumn(layoutPages):
+           format==="xlsx-columns"?window.SunriseOfficeExport.xlsxColumns(columnPages):
+           window.SunriseOfficeExport.xlsx(pages);
+         if(!unchanged()){outcome="cancelled";return;}
+         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
+         downloadBytes(bytes,stem+(format==="xlsx-columns"?"_columns.xlsx":
+           format==="docx-layout"?"_layout_estimate.docx":
+-          format==="docx-two-columns"?"_two_columns_estimate.docx":"_text_only."+format),
+-          (format==="docx"||format==="docx-layout"||format==="docx-two-columns")?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":
++          format==="docx-two-columns"?"_two_columns_estimate.docx":
++          format==="docx-three-columns"?"_three_columns_estimate.docx":"_text_only."+format),
++          (format==="docx"||format==="docx-layout"||format==="docx-two-columns"||format==="docx-three-columns")?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+         showToast(format==="docx"?
+           "줄 구분을 유지한 텍스트 Word를 저장합니다. 원래 PDF의 서식·이미지는 변환되지 않습니다.":
+@@ -9979,10 +9988,12 @@
+           "글자 크기·제목·정렬·일부 규칙적인 표를 추정한 Word입니다. 원본 이미지·도형·병합 셀·완전한 배치는 복원되지 않습니다.":
+           format==="docx-two-columns"?
+           "좌·우 두 단의 텍스트를 편집 가능한 Word 2열 표로 추정했습니다. 원본 그림·표·머리글은 복원되지 않습니다.":
++          format==="docx-three-columns"?
++          "가로 세 단의 텍스트를 편집 가능한 Word 3열 표로 추정했습니다. 다른 열과 겹치는 문구는 지원하지 않습니다.":
+           format==="xlsx-columns"?
+           "정렬된 PDF 텍스트의 열 좌표를 기준으로 Excel을 저장합니다. 원래 표의 선·병합 셀은 복원하지 않습니다.":
+           "줄 구분을 유지한 Excel을 저장합니다. 원래 PDF의 표 구조는 복원하지 않습니다.",
+-          (format==="docx"||format==="docx-layout"||format==="docx-two-columns")?"fa-file-word":"fa-file-excel");
++          (format==="docx"||format==="docx-layout"||format==="docx-two-columns"||format==="docx-three-columns")?"fa-file-word":"fa-file-excel");
+         outcome="succeeded";
+       }catch(error){
+         showToast("Office 텍스트 변환 실패: "+String(error?.message||error),"fa-triangle-exclamation");

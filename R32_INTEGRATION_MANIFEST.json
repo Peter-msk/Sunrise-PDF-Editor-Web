@@ -1,0 +1,129 @@
+{
+  "release": "R32",
+  "artifact_type": "offline-integrated-source-tree",
+  "base_repository": "Peter-msk/Sunrise-PDF-Editor-Web",
+  "base_git_commit": "5781b9546b827a38007bd85c7fffb0a487dd1a4a",
+  "baseline_git_blobs": {
+    "src/editor/index.html": "9efc53a06ef8821647e231a6ed94d3e7ed025ef9",
+    "src/assets/sunrise-special-pdf.js": "238eb64b0bdd60c3d5a379fc39288713c0b1db00",
+    "src/assets/sunrise-pdf-quality.js": "cf14069e9187e7d4d73b54b0355363a39e4de33a",
+    "scripts/build-release.cjs": "7f54d1321cef4c3a2ffd3376617e7037009019e2"
+  },
+  "source_changes": [
+    {
+      "path": "docs/R29_LOCAL_DEVELOPMENT.md",
+      "kind": "new",
+      "old_sha256": null,
+      "new_sha256": "6abd03a4ebb7cd4941ec34d04ec46c4d4e4deb98811954446eac50834ca321e7",
+      "old_bytes": 0,
+      "new_bytes": 2940
+    },
+    {
+      "path": "src/assets/sunrise-pdf-quality.js",
+      "kind": "modified",
+      "old_sha256": "96c444a9239d478aaaf474c5e70cb4ab910fa00a4f47755fc6e73730c5657b05",
+      "new_sha256": "1f0e69054032becb020577adf047327c474770ef7ceaf029cf75e9ba497efa62",
+      "old_bytes": 9927,
+      "new_bytes": 10442
+    },
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "kind": "modified",
+      "old_sha256": "a10a0ec37eb348063edf6a91b01934326b57fa403ba1b1f0e97716b898d2d884",
+      "new_sha256": "4a3bcc9d618ed0c1e15dc40207660bb30b6bb0c05f1aac5c6923dcdad1d58df5",
+      "old_bytes": 19131,
+      "new_bytes": 24015
+    },
+    {
+      "path": "src/editor/index.html",
+      "kind": "modified",
+      "old_sha256": "24d66f5e726ce1220b0123fa3b445222a9391e4151b5da648b4be8358f582c8b",
+      "new_sha256": "7c0c2126f34c1072a168945a285d6f137be3834f44242def53d0f742be39104f",
+      "old_bytes": 542009,
+      "new_bytes": 568849
+    },
+    {
+      "path": "tests/source-text-batch-r29.cjs",
+      "kind": "new",
+      "old_sha256": null,
+      "new_sha256": "ba929fe22265d4670770e96e4cfee08ef8585ad464b15ffdbd317d4ff8c1a214",
+      "old_bytes": 0,
+      "new_bytes": 1680
+    }
+  ],
+  "deduplicated_from": [
+    "R27",
+    "R28",
+    "R29",
+    "R30",
+    "R31"
+  ],
+  "functional_areas": [
+    {
+      "id": "USR-05",
+      "change": "R29 원문 일괄 수정 UI·엔진·TSV (R27/R28 중복 대체)",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-01",
+      "change": "R30 병합 출력 재열기·페이지 구조 확인",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-02",
+      "change": "R30 추출 중 문서 변경 보호",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-03",
+      "change": "R30 페이지 삭제·정렬의 상태 보존",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-04",
+      "change": "R30 텍스트 입력·배치 가드",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-06",
+      "change": "R30 표 셀 입력 가드",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-07",
+      "change": "R31 주석 저장 결과 교차 확인",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-08",
+      "change": "R31 북마크 계층 연결 확인",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-09",
+      "change": "R31 PDF 압축 구조 보존 확인",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-10",
+      "change": "R31 양식 입력값 저장 교차 확인",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-11",
+      "change": "R31 일괄 작업 건수·용량 안내",
+      "source": "src/editor/index.html"
+    },
+    {
+      "id": "USR-12",
+      "change": "R31 품질 검사 경고 누락 방지, R32 집계 정확성 정정",
+      "source": "src/assets/sunrise-pdf-quality.js"
+    }
+  ],
+  "quality_review": "NOT_RUN",
+  "node_build": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "cloud_deployed": false,
+  "github_modified": false,
+  "note": "The source tree is assembled. Existing dist/ is a stale R26 build until user authorizes a rebuild."
+}

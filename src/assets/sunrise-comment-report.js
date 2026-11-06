@@ -23,8 +23,8 @@
     }
     for(const item of native){
       if(!Number.isSafeInteger(item.pageIndex)||item.pageIndex<0||
-        !['Text','Highlight'].includes(item.subtype))throw new Error('원본 PDF 주석 정보가 올바르지 않습니다.');
-      rows.push([item.pageIndex+1,item.subtype==='Highlight'?'원본 형광펜':'원본 메모',
+        !['Text','Highlight','Underline','StrikeOut','Squiggly','Square','Circle'].includes(item.subtype))throw new Error('원본 PDF 주석 정보가 올바르지 않습니다.');
+      rows.push([item.pageIndex+1,'원본 '+({Text:'메모',Highlight:'형광펜',Underline:'밑줄',StrikeOut:'취소선',Squiggly:'물결선',Square:'사각형',Circle:'원형'}[item.subtype]||item.subtype),
         String(item.text||''),'','','원본 PDF']);
     }
     return '\uFEFF'+rows.map(row=>row.map(cell).join(',')).join('\r\n')+'\r\n';

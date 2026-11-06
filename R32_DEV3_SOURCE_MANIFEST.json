@@ -1,0 +1,84 @@
+{
+  "release": "R32-DEV3",
+  "source_base": "R32-DEV2",
+  "feature": "USR-15 browser X.509 PEM RSA detached CMS signature (source only)",
+  "changed_files": [
+    {
+      "path": "src/assets/sunrise-pdf-cms.js",
+      "status": "added",
+      "original_sha256": null,
+      "final_sha256": "bbeb54d7b5a446770fc047721d31d367a9a514d6dd537322347a05040c1e85a0",
+      "bytes": 15816
+    },
+    {
+      "path": "src/editor/index.html",
+      "status": "modified",
+      "original_sha256": "ba0230085217bc77020699c93766e669d246a45b4315c16000e4697156631b84",
+      "final_sha256": "38ce07a6bf92a7577ff1f60cf60f3b67bcdf032e4a505ce54bd735e5fbf06bbe",
+      "bytes": 577358
+    },
+    {
+      "path": "src/assets/sunrise-tool-hub.js",
+      "status": "modified",
+      "original_sha256": "ef885e0729f83d866d1bf0619f8820b313adfa49d22a50e0d5319e55d0ab9989",
+      "final_sha256": "35c6fab7e7ad23ea61f32c6abaca2b2d73370fe6f738e5e0a47ab425cacc1767",
+      "bytes": 17043
+    },
+    {
+      "path": "scripts/build-release.cjs",
+      "status": "modified",
+      "original_sha256": "83af4ded145e30c6422baf455b7efc9d024cab4d27ecf50eff7a8b4a19681cf2",
+      "final_sha256": "fc65dcd5ed2999fad3a78c4164ca2e4d727a3d18e6beade1b444142b3fc4bef3",
+      "bytes": 2916
+    },
+    {
+      "path": "tests/cms-signature-practical.cjs",
+      "status": "added",
+      "original_sha256": null,
+      "final_sha256": "4c938cbe1a05af741dbd61780a408fff2238cb7286f8edba245c8f16acefc3d5",
+      "bytes": 3487
+    },
+    {
+      "path": "docs/R32_DEV3_IMPLEMENTATION.md",
+      "status": "added",
+      "original_sha256": null,
+      "final_sha256": "960abbc95c7aa47e7e44d54a31b6d25121bf21caa9b1e5664eb354ef26124b1e",
+      "bytes": 3587
+    },
+    {
+      "path": "docs/R32_DEV3_FEATURE_PROGRESS.md",
+      "status": "added",
+      "original_sha256": null,
+      "final_sha256": "022a33c599acac6c826e75798aa0d4b1db364f075fa74b00326b3fdddab17be3",
+      "bytes": 7195
+    },
+    {
+      "path": "README_R32_DEV3.md",
+      "status": "added",
+      "original_sha256": null,
+      "final_sha256": "8893d16df3904c10972b13a8dda286129633d98ebc50c4846b551460d89e9d0c",
+      "bytes": 900
+    }
+  ],
+  "implementation_status": {
+    "usr15_signature_code": "authored_not_verified",
+    "usr14_browser_encryption": "not_implemented",
+    "signature_pki_trust": "not_implemented",
+    "signature_revocation": "not_implemented",
+    "pades": "not_implemented",
+    "p12": "not_implemented"
+  },
+  "progress": {
+    "r26_recorded_user_19_mean_percent": 68.05,
+    "r26_recorded_admin_14_mean_percent": 100.0,
+    "r26_recorded_all_33_mean_percent": 81.61,
+    "dev3_reestimated_mean_percent": null
+  },
+  "tests_executed": false,
+  "build_executed": false,
+  "browser_acceptance_executed": false,
+  "github_modified": false,
+  "cloudflare_modified": false,
+  "dist_build_is_stale": true,
+  "completion_claim": "SOURCE_AUTHORED_ONLY"
+}

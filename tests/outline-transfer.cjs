@@ -10,7 +10,7 @@ const source=fs.readFileSync('src/editor/index.html','utf8');
 const start=source.indexOf('    function appendPdfBookmarks(');
 const end=source.indexOf('    async function compileDocumentWithOverlays(',start);
 assert(start>=0&&end>start);
-const ctx=vm.createContext({window:{PDFLib:lib}});
+const ctx=vm.createContext({window:{PDFLib:lib,SunriseOutlineTransfer:api}});
 vm.runInContext(source.slice(start,end),ctx);
 function append(pdf,list){ctx.pdf=pdf;ctx.items=list;return vm.runInContext('appendPdfBookmarks(pdf,items)',ctx);}
 (async()=>{
@@ -42,6 +42,7 @@ function append(pdf,list){ctx.pdf=pdf;ctx.items=list;return vm.runInContext('app
  ]);
  const twice=await lib.PDFDocument.load(await merged.save());
  assert.deepEqual(api.read(twice,lib).map(x=>x.page),[0,1,3,4,5,7]);
+ const deep=await lib.PDFDocument.create();deep.addPage();append(deep,Array.from({length:32},(_,level)=>({title:'Level '+level,page:0,level})));assert.equal(api.read(await lib.PDFDocument.load(await deep.save()),lib).at(-1).level,31);
  const broken=await lib.PDFDocument.create();broken.addPage();
  const root=broken.context.obj({Type:'Outlines'}),rr=broken.context.register(root);
  broken.catalog.set(name('Outlines'),rr);

@@ -41,7 +41,7 @@ assert.match(editor,/level: item\.level/);
 const start=editor.indexOf('    function appendPdfBookmarks(');
 const end=editor.indexOf('    async function compileDocumentWithOverlays(',start);
 assert(start>=0&&end>start);
-const context=vm.createContext({window:{PDFLib:lib},console});
+const context=vm.createContext({window:{PDFLib:lib,SunriseOutlineTransfer:require('../src/assets/sunrise-outline-transfer.js')},console});
 vm.runInContext(editor.slice(start,end),context);
 function append(pdf,items){context.pdf=pdf;context.items=items;vm.runInContext('appendPdfBookmarks(pdf,items)',context);}
 function obj(pdf,ref){return pdf.context.lookup(ref);}
@@ -81,7 +81,7 @@ function title(item){return item.lookup(n('Title')).decodeText();}
  const destination=secondSection.lookup(n('Dest'));
  assert.equal(destination.get(0).toString(),pages[3].ref.toString());
  const invalid=await lib.PDFDocument.create();invalid.addPage();
- assert.throws(()=>append(invalid,[{title:'잘못된 단계',page:0,level:4}]),/단계/);
+ assert.throws(()=>append(invalid,[{title:'잘못된 단계',page:0,level:32}]),/단계/);
  assert.throws(()=>append(invalid,[{title:'잘못된 페이지',page:1,level:0}]),/페이지/);
  const orphan=await lib.PDFDocument.create();orphan.addPage();orphan.addPage();
  append(orphan,[{title:'선행 부모 누락',page:0,level:2},{title:'하위',page:1,level:3}]);

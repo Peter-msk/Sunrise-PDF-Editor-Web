@@ -1,0 +1,26 @@
+{
+  "name": "pdfstudio",
+  "version": "0.4.0",
+  "integrity": "sha512-yFHlp/VHxKmrYxYA45ACkh24c4mCBa/Al3EmajnlBnN9FzfynZz63sR2do2kBH34XoTAQSXy+ywijAcq0DUcSQ==",
+  "source": "https://registry.npmjs.org/pdfstudio/-/pdfstudio-0.4.0.tgz",
+  "tar_sha256": "4b8481ce55b5f29373baf1a4a10361d7facdd5ec074b7c7daf101431d931c97a",
+  "executed": false,
+  "files": {
+    "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "README.md": "67459be1838674f5c66588427aeb80a119e69c6ea9a433e69b317af929ddfa01",
+    "package.json": "9a4e26acf634fb8f97b638c1fb510ea4822b8c098289a2fbb46f66246e202ab4",
+    "dist/index.js": "c0cd1c3b3a63b580a3d60fa2a3b858b7c49ba7afc897ea2795273bdd16095195",
+    "dist/types.d.ts": "4e50dece060b8c971b3a44a21132848b3185b8d5664193a26933ecbc78f66c73",
+    "dist/errors.js": "2e34b66ad9b645f488cf89c6b49b5c8b64a8f567f9c7a4d61f327aadce146383",
+    "dist/errors.d.ts": "ecbb9f74423c378e351d57a12b4d9666a47e981a75f5798ac903f18ff7eb113a",
+    "dist/images.js": "03d5afd36e1049c6bed3fe2db01b4f4fa05c5ad4b5149b50b85fe2622cbd5141",
+    "dist/runner.js": "8563a6419093beaddb579bf41fc213d87874a180a7cc1aeea8c879ed7859ed66",
+    "dist/index.d.ts": "e766f92d6fd17c7da7ce6b4c6b530638e0be78a5bff8b11a902f88a755db7b44",
+    "dist/types.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+    "dist/images.d.ts": "04a9a2f49fc32dfbccd3813e48a6aadcd80d0eb6c59391e9df6ec099b58803e6",
+    "dist/runner.d.ts": "c387c5f0a541d8f41baa4eb5abd6d3943cfa48aada26fe73224aadff476c1015",
+    "dist/wasm/qpdf.js": "30f0a3407e6f6058def17d6080f94a797a53c03afd6b93f2e9ebf29881dce037",
+    "dist/wasm/qpdf.d.ts": "d4110a11d0bcf3bbd2d6160c01e33c54add84b3cd1b39ae63f41ed04bd7a7b4e",
+    "dist/wasm/qpdf.wasm": "48a6044e2b5abb32295fa1682e26f20338181bb2423b2ab6e8456b7c4a8c9756"
+  }
+}

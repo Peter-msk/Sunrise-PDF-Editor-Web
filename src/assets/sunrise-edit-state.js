@@ -49,6 +49,12 @@
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFHexString, PDFNumber, PDFRef } = pdfLib;
     const pdfDoc = await PDFDocument.load(bytes);
     const key = PDFName.of(KEY);
+    // Restoring Sunrise overlays rewrites streams and would invalidate an
+    // existing signature. Preserve the exact signed file instead.
+    const form=pdfDoc.context.lookup(pdfDoc.catalog.get(PDFName.of('AcroForm')));
+    const signed=pdfDoc.catalog.has(PDFName.of('Perms'))||form?.has?.(PDFName.of('SigFlags'))||
+      pdfDoc.context.enumerateIndirectObjects().some(([,object])=>object?.get?.(PDFName.of('ByteRange'))||object?.get?.(PDFName.of('Type'))?.toString()==='/Sig');
+    if(signed)return {bytes,overlays:[],warning:false,signed:true};
     if (!pdfDoc.catalog.has(key)) return { bytes, overlays: [], warning: false };
     try {
       const info = pdfDoc.catalog.lookup(key, PDFDict);

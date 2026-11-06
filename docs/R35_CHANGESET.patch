@@ -1,0 +1,1261 @@
+--- a/README.md
++++ b/README.md
+@@ -1,21 +1,21 @@
+-# Sunrise PDF Editor Web — R34-DEV1
++# Sunrise PDF Editor Web — R35-DEV1
+ 
+ 현재 상태: **변경 기능 실행 검사 통과, 전체 미구현 종료 및 최종 배포 준비는 미완료**.
+ 
+-개발 근거와 남은 범위는 `README_R34.md`, `docs/USR01-19_PROGRESS_CURRENT.md`, `docs/R34_IMPLEMENTATION.md`를 따른다. 이전 설명은 `README_LEGACY_BEFORE_R34.md`에 보존했다.
++R35 변경 내용은 `README_R35.md`, `docs/R35_IMPLEMENTATION.md`, `docs/R35_VALIDATION.json`에 기록한다. R34 기존 개발 인계와 기능별 현황은 `README_R34.md`, `docs/USR01-19_PROGRESS_CURRENT.md`, `docs/R34_IMPLEMENTATION.md`에 보존한다.
+ 
+ ## 구조와 실행
+ 
+ - 정적 사이트 루트는 `dist/`, 편집기는 `/editor/`다. 현재 dist는 이전 소스의 배포물이므로 새 기능 확인에 사용하지 않는다.
+ - 원본은 `src/`, 검증한 외부 엔진은 `vendor/`에 있다. 문서는 브라우저 내부에서 처리하며 이번에 문서 업로드나 개인키 저장 기능을 추가하지 않았다.
+ - 고정 의존성 설치: `npm ci --ignore-scripts`.
+-- 이번 변경 검사: `npm run test:r34`. Node 18+와 OpenSSL, Python 3가 필요하다. Windows의 Miniconda Python을 쓸 때는 `SUNRISE_PYTHON` 환경변수를 해당 Python 실행파일로 지정한다.
+-- 전체 검사: `npm test`. 빌드: `npm run build`. 이번 작업에서는 전체 검사·빌드를 실행하지 않았다.
++- 이번 변경 검사: `npm run test:r35` (선행 기능은 `npm run test:r34`). Node 18+와 OpenSSL, Python 3가 필요하다. Windows의 Miniconda Python을 쓸 때는 `SUNRISE_PYTHON` 환경변수를 해당 Python 실행파일로 지정한다.
++- 전체 검사: `npm test`. 빌드: `npm run build`. R35에서는 전체 계약 검사 93개 중 92개 통과, 빌드 의존성 `terser@5.51.2` 미설치로 `tests/build-line-endings.cjs` 한 개 차단. 전체 릴리스 빌드는 실패했으며 브라우저·CI·실서비스 배포는 미실시.
+ - HTTPS 또는 localhost의 웹 서버에서 확인한다. HTML 파일을 직접 여는 방식은 지원하지 않는다.
+ 
+ ## 주요 추가 경로
+ 
+-입력 가능한 양식과 첨부를 보존하는 병합/추출/분할, 호출 위치를 격리한 중첩 객체 편집, 내장 CID CMap/Identity-V 원문 수정, FreeText와 연결 주석, 32단 북마크 이식, 실제 AES-256 엔진, 원본 바이트를 보존하는 추가 서명, 다중 표와 텍스트/표/개별 이미지 혼합 Word를 제공한다. 지원되지 않는 구조는 오류로 중단한다.
++입력 가능한 양식과 첨부를 보존하는 병합/추출/분할, 호출 위치를 격리한 중첩 객체 편집, 내장 고정·혼합 길이 CID CMap/Identity-V 원문 수정, FreeText와 연결 주석, 32단 북마크 이식, 실제 AES-256 엔진, 원본 바이트를 보존하는 추가 서명, 다중 표와 텍스트/표/개별 이미지 혼합 Word를 제공한다. 지원되지 않는 구조는 오류로 중단한다.
+ 
+ 양식 페이지의 모든 조작이나 XFA 전체 지원, 모든 글꼴/외부 CMap/문단 재흐름, OCSP/CRL/TSA/PAdES LT/LTA, 임의 복합 문서의 정확한 Office 복원을 완료했다고 주장하지 않는다. 마스킹 OCR 제외 방침을 유지한다.
+ 
+--- /dev/null
++++ b/README_R35.md
+@@ -0,0 +1,21 @@
++# Sunrise PDF Editor Web — R35-DEV1
++
++**현재 상태: 소스 개발 및 계약 검사 92/93 PASS. 최종 빌드·운영 배포 미완료.**
++
++R34-DEV1의 전체 원본 소스를 기초로 신규 R35 CMap 원문 편집, PDF 마스킹 오류 수정, 과거 테스트 환경 복구를 수행했다. 이전 R34 원본과 검증 증빙은 보존했다. `dist/`는 R34 이후 기능을 포함하지 않는 과거 산출물이며 R35 빌드 전 배포에 사용하지 않는다.
++
++- 신규 혼합 1·2바이트 CMap: `src/assets/sunrise-content-editor.js`, `tests/r35-variable-cmap.cjs`.
++- 마스킹 PDF 구조 점검 수정: `src/assets/sunrise-special-pdf.js`.
++- R34 검증 이력 보존: 부분 재검사에서는 `docs/R34_VALIDATION.json`을 덮어쓰지 않음.
++- 전체 검사 93개 중 92개 PASS, 1개는 `terser@5.51.2` 미설치로 인한 빌드 기반 검사 FAIL. 확인: `docs/R35_VALIDATION.json`.
++- 원본 서명/양식/Office 등 R34 기능은 그대로 유지하며 **OCR은 범위 제외**.
++
++## 다음 인수 시 첫 단계
++
++1. 고정 의존성을 설치한다: `npm ci --ignore-scripts` (Node 18+; 인터넷/사내 패키지 미러 필요).
++2. `npm test`를 다시 실행해 93/93 확인한다. `npm run progress:check` 실행 후 `npm run build`로 실제 `dist/`를 생성한다.
++3. 실제 브라우저 PDF 열기·원문 편집·저장·재열기, 빌드 시 보안/해시/CI/독립 뷰어/Office 실기 확인.
++4. 남은 근본 기능: 외부/상속 CMap과 문단 재흐름, XFA/스크립트 양식과 특수 구조, 장기검증 PAdES, 범용 고충실도 Office 변환.
++5. GitHub R16~R25 미병합 PR 이력을 재확인하고 R34/R35 변경을 보존하는 통합 브랜치를 만든 후 CI 성공 시에만 릴리스한다.
++
++GitHub, Cloudflare Worker, D1 운영 데이터는 R35에서 변경하지 않았다.
+--- /dev/null
++++ b/docs/R35_IMPLEMENTATION.md
+@@ -0,0 +1,42 @@
++# Sunrise PDF Editor (Web) — R35-DEV1 개발 인계
++
++기준: 2026-11-06. 시작점은 R34-DEV1 전체 소스 ZIP이다.  `README_R34.md`와 `docs/R34_IMPLEMENTATION.md`에 명시된 선행 기능 및 한계는 유지한다.
++
++## 구현 내용
++
++### 1. USR-05 내장 가변 길이 CID CMap
++
++- 내장 `Encoding` CMap의 코드 공간 선언을 읽어 1~4바이트 원문 코드를 검증하고, 안전하게 혼용된 길이의 코드를 순차 해석한다.
++- 범위 겹침·접두부 모호성·중복 CID·코드 공간 밖 매핑·너무 큰 범위를 거부한다. 다른 길이의 ToUnicode 코드 범위 끝점은 같은 길이여야 한다.
++- 텍스트 교체 시 코드 공간에 포함되고 CID가 연결된 글리프만 대상으로 허용한다. 역방향 Unicode가 하나로 결정되지 않으면 변경을 중단한다.
++- 고정 길이 CMap/Identity-H/Identity-V의 기존 경로 및 구형 숫자 키 매핑을 유지한다.
++- 새 테스트 `tests/r35-variable-cmap.cjs`: 실제 pdf-lib PDF를 1·2바이트 혼합 코드/한글로 구성한 뒤 원문 발견, 교체, 저장 후 재열기, 입력 원본 불변을 검증. 모호한 접두부/중복 코드 공간/누락 또는 선언 밖 CID/잘못된 Unicode 원문 코드 방어를 포함한다.
++
++### 2. USR-13 마스킹 결과 구조 검증
++
++- `src/assets/sunrise-special-pdf.js`의 `PDFDict.size()`는 실제 pdf-lib PDFDict API가 아니므로 오류가 발생했다.
++- `PDFDict.keys().length`로 객체 수를 검증하도록 수정. 기존 기대 이미지 객체가 1개인지 검사하는 보안 계약은 유지했다.
++- `tests/special-pdf-guard.cjs`, `tests/multipage-mask-audit.cjs`를 재실행해 PASS.
++
++### 3. 검사 계약과 이력 보존
++
++- 북마크·페이지 작업 테스트의 VM 격리 환경에 필요한 페이지 문맥·outline API·`console.error` 스텁을 추가.
++- 예외를 UI에서 잡아 표시하는 작업은 `rejects`가 아니라 알림 발생·원본 불변을 검증하도록 계약을 변경.
++- `scripts/verify-r34.cjs --new-only`가 과거 `docs/R34_VALIDATION.json`을 덮어쓰던 동작을 중단하고 **원본 R34 기록을 ZIP과 바이트 단위 동일하게 복원**. 전체 재실행 모드는 기존처럼 R34 기록을 갱신한다.
++
++## 검증 결과
++
++- `docs/R35_VALIDATION.json`: `package.json`의 `npm test` 체인을 93개 독립 호출해 전부 시도. **92 PASS, 1 FAIL** (빌드 기반 `tests/build-line-endings.cjs`만 `Cannot find module 'terser'`). 수행 26.7초.
++- R34 `--new-only` 재검사 13/13, 문법 8/8 PASS. 별도 `npm run progress:check` PASS.
++- `npm run build`는 `terser@5.51.2` 부재로 실패. `npm ci --ignore-scripts --offline`은 캐시가 없어 실패했고 온라인 시도도 성공하지 못함. **R35 dist 새로 생성하지 못함**.
++- 독립 외부 PDF/Word/Excel 실기, Linux/Windows 실브라우저, Android/iOS, 서버/Workers 실기, CI, D1 복구 검증, Cloudflare 운영 배포는 수행하지 않았다.
++- `dist/`는 과거 배포물. R35 소스 ZIP에 포함되지만 **R35 기능을 담은 신규 빌드가 아니다.**
++
++## 남은 개발/릴리스 경계
++
++1. USR-05: 외부 이름/상속된 CMap, Type3/다양한 글꼴, 복잡 문단 재흐름은 아직 미구현.
++2. USR-01/02/10: XFA와 PDF 스크립트/자동 계산 양식, 태그·특수 구조를 보존하는 모든 페이지 조작은 미구현.
++3. USR-15: OCSP/CRL, 신뢰 TSA, PAdES LT/LTA, 인증 서명 및 필드 잠금 완성은 미구현.
++4. USR-16: 임의 복합 문서의 글꼴·벡터·회전/잘림 이미지·레이아웃을 완전 복원하는 Office 변환은 미구현.
++
++실제 코드 작업 이외의 기능 완료율 또는 실서비스 배포율은 증빙 없이 상향하지 않았다. OCR 개발은 하지 않았다. GitHub/Cloudflare/D1에는 쓰지 않았다.
+--- /dev/null
++++ b/docs/R35_VALIDATION.json
+@@ -0,0 +1,759 @@
++{
++  "release": "R35-DEV1",
++  "source": "R34-DEV1",
++  "executionTimeUTC": "2026-11-06T14:42:41.452122+00:00",
++  "results": [
++    {
++      "index": 1,
++      "command": "node tests/synthetic-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: page remapping, searchable Korean PDF text, attachment, rotated overlay and saved-item restoration\n",
++      "stderr": ""
++    },
++    {
++      "index": 2,
++      "command": "node tests/rotation-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: multi-page clockwise/counterclockwise, selection, failure atomicity, overlay safety\n",
++      "stderr": ""
++    },
++    {
++      "index": 3,
++      "command": "node tests/lazy-text-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: lazy extraction, shared in-flight work, cached result, stale document guard\n",
++      "stderr": ""
++    },
++    {
++      "index": 4,
++      "command": "node tests/undo-performance-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: overlay undo/redo avoids PDF reload; changed PDF bytes still reload\n",
++      "stderr": ""
++    },
++    {
++      "index": 5,
++      "command": "node tests/placement-gesture-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: click placement coordinates/cancellation and pinch swipe guard\n",
++      "stderr": ""
++    },
++    {
++      "index": 6,
++      "command": "node tests/bookmark-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: Unicode titles, page destinations, append without replacing existing bookmarks, invalid page\n",
++      "stderr": ""
++    },
++    {
++      "index": 7,
++      "command": "node tests/page-range-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: bounded page ranges, PDF filename/mask line parsing and stale editable-state guards\n",
++      "stderr": ""
++    },
++    {
++      "index": 8,
++      "command": "node tests/search-results-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: repeated search matches, overlay, multi-item fallback and stale searches\n",
++      "stderr": ""
++    },
++    {
++      "index": 9,
++      "command": "node tests/highlight-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: native highlight, quad geometry, appearance and existing annotations\n",
++      "stderr": ""
++    },
++    {
++      "index": 10,
++      "command": "node tests/native-annotation-edit.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: native Text/Highlight Unicode edit+delete, PDF disk-byte roundtrip, unmodified source, other annotation preservation, thread deletion, signature/form/locked guards and UI wiring\n",
++      "stderr": ""
++    },
++    {
++      "index": 11,
++      "command": "node tests/save-safety-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: save snapshot, damaged output blocked before URL publication, explicit download confirmation, later edits preserved\n",
++      "stderr": ""
++    },
++    {
++      "index": 12,
++      "command": "node tests/thumbnail-memory-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: offscreen thumbnail release, in-flight render and recovery\n",
++      "stderr": ""
++    },
++    {
++      "index": 13,
++      "command": "node tests/rotate-export-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: rotated searchable text, stamp and watermark save and edit-state restoration\n",
++      "stderr": ""
++    },
++    {
++      "index": 14,
++      "command": "node tests/page-jump-race-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: in-progress page jump survives render; validates integer and document changes\n",
++      "stderr": ""
++    },
++    {
++      "index": 15,
++      "command": "node tests/page-metadata-concurrency-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: bounded parallel page metadata, ordered pages, attachment failure and cleanup\n",
++      "stderr": ""
++    },
++    {
++      "index": 16,
++      "command": "node tests/bookmark-reading-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: nested outlines, named and direct destinations, unavailable links, read errors\n",
++      "stderr": ""
++    },
++    {
++      "index": 17,
++      "command": "node tests/bookmark-page-guard-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: outline protection for delete, cut and reorder; copy and ordinary delete remain available\n",
++      "stderr": "Unable to verify outline destinations Error: missing or ambiguous destination\n    at resolveNamed (evalmachine.<anonymous>:67:43)\n    at destinationPage (evalmachine.<anonymous>:74:38)\n    at allowPageStructureChange (evalmachine.<anonymous>:139:31)\n    at deleteSelectedPagesFromDoc (evalmachine.<anonymous>:265:12)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/bookmark-page-guard-contract.cjs:33:3\nUnable to verify outline destinations Error: missing or ambiguous destination\n    at resolveNamed (evalmachine.<anonymous>:67:43)\n    at destinationPage (evalmachine.<anonymous>:74:38)\n    at allowPageStructureChange (evalmachine.<anonymous>:139:31)\n    at copySelectedPagesToClipboard (evalmachine.<anonymous>:212:20)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/bookmark-page-guard-contract.cjs:35:3\nUnable to verify outline destinations Error: missing or ambiguous destination\n    at resolveNamed (evalmachine.<anonymous>:67:43)\n    at destinationPage (evalmachine.<anonymous>:74:38)\n    at allowPageStructureChange (evalmachine.<anonymous>:139:31)\n    at Object.confirm (evalmachine.<anonymous>:351:18)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/bookmark-page-guard-contract.cjs:37:96\n"
++    },
++    {
++      "index": 18,
++      "command": "node tests/bookmark-rename-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: nested outline rename, Unicode persistence, action preservation, mismatch rejection, atomic failure and undo snapshot\n",
++      "stderr": ""
++    },
++    {
++      "index": 19,
++      "command": "node tests/bookmark-delete-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: nested deletion, subtree deletion, first/last links, closed ancestors and invalid counts\n",
++      "stderr": ""
++    },
++    {
++      "index": 20,
++      "command": "node tests/bookmark-page-preservation-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: direct bookmark survives reorder and unrelated deletion; targeted deletion, invalid numeric destinations and unsupported actions blocked\n",
++      "stderr": ""
++    },
++    {
++      "index": 21,
++      "command": "node tests/page-atomic-publish.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: failed page duplication, deletion, cut and reorder do not publish state\n",
++      "stderr": "페이지 삭제 중단 Error: synthetic serialization failure\n    at pdf.save (/mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:24:28)\n    at Object.deleteSelectedPagesFromDoc (evalmachine.<anonymous>:113:36)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:51:4\n페이지 재배열 실패 Error: synthetic serialization failure\n    at pdf.save (/mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:24:28)\n    at Object.click (evalmachine.<anonymous>:186:47)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:66:3\n"
++    },
++    {
++      "index": 22,
++      "command": "node tests/bookmark-named-destination-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: legacy and name-tree destinations, GoTo actions, reorder, referenced-page protection, ambiguous names and chained actions\n",
++      "stderr": ""
++    },
++    {
++      "index": 23,
++      "command": "node tests/bookmark-insert-guard-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: insertion guard blocks invalid numeric bookmark destinations and preserves direct destination on duplicate\n",
++      "stderr": ""
++    },
++    {
++      "index": 24,
++      "command": "node tests/pdf-compression-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: lossless stream compression 137439 -> 1897; weak Flate 90689 -> 924; metadata/bookmark/attachment retained, no-op and unavailable API\n",
++      "stderr": ""
++    },
++    {
++      "index": 25,
++      "command": "node tests/compression-save-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: compression save flow, size report, explicit download confirmation\n",
++      "stderr": ""
++    },
++    {
++      "index": 26,
++      "command": "node tests/bookmark-retarget-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: bookmark page retarget, shared action isolation, save/reopen, undo snapshot and failure safety\n",
++      "stderr": ""
++    },
++    {
++      "index": 27,
++      "command": "node tests/bookmark-action-chain-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: GoTo chains, arrays, shared actions, page operations, target protection, cycles and atomic rejection\n",
++      "stderr": ""
++    },
++    {
++      "index": 28,
++      "command": "node tests/bookmark-retarget-chain-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: GoTo chain destination editing, shared action isolation, next actions preserved, mixed/cyclic rejection\n",
++      "stderr": ""
++    },
++    {
++      "index": 29,
++      "command": "node tests/homepage-contact-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: homepage fixed notice/update rail, feature descriptions, public feed and private inquiry form contract\n",
++      "stderr": ""
++    },
++    {
++      "index": 30,
++      "command": "node tests/contact-worker-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: public release feed, no inquiry listing, validated same-origin private D1 submissions, honeypot and retention cron\n",
++      "stderr": "(node:3441) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 31,
++      "command": "node tests/admin-metrics-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: password-only admin routes fail closed, telemetry whitelist and dashboard contract\n",
++      "stderr": "(node:3452) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 32,
++      "command": "node tests/home-rail-no-overlap-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: administrator navigation visible and notices remain outside centered content across desktop widths\n",
++      "stderr": ""
++    },
++    {
++      "index": 33,
++      "command": "node tests/admin-password-auth-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: first registration and login use browser PBKDF2 and server-only HMAC; rate limits, secure session, logout, HTML error handling\n",
++      "stderr": ""
++    },
++    {
++      "index": 34,
++      "command": "node tests/publication-lifetime.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: first publication retained; KST 7-day boundaries, drafts, edits, future dates and hidden records\n",
++      "stderr": "(node:3481) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 35,
++      "command": "node tests/admin-publications.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: authenticated publication management, draft activation, immutable first date, validation, CSRF and duplicate protection\n",
++      "stderr": "(node:3492) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 36,
++      "command": "node tests/telemetry-day-boundary.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: an editor tab crossing KST midnight registers the next day before sending usage\n",
++      "stderr": ""
++    },
++    {
++      "index": 37,
++      "command": "node tests/admin-inquiry-search.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: inquiry search treats percent, underscore and backslash as literal characters\n",
++      "stderr": "(node:3510) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 38,
++      "command": "node tests/form-page-safety-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: form/XFA/widget page operations fail safely before state change or download; normal documents remain allowed\n",
++      "stderr": ""
++    },
++    {
++      "index": 39,
++      "command": "node tests/form-save-roundtrip.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: basic form values and unchanged XFA survive the tested no-overlay save and reopen\n",
++      "stderr": ""
++    },
++    {
++      "index": 40,
++      "command": "node tests/pdf-input-size-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: valid large PDF metadata allowed; unsafe sizes rejected before read; partial reads blocked in open, merge, insert and drop\n",
++      "stderr": ""
++    },
++    {
++      "index": 41,
++      "command": "node tests/saved-pdf-preflight.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: saved PDF preflight and download gate block missing pages, rotation/box damage and corrupt bytes\n",
++      "stderr": ""
++    },
++    {
++      "index": 42,
++      "command": "node tests/saved-pdf-structure-guard.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: native annotation and catalog structure preservation on normal PDF saves\n",
++      "stderr": ""
++    },
++    {
++      "index": 43,
++      "command": "node tests/comment-report-csv.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: local review report Unicode, original annotation inclusion, formula neutralization and bounded count\n",
++      "stderr": ""
++    },
++    {
++      "index": 44,
++      "command": "node tests/admin-statistics-export.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: authenticated aggregate CSV, 30-day boundaries, privacy and malformed data rejection\n",
++      "stderr": "(node:3563) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 45,
++      "command": "node tests/create-form-field.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: create and reopen Korean text/date/checkbox fields, readonly, invalid inputs and XFA/signature guards\n",
++      "stderr": ""
++    },
++    {
++      "index": 46,
++      "command": "node tests/bulk-form-fields.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: atomic batch AcroForm edit, shared Unicode font, readonly, XFA/signature, invalid value, original unchanged\n",
++      "stderr": ""
++    },
++    {
++      "index": 47,
++      "command": "node tests/admin-inquiry-history.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: inquiry status history ordered, restricted to existing inquiry, private fields omitted and unauthenticated requests denied\n",
++      "stderr": "(node:3588) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 48,
++      "command": "node tests/admin-inquiry-atomic.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: inquiry status and audit update atomically, including rollback and serialized changes\n",
++      "stderr": "(node:3599) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 49,
++      "command": "node tests/admin-inquiry-pagination.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: inquiry keyset pagination, identical timestamps, new rows, filters and invalid cursors\n",
++      "stderr": "(node:3610) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 50,
++      "command": "node tests/batch-compress.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: batch compression isolates failures, checks form values, page geometry, dropped fields, cancellation, and signed files\n",
++      "stderr": ""
++    },
++    {
++      "index": 51,
++      "command": "node tests/auto-text-bookmarks.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: text-only heading bookmarks, repeated running header suppression, page targets, zero OCR, preview, stale document guard\n",
++      "stderr": ""
++    },
++    {
++      "index": 52,
++      "command": "node tests/bookmark-hierarchy.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: inferred chapter hierarchy, manual indent/outdent, nested PDF outline persistence, legacy outline preservation, safe normalization\n",
++      "stderr": ""
++    },
++    {
++      "index": 53,
++      "command": "node tests/outline-transfer.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: merge, split and extract preserve simple PDF bookmarks; unsafe external action rejected\n",
++      "stderr": ""
++    },
++    {
++      "index": 54,
++      "command": "node tests/overlay-table-shape-annotation.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: table rectangular edits, shape UI/save hooks, review panel, safe PDF overlay metadata roundtrip incl. colors/opacity\n",
++      "stderr": ""
++    },
++    {
++      "index": 55,
++      "command": "node tests/embedded-image-extraction.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "Embedded PDF image extraction contracts passed\n",
++      "stderr": ""
++    },
++    {
++      "index": 56,
++      "command": "node tests/admin-password-change.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: password rotation requires valid session, old password proof and same origin; all sessions revoked, new password succeeds\n",
++      "stderr": ""
++    },
++    {
++      "index": 57,
++      "command": "node tests/batch-compress-disk-roundtrip.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: production lossless batch compressor, actual disk bytes saved/reopened, form values, page rotation, per-file failure isolation\n",
++      "stderr": ""
++    },
++    {
++      "index": 58,
++      "command": "node tests/batch-watermark-page-number.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: batch Korean watermark & page numbers, field preservation, corrupt file isolation, signature/rotation guards, cancellation\n",
++      "stderr": ""
++    },
++    {
++      "index": 59,
++      "command": "node tests/batch-split-merge.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: split/merge PDF disk roundtrip; rotation, size and source immutability; safe form/signature/bookmark/annotation rejection; cancellation, atomic merge and UI wiring\n",
++      "stderr": ""
++    },
++    {
++      "index": 60,
++      "command": "node tests/pdf-submission-quality.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: pre-submit geometry, mixed orientation, image-vs-blank candidates, required forms, signatures, unscanned-page warnings, cancel and read-only source\n",
++      "stderr": "Removing XFA form data as pdf-lib does not support reading or writing XFA\n"
++    },
++    {
++      "index": 61,
++      "command": "node tests/pdf-export-bundle.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: CSV formula safety, local JSON preflight, bounded split planning, UI and release build wiring\n",
++      "stderr": ""
++    },
++    {
++      "index": 62,
++      "command": "node tests/special-pdf-guard.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: visual-only correction candidate validation, one-page raster mask output, non-certified signature persistence and safety labels\n",
++      "stderr": ""
++    },
++    {
++      "index": 63,
++      "command": "node tests/r15-stamp-geometry.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS R15: mixed portrait/landscape and rotated watermark, start on PDF page 2, skip 3/5, validations\n",
++      "stderr": ""
++    },
++    {
++      "index": 64,
++      "command": "node tests/multipage-mask-audit.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: multi-page multi-mask plan, bounds, output fresh PDF/no source catalog, cancellation, progress and safeguards\n",
++      "stderr": ""
++    },
++    {
++      "index": 65,
++      "command": "node tests/office-text-export.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: PDF.js line breaks, safe Word/Excel text and ZIP, strict 32767-char/no-silent-loss, XML Unicode, limits and UI wiring\n",
++      "stderr": ""
++    },
++    {
++      "index": 66,
++      "command": "node tests/pdf-encrypt-local-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: signed/unreadable PDF rejection, secure qpdf stdin password transport, atomic output, no overwrite and cleanup\n",
++      "stderr": ""
++    },
++    {
++      "index": 67,
++      "command": "node tests/batch-stress-cancel.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: split 120 pages, merge 240 pages, numeric geometry snapshots, atomic cancellation, safe byte accounting; split=103ms merge=115ms sampled peak RSS MiB=112 arrayBuffers MiB=3\n",
++      "stderr": ""
++    },
++    {
++      "index": 68,
++      "command": "node tests/admin-operational-health.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: private read-only status, D1 fail closed, verified version labels, operator alert UI\n",
++      "stderr": ""
++    },
++    {
++      "index": 69,
++      "command": "node tests/admin-quality-sessions.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: 14-day retained session quality, error warning, 48h inquiry alert, honest 0-session display and UI\n",
++      "stderr": "(node:3770) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 70,
++      "command": "node tests/admin-save-quality.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: save preparation events, deduplication, privacy fields, authenticated aggregate and retention cascade\n",
++      "stderr": "(node:3781) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 71,
++      "command": "node tests/admin-period-filter.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: admin 7/14/30-day visit and error trends, strict whitelist\n",
++      "stderr": "(node:3792) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 72,
++      "command": "node tests/admin-publication-csv-lifecycle.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: real SQLite public 7-day lifetime, immutable first dates after updates/reposting, retained admin entries, private 30-day CSV\n",
++      "stderr": "(node:3803) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 73,
++      "command": "node tests/admin-retention-restore.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: scheduled 90-day inquiry/audit co-retention, 14-day sessions, limits cleanup, idempotence and consistent offline SQLite restore\n",
++      "stderr": "(node:3814) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 74,
++      "command": "node tests/admin-retention-boundary.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: deterministic retention cutoff and UTC/KST boundaries\n",
++      "stderr": "(node:3825) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 75,
++      "command": "node tests/admin-version-metadata.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: authenticated Cloudflare Worker version ID/tag/timestamp, safe fallback, no-leak D1 degradation and admin alert controls\n",
++      "stderr": ""
++    },
++    {
++      "index": 76,
++      "command": "node tests/admin-version-retention-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: receiving Worker attribution, outcome immutability, period/version filters, CSV, telemetry trust, retention success/failure/lease\n",
++      "stderr": "(node:3847) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 77,
++      "command": "node tests/admin-edit-conflicts-pagination.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: historical publication search, pagination, literal filters, stale edit rejection, inquiry/audit consistency and publication lifetime\n",
++      "stderr": "(node:3858) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 78,
++      "command": "node tests/telemetry-foreground-idle.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: foreground segments, focus boundaries, two-minute idle cutoff, resumed input and suspended timer\n",
++      "stderr": ""
++    },
++    {
++      "index": 79,
++      "command": "node tests/admin-schema-session-security.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: current schema readiness, missing columns, real session expiry/revocation, security history privacy, password rotation and tracked scheduled execution\n",
++      "stderr": "(node:3876) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 80,
++      "command": "node tests/admin-deployment-reports.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: signed deployment reports, replay ordering, idempotence, tampering/clock/schema/size rejection and private failure output\n",
++      "stderr": "(node:3887) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
++    },
++    {
++      "index": 81,
++      "command": "node tests/admin-operator-tools.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: real operator processes with synthetic Wrangler, canonical path/overwrite/privacy guards, strict empty-DB import gate and actual SQLite backup/rehearsal\n",
++      "stderr": ""
++    },
++    {
++      "index": 82,
++      "command": "node tests/build-line-endings.cjs",
++      "status": "FAIL",
++      "exitCode": 1,
++      "stdout": "",
++      "stderr": "node:assert:95\n  throw new AssertionError(obj);\n  ^\n\nAssertionError [ERR_ASSERTION]: node:internal/modules/cjs/loader:1404\n  throw err;\n  ^\n\nError: Cannot find module 'terser'\nRequire stack:\n- /tmp/sunrise-build-endings-4xmEN3/scripts/build-release.cjs\n    at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)\n    at Function._load (node:internal/modules/cjs/loader:1211:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)\n    at Module.require (node:internal/modules/cjs/loader:1487:12)\n    at require (node:internal/modules/helpers:135:16)\n    at Object.<anonymous> (/tmp/sunrise-build-endings-4xmEN3/scripts/build-release.cjs:3:20)\n    at Module._compile (node:internal/modules/cjs/loader:1730:14) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [ '/tmp/sunrise-build-endings-4xmEN3/scripts/build-release.cjs' ]\n}\n\nNode.js v22.16.0\n\n\n1 !== 0\n\n    at Object.<anonymous> (/mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/build-line-endings.cjs:16:10)\n    at Module._compile (node:internal/modules/cjs/loader:1730:14)\n    at Object..js (node:internal/modules/cjs/loader:1895:10)\n    at Module.load (node:internal/modules/cjs/loader:1465:32)\n    at Function._load (node:internal/modules/cjs/loader:1282:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)\n    at node:internal/main/run_main_module:36:49 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 1,\n  expected: 0,\n  operator: 'strictEqual'\n}\n\nNode.js v22.16.0\n"
++    },
++    {
++      "index": 83,
++      "command": "node tests/d1-schema-preflight.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: release D1 metadata gate rejects missing tables/fields and malformed read-only responses\n",
++      "stderr": ""
++    },
++    {
++      "index": 84,
++      "command": "node tests/release-workflow-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: manual release enforces private backup receipt, remote isolated D1 counts, migration, CI and smoke gates\n",
++      "stderr": ""
++    },
++    {
++      "index": 85,
++      "command": "node tests/release-ci-gate-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: manual release requires exact successful main CI and four completed jobs\n",
++      "stderr": ""
++    },
++    {
++      "index": 86,
++      "command": "node tests/progress-metrics-contract.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: product implementation, historical seven-phase score and R15 release evidence stay distinct\n",
++      "stderr": ""
++    },
++    {
++      "index": 87,
++      "command": "node tests/standalone-form-save-integrity.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS: standalone form values, flags, five page boxes and rotation verified after save; corruption/cancel blocked\n",
++      "stderr": ""
++    },
++    {
++      "index": 88,
++      "command": "node tests/batch-content-integrity.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS R18: input-size mismatch isolation, source-byte immutability and page-content fingerprint fail-closed in split/merge\n",
++      "stderr": ""
++    },
++    {
++      "index": 89,
++      "command": "node tests/batch-cancel-boundaries.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS R19: cancelled reads/parses/saves/reopens halt before further heavy PDF work; split and merge success unaffected\n",
++      "stderr": ""
++    },
++    {
++      "index": 90,
++      "command": "node tests/native-jpeg-extraction.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS R20: actual pdf-lib embedded JPEG byte identity, resource dedup, page scope, mask/filter exclusions, cancellation and UI wiring\n",
++      "stderr": ""
++    },
++    {
++      "index": 91,
++      "command": "node tests/source-text-replacement.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS R24: source text Tj operator rewritten; ambiguous, forms, unsupported fonts rejected, source immutable, UI wired\n",
++      "stderr": ""
++    },
++    {
++      "index": 92,
++      "command": "node scripts/verify-r34.cjs --new-only",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "PASS r33-content-editing.cjs\nPASS r33-office-grids.cjs\nPASS r33-signature-integrity.cjs\nPASS r34-form-transfer.cjs\nPASS r34-incremental-signatures.cjs\nPASS r34-nested-content.cjs\nPASS r34-cmap-vertical.cjs\nPASS r34-multiple-tables.cjs\nPASS r34-mixed-word.cjs\nPASS r34-annotation-appearance.cjs\nPASS r34-engine-roundtrip.cjs\nPASS r34-worker-encryption.cjs\nPASS r34-pki-container.cjs\nSyntax 8/8; functional groups 13/13\n",
++      "stderr": ""
++    },
++    {
++      "index": 93,
++      "command": "node tests/r35-variable-cmap.cjs",
++      "status": "PASS",
++      "exitCode": 0,
++      "stdout": "R35 mixed 1/2-byte CMap: roundtrip, source integrity, boundary ambiguity and unmapped-code guards PASS\n",
++      "stderr": ""
++    }
++  ],
++  "summary": {
++    "total": 93,
++    "passed": 92,
++    "failed": 1,
++    "timeout": 0,
++    "elapsedSeconds": 26.7
++  },
++  "important": "Build-dependent tests cannot pass without pinned terser install; source tree dist is historic and was not built."
++}
+--- a/package.json
++++ b/package.json
+@@ -4,7 +4,7 @@
+   "description": "Sunrise PDF Editor Web release build",
+   "scripts": {
+     "build": "node scripts/build-release.cjs",
+-    "test": "node tests/synthetic-contract.cjs && node tests/rotation-contract.cjs && node tests/lazy-text-contract.cjs && node tests/undo-performance-contract.cjs && node tests/placement-gesture-contract.cjs && node tests/bookmark-contract.cjs && node tests/page-range-contract.cjs && node tests/search-results-contract.cjs && node tests/highlight-contract.cjs && node tests/native-annotation-edit.cjs && node tests/save-safety-contract.cjs && node tests/thumbnail-memory-contract.cjs && node tests/rotate-export-contract.cjs && node tests/page-jump-race-contract.cjs && node tests/page-metadata-concurrency-contract.cjs && node tests/bookmark-reading-contract.cjs && node tests/bookmark-page-guard-contract.cjs && node tests/bookmark-rename-contract.cjs && node tests/bookmark-delete-contract.cjs && node tests/bookmark-page-preservation-contract.cjs && node tests/page-atomic-publish.cjs && node tests/bookmark-named-destination-contract.cjs && node tests/bookmark-insert-guard-contract.cjs && node tests/pdf-compression-contract.cjs && node tests/compression-save-contract.cjs && node tests/bookmark-retarget-contract.cjs && node tests/bookmark-action-chain-contract.cjs && node tests/bookmark-retarget-chain-contract.cjs && node tests/homepage-contact-contract.cjs && node tests/contact-worker-contract.cjs && node tests/admin-metrics-contract.cjs && node tests/home-rail-no-overlap-contract.cjs && node tests/admin-password-auth-contract.cjs && node tests/publication-lifetime.cjs && node tests/admin-publications.cjs && node tests/telemetry-day-boundary.cjs && node tests/admin-inquiry-search.cjs && node tests/form-page-safety-contract.cjs && node tests/form-save-roundtrip.cjs && node tests/pdf-input-size-contract.cjs && node tests/saved-pdf-preflight.cjs && node tests/saved-pdf-structure-guard.cjs && node tests/comment-report-csv.cjs && node tests/admin-statistics-export.cjs && node tests/create-form-field.cjs && node tests/bulk-form-fields.cjs && node tests/admin-inquiry-history.cjs && node tests/admin-inquiry-atomic.cjs && node tests/admin-inquiry-pagination.cjs && node tests/batch-compress.cjs && node tests/auto-text-bookmarks.cjs && node tests/bookmark-hierarchy.cjs && node tests/outline-transfer.cjs && node tests/overlay-table-shape-annotation.cjs && node tests/embedded-image-extraction.cjs && node tests/admin-password-change.cjs && node tests/batch-compress-disk-roundtrip.cjs && node tests/batch-watermark-page-number.cjs && node tests/batch-split-merge.cjs && node tests/pdf-submission-quality.cjs && node tests/pdf-export-bundle.cjs && node tests/special-pdf-guard.cjs && node tests/r15-stamp-geometry.cjs && node tests/multipage-mask-audit.cjs && node tests/office-text-export.cjs && node tests/pdf-encrypt-local-contract.cjs && node tests/batch-stress-cancel.cjs && node tests/admin-operational-health.cjs && node tests/admin-quality-sessions.cjs && node tests/admin-save-quality.cjs && node tests/admin-period-filter.cjs && node tests/admin-publication-csv-lifecycle.cjs && node tests/admin-retention-restore.cjs && node tests/admin-retention-boundary.cjs && node tests/admin-version-metadata.cjs && node tests/admin-version-retention-contract.cjs && node tests/admin-edit-conflicts-pagination.cjs && node tests/telemetry-foreground-idle.cjs && node tests/admin-schema-session-security.cjs && node tests/admin-deployment-reports.cjs && node tests/admin-operator-tools.cjs && node tests/build-line-endings.cjs && node tests/d1-schema-preflight.cjs && node tests/release-workflow-contract.cjs && node tests/release-ci-gate-contract.cjs && node tests/progress-metrics-contract.cjs && node tests/standalone-form-save-integrity.cjs && node tests/batch-content-integrity.cjs && node tests/batch-cancel-boundaries.cjs && node tests/native-jpeg-extraction.cjs && node tests/source-text-replacement.cjs && node scripts/verify-r34.cjs --new-only",
++    "test": "node tests/synthetic-contract.cjs && node tests/rotation-contract.cjs && node tests/lazy-text-contract.cjs && node tests/undo-performance-contract.cjs && node tests/placement-gesture-contract.cjs && node tests/bookmark-contract.cjs && node tests/page-range-contract.cjs && node tests/search-results-contract.cjs && node tests/highlight-contract.cjs && node tests/native-annotation-edit.cjs && node tests/save-safety-contract.cjs && node tests/thumbnail-memory-contract.cjs && node tests/rotate-export-contract.cjs && node tests/page-jump-race-contract.cjs && node tests/page-metadata-concurrency-contract.cjs && node tests/bookmark-reading-contract.cjs && node tests/bookmark-page-guard-contract.cjs && node tests/bookmark-rename-contract.cjs && node tests/bookmark-delete-contract.cjs && node tests/bookmark-page-preservation-contract.cjs && node tests/page-atomic-publish.cjs && node tests/bookmark-named-destination-contract.cjs && node tests/bookmark-insert-guard-contract.cjs && node tests/pdf-compression-contract.cjs && node tests/compression-save-contract.cjs && node tests/bookmark-retarget-contract.cjs && node tests/bookmark-action-chain-contract.cjs && node tests/bookmark-retarget-chain-contract.cjs && node tests/homepage-contact-contract.cjs && node tests/contact-worker-contract.cjs && node tests/admin-metrics-contract.cjs && node tests/home-rail-no-overlap-contract.cjs && node tests/admin-password-auth-contract.cjs && node tests/publication-lifetime.cjs && node tests/admin-publications.cjs && node tests/telemetry-day-boundary.cjs && node tests/admin-inquiry-search.cjs && node tests/form-page-safety-contract.cjs && node tests/form-save-roundtrip.cjs && node tests/pdf-input-size-contract.cjs && node tests/saved-pdf-preflight.cjs && node tests/saved-pdf-structure-guard.cjs && node tests/comment-report-csv.cjs && node tests/admin-statistics-export.cjs && node tests/create-form-field.cjs && node tests/bulk-form-fields.cjs && node tests/admin-inquiry-history.cjs && node tests/admin-inquiry-atomic.cjs && node tests/admin-inquiry-pagination.cjs && node tests/batch-compress.cjs && node tests/auto-text-bookmarks.cjs && node tests/bookmark-hierarchy.cjs && node tests/outline-transfer.cjs && node tests/overlay-table-shape-annotation.cjs && node tests/embedded-image-extraction.cjs && node tests/admin-password-change.cjs && node tests/batch-compress-disk-roundtrip.cjs && node tests/batch-watermark-page-number.cjs && node tests/batch-split-merge.cjs && node tests/pdf-submission-quality.cjs && node tests/pdf-export-bundle.cjs && node tests/special-pdf-guard.cjs && node tests/r15-stamp-geometry.cjs && node tests/multipage-mask-audit.cjs && node tests/office-text-export.cjs && node tests/pdf-encrypt-local-contract.cjs && node tests/batch-stress-cancel.cjs && node tests/admin-operational-health.cjs && node tests/admin-quality-sessions.cjs && node tests/admin-save-quality.cjs && node tests/admin-period-filter.cjs && node tests/admin-publication-csv-lifecycle.cjs && node tests/admin-retention-restore.cjs && node tests/admin-retention-boundary.cjs && node tests/admin-version-metadata.cjs && node tests/admin-version-retention-contract.cjs && node tests/admin-edit-conflicts-pagination.cjs && node tests/telemetry-foreground-idle.cjs && node tests/admin-schema-session-security.cjs && node tests/admin-deployment-reports.cjs && node tests/admin-operator-tools.cjs && node tests/build-line-endings.cjs && node tests/d1-schema-preflight.cjs && node tests/release-workflow-contract.cjs && node tests/release-ci-gate-contract.cjs && node tests/progress-metrics-contract.cjs && node tests/standalone-form-save-integrity.cjs && node tests/batch-content-integrity.cjs && node tests/batch-cancel-boundaries.cjs && node tests/native-jpeg-extraction.cjs && node tests/source-text-replacement.cjs && node scripts/verify-r34.cjs --new-only && node tests/r35-variable-cmap.cjs",
+     "test:images": "node tests/image-compression-practical.cjs",
+     "test:publications": "node tests/publication-lifetime.cjs && node tests/admin-publications.cjs",
+     "progress": "node scripts/progress-report.cjs",
+@@ -22,7 +22,8 @@
+     "test:usr14-wasm": "node tests/usr14-wasm-aes256-practical.cjs",
+     "test:usr14-web-source": "node tests/usr14-web-integration-contract.cjs",
+     "test:r33": "node tests/r33-content-editing.cjs && node tests/r33-office-grids.cjs && node tests/r33-signature-integrity.cjs",
+-    "test:r34": "node scripts/verify-r34.cjs"
++    "test:r34": "node scripts/verify-r34.cjs",
++    "test:r35": "node tests/r35-variable-cmap.cjs"
+   },
+   "type": "commonjs",
+   "devDependencies": {
+--- a/scripts/verify-r34.cjs
++++ b/scripts/verify-r34.cjs
+@@ -33,6 +33,6 @@
+  syntax:{passed:results.filter(r=>r.kind==='syntax'&&r.status==='PASS').length,total:results.filter(r=>r.kind==='syntax').length},
+  functional:{passed:results.filter(r=>r.kind==='functional'&&r.status==='PASS').length,total:selected.length},
+  allRequestedFunctionalityComplete:false,build:'NOT_RUN',fullRegression:'NOT_RUN',browserAcceptance:'NOT_RUN',mobileAcceptance:'NOT_RUN',ci:'NOT_RUN',deployment:'NOT_RUN',results};
+-fs.writeFileSync(path.join(root,'docs/R34_VALIDATION.json'),JSON.stringify(report,null,2)+'\n');
++if(!process.argv.includes('--new-only'))fs.writeFileSync(path.join(root,'docs/R34_VALIDATION.json'),JSON.stringify(report,null,2)+'\n');
+ console.log('Syntax '+report.syntax.passed+'/'+report.syntax.total+'; functional groups '+report.functional.passed+'/'+report.functional.total);
+ process.exitCode=failed?1:0;
+--- a/src/assets/sunrise-content-editor.js
++++ b/src/assets/sunrise-content-editor.js
+@@ -102,10 +102,11 @@
+     return s;
+   }
+   function cmap(script,codeBytes){
+-    if(script.length>1024*1024||![1,2,3,4].includes(codeBytes))throw Error('ToUnicode CMap 범위를 지원하지 않습니다.');
+-    const input=tokens(script),map=new Map();let expanded=0;
+-    const put=(key,text)=>{if(key.length!==codeBytes*2||map.has(key)||++expanded>65536)throw Error('중복되거나 과대한 ToUnicode 매핑입니다.');map.set(key,text);};
+-    const source=token=>{if(token?.kind!=='string'||token.bytes.length!==codeBytes)throw Error('ToUnicode 원문 코드 길이가 올바르지 않습니다.');return hex(token.bytes);};
++    const lengths=Array.isArray(codeBytes)?codeBytes:[codeBytes];
++    if(script.length>1024*1024||!lengths.length||lengths.some(n=>![1,2,3,4].includes(n)))throw Error('ToUnicode CMap 범위를 지원하지 않습니다.');
++    const allowed=new Set(lengths),input=tokens(script),map=new Map();let expanded=0;
++    const put=(key,text)=>{if(!allowed.has(key.length/2)||map.has(key)||++expanded>65536)throw Error('중복되거나 과대한 ToUnicode 매핑입니다.');map.set(key,text);};
++    const source=token=>{if(token?.kind!=='string'||!allowed.has(token.bytes.length))throw Error('ToUnicode 원문 코드 길이가 올바르지 않습니다.');return hex(token.bytes);};
+     const target=token=>{if(token?.kind!=='string')throw Error('ToUnicode 목적 코드가 올바르지 않습니다.');return unicode(hex(token.bytes));};
+     for(let i=0;i<input.length;i++){
+       const op=input[i];if(op.kind!=='word')continue;
+@@ -116,16 +117,17 @@
+       for(let j=0;j<count;j++){
+         if(op.value==='beginbfchar'){const from=source(input[++i]),to=target(input[++i]);put(from,to);}
+         else{
+-          const first=parseInt(source(input[++i]),16),last=parseInt(source(input[++i]),16),to=input[++i];
+-          if(last<first||last-first>65535)throw Error('ToUnicode 범위가 올바르지 않습니다.');
++          const firstKey=source(input[++i]),lastKey=source(input[++i]),first=parseInt(firstKey,16),last=parseInt(lastKey,16),to=input[++i];
++          if(firstKey.length!==lastKey.length||last<first||last-first>65535)throw Error('ToUnicode 범위가 올바르지 않습니다.');
++          const digits=firstKey.length;
+           if(to?.kind==='array'){
+             if(to.values.length!==last-first+1)throw Error('ToUnicode 배열 길이가 일치하지 않습니다.');
+-            for(let k=first;k<=last;k++)put(k.toString(16).padStart(codeBytes*2,'0').toUpperCase(),target(to.values[k-first]));
++            for(let k=first;k<=last;k++)put(k.toString(16).padStart(digits,'0').toUpperCase(),target(to.values[k-first]));
+           }else{
+             if(to?.kind!=='string'||to.bytes.length!==2)throw Error('복합 Unicode 범위 증가식은 지원하지 않습니다.');
+             const base=parseInt(hex(to.bytes),16);
+             if(base+last-first>65535)throw Error('Unicode 코드 단위 범위를 초과했습니다.');
+-            for(let k=first;k<=last;k++)put(k.toString(16).padStart(codeBytes*2,'0').toUpperCase(),unicode((base+k-first).toString(16).padStart(4,'0')));
++            for(let k=first;k<=last;k++)put(k.toString(16).padStart(digits,'0').toUpperCase(),unicode((base+k-first).toString(16).padStart(4,'0')));
+           }
+         }
+       }
+@@ -135,8 +137,8 @@
+   }
+ 
+   function encodingCMap(script){
+-    const input=tokens(script),mapping=new Map(),lengths=new Set();let vertical=false;
+-    const source=t=>{if(t?.kind!=='string'||t.bytes.length<1||t.bytes.length>4)throw Error('CMap 원문 코드 길이가 올바르지 않습니다.');lengths.add(t.bytes.length);return parseInt(hex(t.bytes),16);};
++    const input=tokens(script),mapping=new Map(),spaces=[],entries=[];let vertical=false;
++    const source=t=>{if(t?.kind!=='string'||t.bytes.length<1||t.bytes.length>4)throw Error('CMap 원문 코드 길이가 올바르지 않습니다.');return {code:parseInt(hex(t.bytes),16),length:t.bytes.length};};
+     const cid=t=>{if(t?.kind!=='number'||!Number.isSafeInteger(t.value)||t.value<0||t.value>65535)throw Error('CMap CID 범위가 올바르지 않습니다.');return t.value;};
+     for(let i=0;i<input.length;i++){
+       const t=input[i];
+@@ -146,21 +148,40 @@
+       const count=input[i-1]?.value;if(!Number.isSafeInteger(count)||count<0||count>65536)throw Error('CMap 항목 수가 올바르지 않습니다.');
+       for(let j=0;j<count;j++){
+         const first=source(input[++i]);
+-        if(t.value==='begincidchar'){
+-          const value=cid(input[++i]);if(mapping.has(first)||mapping.size>=65536)throw Error('CMap 코드가 중복되거나 너무 많습니다.');mapping.set(first,value);
+-        }else{
+-          const last=source(input[++i]);if(last<first||last-first>65535)throw Error('CMap 코드 범위가 너무 큽니다.');
+-          if(t.value==='begincidrange'){
+-            const value=cid(input[++i]);if(value+last-first>65535)throw Error('CID 범위를 초과했습니다.');
+-            for(let code=first;code<=last;code++){if(mapping.has(code)||mapping.size>=65536)throw Error('CMap 코드가 중복되거나 너무 많습니다.');mapping.set(code,value+code-first);}
++        if(t.value==='begincidchar')entries.push({first,last:first,value:cid(input[++i])});
++        else{
++          const last=source(input[++i]);
++          if(first.length!==last.length||last.code<first.code||last.code-first.code>65535)throw Error('CMap 코드 범위가 너무 큽니다.');
++          if(t.value==='begincodespacerange')spaces.push({length:first.length,start:first.code,end:last.code});
++          else{
++            const value=cid(input[++i]);if(value+last.code-first.code>65535)throw Error('CID 범위를 초과했습니다.');
++            entries.push({first,last,value});
+           }
+         }
+       }
+       const end={begincidchar:'endcidchar',begincidrange:'endcidrange',begincodespacerange:'endcodespacerange'}[t.value];
+       if(input[++i]?.value!==end)throw Error('CMap 항목 수와 종료 위치가 일치하지 않습니다.');
+     }
+-    if(lengths.size!==1||!mapping.size)throw Error('고정 길이의 내장 CID CMap이 필요합니다.');
+-    return {codeBytes:[...lengths][0],vertical,mapping};
++    if(!spaces.length||!entries.length||spaces.length>1000)throw Error('CMap 코드 공간 및 CID 매핑이 필요합니다.');
++    for(let i=0;i<spaces.length;i++)for(let j=0;j<i;j++){
++      const a=spaces[i],b=spaces[j];
++      if(a.length===b.length){if(a.start<=b.end&&b.start<=a.end)throw Error('중복된 CMap 코드 공간입니다.');}
++      else{
++        const short=a.length<b.length?a:b,long=a.length<b.length?b:a;
++        const shift=8*(long.length-short.length),from=Math.floor(long.start/2**shift),to=Math.floor(long.end/2**shift);
++        if(short.start<=to&&from<=short.end)throw Error('가변 CMap 코드 공간의 접두부가 모호합니다.');
++      }
++    }
++    const lengths=[...new Set(spaces.map(s=>s.length))].sort((a,b)=>a-b),variableLength=lengths.length>1;
++    for(const {first,last,value} of entries){
++      if(!spaces.some(s=>s.length===first.length&&first.code>=s.start&&last.code<=s.end))throw Error('CID 원문 코드가 선언된 CMap 코드 공간 밖에 있습니다.');
++      for(let code=first.code;code<=last.code;code++){
++        const key=variableLength?code.toString(16).padStart(first.length*2,'0').toUpperCase():code;
++        if(mapping.has(key)||mapping.size>=65536)throw Error('CMap 코드가 중복되거나 너무 많습니다.');
++        mapping.set(key,value+code-first.code);
++      }
++    }
++    return {codeBytes:variableLength?null:lengths[0],codeLengths:lengths,codeSpaces:spaces,variableLength,vertical,mapping};
+   }
+ 
+   function decodedStream(stream,lib){
+@@ -230,11 +251,11 @@
+     const fonts=ctx.lookup(resources?.get(n('Font'))),font=ctx.lookup(fonts?.get(n(fontName)));
+     if(!font?.get)throw Error('글꼴 리소스를 확인할 수 없습니다.');
+     const type=font.get(n('Subtype'))?.toString(),encoding=font.get(n('Encoding'))?.toString();
+-    let map,codeBytes=1,width,standard,vertical=false;
++    let map,cidMap=null,codeBytes=1,codeLengths=[1],codeSpaces=null,width,standard,vertical=false;
+     if(type==='/Type0'){
+-      const encodingObject=ctx.lookup(font.get(n('Encoding')));let cidMap=null;
+-      if(['/Identity-H','/Identity-V'].includes(encoding)){codeBytes=2;vertical=encoding==='/Identity-V';}
+-      else if(encodingObject instanceof lib.PDFRawStream){const parsed=encodingCMap(latin(decodedStream(encodingObject,lib)));codeBytes=parsed.codeBytes;vertical=parsed.vertical;cidMap=parsed.mapping;}
++      const encodingObject=ctx.lookup(font.get(n('Encoding')));
++      if(['/Identity-H','/Identity-V'].includes(encoding)){codeBytes=2;codeLengths=[2];vertical=encoding==='/Identity-V';}
++      else if(encodingObject instanceof lib.PDFRawStream){const parsed=encodingCMap(latin(decodedStream(encodingObject,lib)));codeBytes=parsed.codeBytes;codeLengths=parsed.codeLengths;codeSpaces=parsed.codeSpaces;vertical=parsed.vertical;cidMap=parsed.mapping;}
+       else throw Error('외부 이름 CMap은 직접 수정하지 않습니다. 내장 CMap이 필요합니다.');
+       const descendants=ctx.lookup(font.get(n('DescendantFonts')));
+       const cid=ctx.lookup(descendants?.get?.(0));if(!cid?.get)throw Error('CID 글꼴을 읽을 수 없습니다.');
+@@ -270,8 +291,8 @@
+             }
+           }
+         }
+-        width=code=>{const mapped=cidMap?cidMap.get(code):code;if(mapped===undefined)throw Error('CMap의 CID를 찾을 수 없습니다.');return -finite(verticalWidths.get(mapped)??defaultAdvance,'세로 글리프 진행');};
+-      }else width=code=>{const mapped=cidMap?cidMap.get(code):code;if(mapped===undefined)throw Error('CMap의 CID를 찾을 수 없습니다.');return widths.get(mapped)??finite(fallback,'기본 글리프 너비');};
++        width=(code,key)=>{const mapped=cidMap?cidMap.get(codeBytes===null?key:code):code;if(mapped===undefined)throw Error('CMap의 CID를 찾을 수 없습니다.');return -finite(verticalWidths.get(mapped)??defaultAdvance,'세로 글리프 진행');};
++      }else width=(code,key)=>{const mapped=cidMap?cidMap.get(codeBytes===null?key:code):code;if(mapped===undefined)throw Error('CMap의 CID를 찾을 수 없습니다.');return widths.get(mapped)??finite(fallback,'기본 글리프 너비');};
+     }else if(type==='/Type1'||type==='/TrueType'){
+       if(encoding&&encoding!=='/WinAnsiEncoding'&&!font.has(n('ToUnicode')))throw Error('사용자 정의 인코딩에는 ToUnicode 매핑이 필요합니다.');
+       const w=ctx.lookup(font.get(n('Widths'))),first=ctx.lookup(font.get(n('FirstChar')))?.asNumber?.()??0;
+@@ -283,23 +304,44 @@
+       }
+     }else throw Error('Type1·TrueType 또는 Identity-H 글꼴만 지원합니다.');
+     const toUnicode=ctx.lookup(font.get(n('ToUnicode')));
+-    if(toUnicode)map=cmap(latin(decodedStream(toUnicode,lib)),codeBytes);
++    if(toUnicode)map=cmap(latin(decodedStream(toUnicode,lib)),codeLengths);
+     else{
+       if(codeBytes!==1)throw Error('CID 글꼴의 ToUnicode 매핑이 필요합니다.');
+       map=new Map();for(let i=32;i<256;i++)map.set(i.toString(16).padStart(2,'0').toUpperCase(),new TextDecoder('windows-1252').decode(Uint8Array.of(i)));
+     }
+     const decode=bytes=>{
+-      if(bytes.length%codeBytes)throw Error('글리프 코드 길이가 맞지 않습니다.');
++      if(codeBytes!==null&&bytes.length%codeBytes)throw Error('글리프 코드 길이가 맞지 않습니다.');
+       let text='',advance=0,count=0,spaces=0;
+-      for(let i=0;i<bytes.length;i+=codeBytes){
+-        const key=hex(bytes.subarray(i,i+codeBytes)),value=map.get(key);
++      for(let i=0;i<bytes.length;){
++        let length=codeBytes;
++        if(length===null){
++          const matches=codeSpaces.filter(space=>{
++            if(i+space.length>bytes.length)return false;
++            let code=0;for(let j=0;j<space.length;j++)code=code*256+bytes[i+j];
++            return code>=space.start&&code<=space.end;
++          });
++          if(matches.length!==1)throw Error('CMap 원문 코드 경계가 모호하거나 누락되었습니다.');
++          length=matches[0].length;
++        }
++        const key=hex(bytes.subarray(i,i+length)),value=map.get(key);
+         if(value===undefined)throw Error('원문 글리프의 Unicode 매핑이 없습니다.');
+-        const code=parseInt(key,16);text+=value;advance+=width(code);count++;
+-        if(codeBytes===1&&code===32)spaces++;
++        const code=parseInt(key,16);text+=value;advance+=width(code,key);count++;
++        if(length===1&&code===32)spaces++;
++        i+=length;
+       }
+       return {text,advance,count,spaces};
+     };
+-    const reverse=new Map();for(const [k,v] of map){if(reverse.has(v))reverse.set(v,null);else reverse.set(v,k);}
++    // A ToUnicode entry is not necessarily a valid source code in the font Encoding.
++    // Never generate an unmapped CID or a byte sequence outside the declared code space.
++    const reverse=new Map();
++    for(const [k,v] of map){
++      if(codeSpaces&&!codeSpaces.some(space=>k.length===space.length*2&&parseInt(k,16)>=space.start&&parseInt(k,16)<=space.end))continue;
++      if(type==='/Type0'&&codeSpaces){
++        const raw=codeBytes===null?k:parseInt(k,16);
++        if(cidMap?.get(raw)===undefined)continue;
++      }
++      if(reverse.has(v))reverse.set(v,null);else reverse.set(v,k);
++    }
+     const encode=text=>{
+       const symbols=[...text],parts=[];
+       for(const symbol of symbols){const code=reverse.get(symbol);if(!code)return null;parts.push(...code.match(/../g).map(x=>parseInt(x,16)));}
+--- a/src/assets/sunrise-special-pdf.js
++++ b/src/assets/sunrise-special-pdf.js
+@@ -322,7 +322,7 @@
+     if(fontRef&&document.context.lookup(fontRef)?.size?.()>0)
+      throw Error('출력 PDF에 텍스트 글꼴 리소스가 남아 있습니다.');
+     const xobjects=document.context.lookup(resources.get(name('XObject')));
+-    if(!(xobjects instanceof PDFLib.PDFDict)||xobjects.size()!==1)
++    if(!(xobjects instanceof PDFLib.PDFDict)||xobjects.keys().length!==1)
+      throw Error('출력 PDF 이미지 객체 수가 예상과 다릅니다.');
+     for(const imageName of xobjects.keys()){
+      const obj=document.context.lookup(xobjects.get(imageName));
+--- a/tests/bookmark-action-chain-contract.cjs
++++ b/tests/bookmark-action-chain-contract.cjs
+@@ -1,6 +1,6 @@
+ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
+ const src=fs.readFileSync('src/editor/index.html','utf8'),a=src.indexOf('    function allowPageStructureChange('),b=src.indexOf('    async function copySelectedPagesToClipboard(',a);assert(a>=0&&b>a);
+-let message='';const ctx=vm.createContext({window:{PDFLib:lib},console:{warn(){}},showToast:s=>message=s});vm.runInContext(src.slice(a,b),require('./helpers/editor-metrics.cjs')(ctx));const n=lib.PDFName.of;
++let message='';const ctx=vm.createContext({window:{PDFLib:lib},console:{warn(){},error(){}},showToast:s=>message=s});vm.runInContext(src.slice(a,b),require('./helpers/editor-metrics.cjs')(ctx));const n=lib.PDFName.of;
+ function allow(pdf,removed=[]){ctx.pdf=pdf;ctx.removed=removed;return vm.runInContext('allowPageStructureChange(pdf,removed)',require('./helpers/editor-metrics.cjs')(ctx));}
+ async function fixture(mode){
+  const pdf=await lib.PDFDocument.create();for(let i=0;i<4;i++)pdf.addPage();const c=pdf.context,pages=pdf.getPages();
+@@ -30,7 +30,7 @@
+  const f=await fixture('array');let snapshots=0,clipboard={sourceName:'unchanged'};
+  const state={get pageClipboard(){return clipboard},set pageClipboard(v){clipboard=v}};
+  const end=src.indexOf('    function openPastePagesModal(',a),delStart=src.indexOf('    async function deleteSelectedPagesFromDoc('),delEnd=src.indexOf('    async function rotateSelectedPages(',delStart);
+- const ui=vm.createContext({window:{PDFLib:lib},state,Set,Array,console:{warn(){}},showToast:s=>message=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},remapPageItems(){}});
++ const ui=vm.createContext({window:{PDFLib:lib},state,Set,Array,activeDoc:()=>ui.doc,verifyPdfPageGeometry:()=>{},parsePageCountAndMeta:async()=>({pdfJsDoc:{destroy:async()=>{}}}),console:{warn(){},error(){}},showToast:s=>message=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},remapPageItems(){}});
+  vm.runInContext(src.slice(a,end)+src.slice(delStart,delEnd),require('./helpers/editor-metrics.cjs')(ui));
+  const original=await f.pdf.save();const doc={bytes:original,name:'chain.pdf',pageCount:4,currentPage:2,selectedPages:new Set([2]),overlays:[],bookmarks:[]};ui.doc=doc;
+  await vm.runInContext('copySelectedPagesToClipboard(doc,true)',require('./helpers/editor-metrics.cjs')(ui));assert.equal(doc.bytes,original);assert.equal(clipboard.sourceName,'unchanged');assert.equal(snapshots,0);
+--- a/tests/bookmark-contract.cjs
++++ b/tests/bookmark-contract.cjs
+@@ -3,7 +3,7 @@
+ const src = fs.readFileSync('src/editor/index.html','utf8');
+ const a = src.indexOf('    function appendPdfBookmarks('), b = src.indexOf('    async function compileDocumentWithOverlays(',a);
+ assert(a>=0 && b>a);
+-const ctx=vm.createContext({window:{PDFLib:lib}}); vm.runInContext(src.slice(a,b),ctx);
++const ctx=vm.createContext({window:{PDFLib:lib,SunriseOutlineTransfer:require('../src/assets/sunrise-outline-transfer.js')}}); vm.runInContext(src.slice(a,b),ctx);
+ (async()=>{
+  const pdf=await lib.PDFDocument.create();pdf.addPage([300,400]);pdf.addPage([300,400]);ctx.pdf=pdf;
+  vm.runInContext(`appendPdfBookmarks(pdf,[{title:'첫 장',page:0},{title:'두 번째',page:1}])`,ctx);
+--- a/tests/bookmark-page-guard-contract.cjs
++++ b/tests/bookmark-page-guard-contract.cjs
+@@ -10,7 +10,8 @@
+   reorderCancelBtn: {addEventListener: (type, fn) => callbacks.cancel = fn},
+   reorderConfirmBtn: {addEventListener: (type, fn) => callbacks.confirm = fn},
+ };
+-const ctx = vm.createContext({window:{PDFLib:lib}, state, Set, Array, console,
++const ctx = vm.createContext({window:{PDFLib:lib}, state, Set, Array, console, activeDoc:()=>ctx.doc,
++  verifyPdfPageGeometry:()=>{},parsePageCountAndMeta:async()=>({pdfJsDoc:{destroy:async()=>{}}}),
+   showToast: message => toast = message, saveUndoSnapshot: () => snapshots++,
+   reloadDocPdfJs: async () => {}, refreshAllViews: async () => {}, closeModal: () => {},
+   openModal: config => {modal = config; config.onMount();}, document: {getElementById: id => elements[id]},
+--- a/tests/bookmark-page-preservation-contract.cjs
++++ b/tests/bookmark-page-preservation-contract.cjs
+@@ -4,7 +4,7 @@
+ let notice='', snapshots=0, callback, clipboard={sourceName:'old'};
+ const state={get pageClipboard(){return clipboard},set pageClipboard(v){clipboard=v}};
+ const elements={reorderInput:{value:'3, 1, 2'},reorderConfirmBtn:{addEventListener:(_,f)=>callback=f},reorderCancelBtn:{addEventListener(){}},reorderReverseBtn:{addEventListener(){}}};
+-const ctx=vm.createContext({window:{PDFLib:lib},state,Set,Array,console:{warn(){}},showToast:s=>notice=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},closeModal(){},openModal:c=>c.onMount(),document:{getElementById:id=>elements[id]},remapPageItems(){}});
++const ctx=vm.createContext({window:{PDFLib:lib},state,Set,Array,activeDoc:()=>ctx.doc,verifyPdfPageGeometry:()=>{},parsePageCountAndMeta:async()=>({pdfJsDoc:{destroy:async()=>{}}}),console:{warn(){},error(){}},showToast:s=>notice=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},closeModal(){},openModal:c=>c.onMount(),document:{getElementById:id=>elements[id]},remapPageItems(){}});
+ vm.runInContext(section('    function allowPageStructureChange(', '    function openPastePagesModal(')+section('    async function deleteSelectedPagesFromDoc(', '    async function rotateSelectedPages('),require('./helpers/editor-metrics.cjs')(ctx));
+ async function fixture(type='direct'){
+  const pdf=await lib.PDFDocument.create();pdf.addPage();pdf.addPage();pdf.addPage();const c=pdf.context;
+--- a/tests/form-page-safety-contract.cjs
++++ b/tests/form-page-safety-contract.cjs
+@@ -16,7 +16,7 @@
+ el('modalBackdrop').classList={contains:()=>true};
+ el('reorderInput').value='2, 1';el('blankPosSelect').value='after';el('blankSizeSelect').value='a4p';el('blankCountInput').value='1';
+ const ctx=vm.createContext({window:{PDFLib:lib,SunriseEditState:{},SunriseKoreanFont:{}},state,Set,Array,JSON,Uint8Array,
+- console:{warn(){}},document:{getElementById:el},activeDoc:()=>active,showToast:s=>notices.push(s),
++ console:{warn(){},error(){}},document:{getElementById:el},activeDoc:()=>active,showToast:s=>notices.push(s),
+  saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},renderMergeQueueList(){},
+  // The real editable-state comparison is covered by page-range-contract.cjs.
+  // Here a stable immutable source snapshot lets us test AcroForm rejection.
+--- a/tests/page-atomic-publish.cjs
++++ b/tests/page-atomic-publish.cjs
+@@ -5,7 +5,7 @@
+ const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
+ const source=fs.readFileSync('src/editor/index.html','utf8');
+ function slice(a,b){const i=source.indexOf(a),j=source.indexOf(b,i);assert(i>=0&&j>i,a);return source.slice(i,j);}
+-let snapshot=0;
++let snapshot=0;const notices=[];
+ const originalPdf=async()=>{
+  const pdf=await lib.PDFDocument.create();
+  pdf.addPage([300,450]);pdf.addPage([300,450]);
+@@ -29,7 +29,7 @@
+ const ctx=vm.createContext({
+  window:{PDFLib:injectedLib},state,Set,Array,console,
+  beginOperationMetric:()=>()=>{},activeDoc:()=>ctx.doc,
+- showToast:()=>{},saveUndoSnapshot:()=>{snapshot++;},
++ showToast:message=>notices.push(message),saveUndoSnapshot:()=>{snapshot++;},
+  allowPageStructureChange:()=>true,allowPageFormStructure:()=>true,
+  reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},
+  remapPageItems:()=>{throw Error('must not publish edits before save');},
+@@ -47,7 +47,10 @@
+   selectedPages:new Set([0]),overlays:[],bookmarks:[]};}
+  for(const name of ['duplicateSelectedPages','deleteSelectedPagesFromDoc']){
+   const doc=fresh();ctx.doc=doc;snapshot=0;
+-  await assert.rejects(ctx[name](doc),/synthetic serialization failure/);
++  if(name==='deleteSelectedPagesFromDoc') {
++   await ctx[name](doc);
++   assert(notices.some(message=>/페이지 삭제 중단.*synthetic serialization failure/.test(message)));
++  } else await assert.rejects(ctx[name](doc),/synthetic serialization failure/);
+   assert.equal(doc.bytes,bytes);assert.equal(snapshot,0);
+   assert.equal(doc.overlays.length,0);
+  }
+@@ -60,7 +63,8 @@
+  {
+   const doc=fresh();ctx.doc=doc;snapshot=0;
+   ctx.openReorderPagesModal(doc);
+-  await assert.rejects(inputElements.reorderConfirmBtn.click(),/synthetic serialization failure/);
++  await inputElements.reorderConfirmBtn.click();
++  assert(notices.some(message=>/페이지 순서 변경 중단.*synthetic serialization failure/.test(message)));
+   assert.equal(doc.bytes,bytes);assert.equal(snapshot,0);
+  }
+  console.log('PASS: failed page duplication, deletion, cut and reorder do not publish state');
+--- /dev/null
++++ b/tests/r35-variable-cmap.cjs
+@@ -0,0 +1,60 @@
++'use strict';
++const assert=require('node:assert/strict');
++const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
++const core=require('../src/assets/sunrise-content-editor.js');
++const n=lib.PDFName.of;
++const encoding='/WMode 0 def 2 begincodespacerange <00> <7F> <8100> <81FF> endcodespacerange '+
++  '1 begincidchar <41> 10 endcidchar 1 begincidrange <8101> <8102> 11 endcidrange';
++const unicode='3 beginbfchar <41> <0041> <8101> <AC00> <8102> <B098> endbfchar';
++
++async function main(){
++  const parsed=core.encodingCMap(encoding);
++  assert.equal(parsed.variableLength,true);
++  assert.deepEqual(parsed.codeLengths,[1,2]);
++  assert.equal(parsed.mapping.get('41'),10);
++  assert.equal(parsed.mapping.get('8101'),11);
++  assert.equal(parsed.mapping.get('8102'),12);
++  assert.equal(core.cmap(unicode,[1,2]).get('8101'),'가');
++  assert.throws(()=>core.encodingCMap(
++    '2 begincodespacerange <00> <FF> <8100> <81FF> endcodespacerange 1 begincidchar <41> 10 endcidchar'
++  ),/모호/);
++  assert.throws(()=>core.encodingCMap(
++    '1 begincodespacerange <8100> <81FF> endcodespacerange 1 begincidchar <41> 10 endcidchar'
++  ),/밖/);
++  assert.throws(()=>core.encodingCMap(
++    '1 begincodespacerange <8100> <81FF> endcodespacerange 1 begincidrange <8101> <82FF> 10 endcidrange'
++  ),/범위|밖/);
++  assert.throws(()=>core.cmap('1 beginbfchar <41> <0041> endbfchar',[2]),/길이/);
++  assert.equal(core.cmap('1 beginbfrange <8101> <8102> <AC00> endbfrange',[1,2]).get('8102'),'각');
++  assert.throws(()=>core.encodingCMap(
++    '2 begincodespacerange <00> <7F> <40> <7E> endcodespacerange 1 begincidchar <41> 10 endcidchar'
++  ),/중복/);
++
++
++  const pdf=await lib.PDFDocument.create(),ctx=pdf.context;
++  const encRef=ctx.register(ctx.flateStream(encoding));
++  const unicodeRef=ctx.register(ctx.flateStream(unicode));
++  const descendant=ctx.register(ctx.obj({Type:'Font',Subtype:'CIDFontType2',BaseFont:'Synthetic',
++    CIDSystemInfo:{Registry:lib.PDFString.of('Adobe'),Ordering:lib.PDFString.of('Identity'),Supplement:0},
++    DW:1000,W:[10,[500,600,700]]}));
++  const fontRef=ctx.register(ctx.obj({Type:'Font',Subtype:'Type0',BaseFont:'Synthetic',Encoding:encRef,
++    DescendantFonts:[descendant],ToUnicode:unicodeRef}));
++  const p=pdf.addPage([400,600]);p.node.set(n('Resources'),ctx.obj({Font:{F1:fontRef}}));
++  p.node.set(n('Contents'),ctx.register(ctx.flateStream('BT /F1 12 Tf 1 0 0 1 20 500 Tm <4181018102> Tj ET')));
++  const source=await pdf.save(),copy=Uint8Array.from(source);
++  const records=await core.listText({bytes:source,pageNumber:1,PDFLib:lib});
++  assert.equal(records.length,1);assert.equal(records[0].original,'A가나');
++  const result=await core.replaceText({bytes:source,pageNumber:1,targetId:records[0].id,
++    original:'A가나',replacement:'나가A',PDFLib:lib});
++  assert.deepEqual(source,copy,'original source bytes must remain immutable');
++  assert.equal((await core.listText({bytes:result.bytes,pageNumber:1,PDFLib:lib}))[0].original,'나가A');
++  const reopened=await lib.PDFDocument.load(result.bytes);
++  assert.equal(reopened.getPageCount(),1);
++  // A valid space may include codes for which neither the encoding nor ToUnicode has a mapping;
++  // they must not be silently decoded or modified.
++  const bad=await lib.PDFDocument.load(source),badPage=bad.getPage(0);
++  badPage.node.set(n('Contents'),bad.context.register(bad.context.flateStream('BT /F1 12 Tf <8180> Tj ET')));
++  assert.deepEqual(await core.listText({bytes:await bad.save(),pageNumber:1,PDFLib:lib}),[]);
++  console.log('R35 mixed 1/2-byte CMap: roundtrip, source integrity, boundary ambiguity and unmapped-code guards PASS');
++}
++main().catch(e=>{console.error(e);process.exitCode=1;});
+--- a/tests/synthetic-contract.cjs
++++ b/tests/synthetic-contract.cjs
+@@ -23,6 +23,7 @@
+   strokeRect() {}, fillText() {} };
+ const context = vm.createContext({
+   window: { PDFLib: require('../dist/assets/pdf-lib/pdf-lib.min.js'), SunriseEditState: editState,
++    SunriseOutlineTransfer: require('../src/assets/sunrise-outline-transfer.js'),
+     SunriseKoreanFont: { embed: (doc, texts) => koreanFont.embed(doc, texts, fontAssets) } },
+   document: { createElement: () => ({ getContext: () => paint, toDataURL: () => png }) },
+   console, Uint8Array, Date,

@@ -16,7 +16,7 @@ el('splitReadyResults').querySelectorAll=()=>[];
 el('modalBackdrop').classList={contains:()=>true};
 el('reorderInput').value='2, 1';el('blankPosSelect').value='after';el('blankSizeSelect').value='a4p';el('blankCountInput').value='1';
 const ctx=vm.createContext({window:{PDFLib:lib,SunriseEditState:{},SunriseKoreanFont:{}},state,Set,Array,JSON,Uint8Array,
- console:{warn(){}},document:{getElementById:el},activeDoc:()=>active,showToast:s=>notices.push(s),
+ console:{warn(){},error(){}},document:{getElementById:el},activeDoc:()=>active,showToast:s=>notices.push(s),
  saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},renderMergeQueueList(){},
  // The real editable-state comparison is covered by page-range-contract.cjs.
  // Here a stable immutable source snapshot lets us test AcroForm rejection.

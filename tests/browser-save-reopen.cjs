@@ -105,10 +105,166 @@ async function main(){
    await page.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
    await page.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseEditState),
      null,{timeout:40000});
+
+   // R24 USR-05: open an actual Type1 ASCII PDF, replace a real Tj text
+   // operand from the editor UI, save to disk, reopen and undo. This must
+   // never be mistaken for the existing appearance-only Correction overlay.
+   const directPdf=await PDFLib.PDFDocument.create();
+   const directFont=await directPdf.embedFont(PDFLib.StandardFonts.Helvetica);
+   directPdf.addPage([450,620]).drawText('INVOICE 2026',{x:32,y:570,size:14,font:directFont});
+   directPdf.addPage([450,620]).drawText('OTHER PAGE',{x:32,y:570,size:14,font:directFont});
+   const directFile=Buffer.from(await directPdf.save());
+   const directTab=await context.newPage();
+   const directErrors=[];
+   directTab.on('pageerror',error=>directErrors.push(error.message));
+   await directTab.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
+   await directTab.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseSpecialPdf),
+     null,{timeout:40000});
+   await directTab.locator('#openPdfInput').setInputFiles({
+     name:'invoice-direct.pdf',mimeType:'application/pdf',buffer:directFile
+   });
+   await directTab.waitForFunction(()=>
+     document.querySelector('#workspaceDocumentTitle')?.textContent.includes('invoice-direct.pdf'),null,{timeout:30000});
+   await directTab.evaluate(()=>executeCommand('directSourceText'));
+   await directTab.locator('#directTextApply').waitFor({state:'visible',timeout:15000});
+   await directTab.waitForFunction(()=>document.querySelector('#directTextOriginal')?.options[0]?.textContent.includes('INVOICE 2026'),
+     null,{timeout:20000});
+   await directTab.locator('#directTextReplacement').fill('TOO LONG TO SUBSTITUTE');
+   await directTab.locator('#directTextApply').click();
+   assert.match(await directTab.locator('#directTextStatus').textContent(),/같은 바이트 길이|길이가 같은/);
+   await directTab.locator('#directTextReplacement').fill('INVOICE 2027');
+   await directTab.locator('#directTextApply').click();
+   await directTab.locator('#modalBackdrop').waitFor({state:'hidden',timeout:25000});
+   const firstText=await directTab.evaluate(async()=>{
+     const text=await (await activeDoc().pdfJsDoc.getPage(1)).getTextContent();
+     return text.items.map(x=>x.str).join(' ');
+   });
+   assert(firstText.includes('INVOICE 2027')&&!firstText.includes('INVOICE 2026'),
+     'real PDF.js text extraction must show changed source text, not a visual-only overlay');
+   // Modal close precedes the asynchronous view refresh; Edge can still see
+   // operationBusy=true and legitimately ignore a premature Save As command.
+   await directTab.waitForFunction(()=>Boolean(activeDoc())&&!activeDoc().operationBusy,
+     null,{timeout:45000});
+   await directTab.evaluate(()=>executeCommand('saveAs'));
+   await directTab.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:15000});
+   await directTab.locator('#saveAsConfirmBtn').click();
+   await directTab.locator('#saveAsDownloadLink').waitFor({state:'visible',timeout:45000});
+   const directDownload=directTab.waitForEvent('download',{timeout:30000});
+   await directTab.locator('#saveAsDownloadLink').click();
+   const savedDirect=await directDownload;
+   const directPath=path.join(downloadDir,'direct-edited.pdf');
+   await savedDirect.saveAs(directPath);
+   const outputDirect=await PDFLib.PDFDocument.load(fs.readFileSync(directPath));
+   assert.equal(outputDirect.getPageCount(),2);
+   assert.equal(outputDirect.getPage(1).getWidth(),450);
+   await directTab.locator('#saveAsDownloadedBtn').click();
+   await directTab.evaluate(()=>performUndo());
+   const undoText=await directTab.evaluate(async()=>{
+     const text=await (await activeDoc().pdfJsDoc.getPage(1)).getTextContent();
+     return text.items.map(x=>x.str).join(' ');
+   });
+   assert(undoText.includes('INVOICE 2026')&&!undoText.includes('INVOICE 2027'),
+     'Undo must restore the original source text');
+   assert.equal(directErrors.length,0,'R24 direct-text UI runtime errors: '+directErrors.join(' | '));
+   await directTab.close();
+   console.log('PASS R24: direct PDF source text changed and searchable, saved/downloaded/reopened, Undo restored original');
+
    const filename='roundtrip-input.pdf',savedName='roundtrip-input_edited.pdf';
    await page.locator('#openPdfInput').setInputFiles({name:filename,mimeType:'application/pdf',buffer:await fixture()});
    await page.waitForFunction(name=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes(name),
      filename,{timeout:40000});
+   // R22 USR-09: use the actual browser JPEG encoder + PDF compressor (no
+   // simulated canvas codec). Verify sizes, text retention, page geometry,
+   // bitmap decode and real sampled visual difference for three presets.
+   const compression=await page.evaluate(async()=>{
+     const {PDFDocument,PDFName}=window.PDFLib, n=PDFName.of;
+     const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;
+     const context=canvas.getContext('2d'),pixels=context.createImageData(640,480);
+     let seed=24681357;
+     for(let i=0;i<pixels.data.length;i+=4){
+       seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+       pixels.data[i]=seed>>>24;
+       pixels.data[i+1]=50+((seed>>>16)&127);
+       pixels.data[i+2]=60+((seed>>>8)&127);
+       pixels.data[i+3]=255;
+     }
+     context.putImageData(pixels,0,0);
+     const originalBlob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',1));
+     if(!originalBlob?.size)throw Error('Cannot create original JPEG');
+     const sourceJpeg=new Uint8Array(await originalBlob.arrayBuffer());
+     const originalBitmap=await createImageBitmap(originalBlob);
+     const pdf=await PDFDocument.create();
+     pdf.setTitle('USR09 browser JPEG compression');
+     const page=pdf.addPage([480,630]),embed=await pdf.embedJpg(sourceJpeg);
+     page.drawImage(embed,{x:40,y:110,width:400,height:300});
+     page.drawText('SEARCHABLE COMPRESSION TEXT',{x:40,y:560,size:15});
+     const before=await pdf.save();
+     const sample=bitmap=>{
+       const view=document.createElement('canvas');view.width=80;view.height=60;
+       const g=view.getContext('2d');g.drawImage(bitmap,0,0,80,60);
+       return g.getImageData(0,0,80,60).data;
+     };
+     const baseline=sample(originalBitmap),stats=[];
+     for(const strength of [20,60,90]){
+       const settings=pdfCompressionSettings(strength);
+       if(strength===90)settings.maxEdge=320; // exercise actual downsampling
+       const result=await compressPdfImages(before,settings);
+       if(result.images!==1)throw Error('Expected one actual JPEG image recompression');
+       if(result.bytes.length>=before.length)throw Error('JPEG compressor did not reduce this synthetic file');
+       const reopened=await PDFDocument.load(result.bytes);
+       if(reopened.getPageCount()!==1||reopened.getTitle()!=='USR09 browser JPEG compression')
+         throw Error('Compression changed document metadata/pages');
+       const resources=reopened.context.lookup(reopened.getPage(0).node.Resources().get(n('XObject')));
+       const images=resources.entries().map(([,ref])=>reopened.context.lookup(ref))
+         .filter(x=>x.dict?.get(n('Subtype'))?.toString()==='/Image');
+       if(images.length!==1)throw Error('Compressed JPEG XObject missing');
+       const img=images[0],width=img.dict.lookup(n('Width')).asNumber(),
+         height=img.dict.lookup(n('Height')).asNumber();
+       if(width!==(strength===90?320:640)||height!==(strength===90?240:480))
+         throw Error('Unexpected output image pixel dimensions');
+       const outputBlob=new Blob([img.getContents()],{type:'image/jpeg'});
+       const bitmap=await createImageBitmap(outputBlob);
+       if(bitmap.width!==width||bitmap.height!==height)throw Error('Compressed JPEG fails to decode at PDF XObject dimensions');
+       const actual=sample(bitmap);bitmap.close();
+       let mse=0;
+       for(let i=0;i<baseline.length;i+=4){
+         for(let component=0;component<3;component++){
+           const delta=baseline[i+component]-actual[i+component];mse+=delta*delta;
+         }
+       }
+       mse/=80*60*3;
+       const psnr=mse===0?99:10*Math.log10(255*255/mse);
+       if(!Number.isFinite(psnr)||psnr<10)throw Error('Compressed JPEG is visually inconsistent');
+       stats.push({strength,input:before.byteLength,output:result.bytes.byteLength,
+         width,height,psnr:Math.round(psnr*10)/10});
+       const decoded=await window.pdfjsLib.getDocument({data:new Uint8Array(result.bytes)}).promise;
+       try {
+         const text=(await (await decoded.getPage(1)).getTextContent()).items.map(x=>x.str).join(' ');
+         if(!text.includes('SEARCHABLE COMPRESSION TEXT'))throw Error('Compression removed searchable PDF text');
+       } finally {await decoded.destroy();}
+     }
+     originalBitmap.close();
+     if(stats[0].output<=stats[1].output||stats[1].output<=stats[2].output)
+       throw Error('Quality presets did not produce descending synthetic output sizes');
+     // Fail-closed validation must reject a malformed JPEG header even though
+     // its containing PDF would have a structurally valid page tree.
+     const originalFor=window.PDFLib.JpegEmbedder.for;
+     let decodedCalls=0,blocked=false;
+     try {
+       window.PDFLib.JpegEmbedder.for=async (...args)=>{
+         const header=await originalFor(...args);
+         if(++decodedCalls===2)header.width+=1;
+         return header;
+       };
+       try {await compressPdfImages(before,pdfCompressionSettings(20));}
+       catch(error){blocked=/JPEG 이미지의 크기/.test(String(error?.message||''));}
+     } finally {window.PDFLib.JpegEmbedder.for=originalFor;}
+     if(!blocked||decodedCalls!==2)throw Error('Mismatched browser-encoded JPEG was not rejected');
+     return stats;
+   });
+   assert.equal(compression.length,3,'three actual browser JPEG compression presets required');
+   assert.equal(compression[2].width,320,'high compression must downsample the raster');
+   console.log('PASS R22: actual browser JPEG sizes, sampled PSNR, image decode, searchable text, pixel dimensions, invalid JPEG fail-closed',compression);
    // USR-16: actual binary DOCX/XLSX download for the PDF text layer.
    const docxDownload=page.waitForEvent('download',{timeout:30000});
    await page.evaluate(()=>executeCommand('exportWordText'));
@@ -203,7 +359,9 @@ async function main(){
    const link=page.locator('#saveAsDownloadLink');
    await link.waitFor({state:'visible',timeout:60000});
    await page.waitForTimeout(1000);
-   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation');
+   // The independent R24 PDF save adds its own start/ready pair.
+   // Scope this historical retry assertion to the four most recent events.
+   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation').slice(-4);
    assert.deepEqual(saveEvents.map(x=>x.stage),['started','failed','started','ready']);
    assert.equal(saveEvents[0].operationId,saveEvents[1].operationId);
    assert.equal(saveEvents[2].retryOf,saveEvents[0].operationId);
@@ -407,6 +565,12 @@ async function main(){
    await page.locator('#maskPlanLines').fill('1,70,100,180,40\n1,260,200,50,30\n2,105,100,200,40');
    await page.locator('#maskPlanCheck').click();
    assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 출력 / 3개 영역 적용 예정'));
+   // The editor intentionally blocks redaction until the user has reviewed remaining
+   // text-layer privacy candidates and acknowledged that unmasked data may remain.
+   await page.locator('#maskSensitiveReview').click();
+   await page.waitForFunction(()=>document.querySelector('#maskSensitiveStatus')?.textContent.includes('형식 후보'),
+     null,{timeout:30000});
+   await page.locator('#maskSensitiveAcknowledged').check();
    await page.locator('#maskConfirmed').check();
    const maskingDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#maskExportBtn').click();
@@ -486,6 +650,55 @@ async function main(){
    assert(maskHeight>=105,'masking dialog textarea must not collapse under flex layout');
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
+   // R23: exercise the new explicit Excel-column command in a real browser.
+   // Keep the original text-only Excel route unchanged.
+   const tableFixture=await PDFLib.PDFDocument.create();
+   const tableSheet=tableFixture.addPage([420,595]);
+   for(const [left,right,y] of [
+     ['Item','Amount',500],['Alpha','1234',470],['Beta','5678',440]
+   ]){
+     tableSheet.drawText(left,{x:42,y,size:12});
+     tableSheet.drawText(right,{x:240,y,size:12});
+   }
+   // R26 multi-page table: first page omits the middle Excel column.
+   const richSheet=tableFixture.addPage([420,595]);
+   for(const [left,middle,right,y] of [
+     ['Item','Units','Amount',500],['Gamma','2','9999',470],['Delta','3','8888',440]
+   ]){
+     richSheet.drawText(left,{x:42,y,size:12});
+     richSheet.drawText(middle,{x:140,y,size:12});
+     richSheet.drawText(right,{x:240,y,size:12});
+   }
+   richSheet.drawText('REVIEW NOTE',{x:340,y:410,size:12});
+   const tablePage=await context.newPage(),tableErrors=[];
+   tablePage.on('pageerror',e=>tableErrors.push(e.message));
+   await tablePage.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
+   await tablePage.waitForFunction(()=>Boolean(window.SunriseOfficeExport&&window.pdfjsLib),null,{timeout:40000});
+   await tablePage.locator('#openPdfInput').setInputFiles({
+     name:'columns-sample.pdf',mimeType:'application/pdf',buffer:Buffer.from(await tableFixture.save())
+   });
+   await tablePage.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('columns-sample.pdf'),null,{timeout:40000});
+   const tableDownload=tablePage.waitForEvent('download',{timeout:30000});
+   await tablePage.evaluate(()=>executeCommand('exportExcelColumns'));
+   const diagnostics=await tablePage.evaluate(async()=>{
+     const info=await activeDoc().pdfJsDoc.getPage(1).then(p=>p.getTextContent());
+     return {text:info.items.map(x=>({str:x.str,x:x.transform?.[4],y:x.transform?.[5],width:x.width,hasEOL:x.hasEOL})),
+       toast:document.getElementById('toastContainer')?.textContent,
+       module:typeof window.SunriseOfficeExport?.xlsxColumns};
+   });
+   console.log('R23 browser PDF table diagnostics:',JSON.stringify(diagnostics));
+   const tableFile=await tableDownload;
+   assert.match(tableFile.suggestedFilename(),/_columns\.xlsx$/);
+   const tablePath=path.join(downloadDir,'real-columns.xlsx');
+   await tableFile.saveAs(tablePath);
+   const sheetBytes=fs.readFileSync(tablePath);
+   assert.equal(sheetBytes.readUInt32LE(0),0x04034b50,'table workbook must be an actual XLSX ZIP');
+   for(const fragment of ['Item','Amount','Units','Alpha','1234','Beta','5678',
+     'Gamma','9999','Delta','8888','REVIEW NOTE','D2','D3','D4','C5','D5','E8'])
+     assert(sheetBytes.includes(Buffer.from(fragment)),'missing original table cell or column '+fragment);
+   assert.equal(tableErrors.length,0,'Excel table export browser errors: '+tableErrors.join(' | '));
+   await tablePage.close();
+   console.log('PASS R26: real two-page PDF -> stable Excel columns and off-grid note');
    console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split, stale-plan protection, raster masking, embedded PNG/reports, mobile touch save/reopen');
    await context.close();
 
@@ -505,6 +718,8 @@ async function main(){
      await touch.locator('#mobileBottomNav').waitFor({state:'visible',timeout:15000});
      // Real tap -> mobile file menu -> browser file chooser, not a hidden
      // input assignment that could mask a broken touch action.
+     assert.equal(await touch.locator('#mobPageIndicator').isDisabled(),true,
+       'Mobile direct page-jump must be unavailable without an open PDF');
      await touch.locator('#mobFileBtn').tap();
      await touch.locator('#mobileFileOpen').waitFor({state:'visible'});
      assert.equal(await touch.locator('#mobileFileSave').isDisabled(),true,
@@ -524,6 +739,34 @@ async function main(){
      await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='2 / 2',
        null,{timeout:30000});
      await touch.locator('#mobPrevPageBtn').tap();
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
+       null,{timeout:30000});
+     // USR-19 R21: page counter is an accessible direct-jump button. Invalid
+     // input must not navigate or close the dialog; valid Enter and tap work.
+     await touch.locator('#mobPageIndicator').tap();
+     await touch.locator('#mobilePageJumpTarget').waitFor({state:'visible'});
+     const jumpModal=await touch.locator('#modalBox').boundingBox();
+     assert(jumpModal&&jumpModal.x>=-1&&jumpModal.x+jumpModal.width<=391,
+       'mobile page jump modal must fit a 390px touch viewport');
+     await touch.locator('#mobilePageJumpTarget').fill('9');
+     await touch.locator('#mobilePageJumpGo').tap();
+     assert.match(await touch.locator('#mobilePageJumpFeedback').textContent(),/1~2/);
+     assert.equal(await touch.locator('#mobPageIndicator').textContent(),'1 / 2');
+     await touch.locator('#mobilePageJumpTarget').fill('2');
+     await touch.locator('#mobilePageJumpTarget').press('Enter');
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='2 / 2',
+       null,{timeout:30000});
+     await touch.locator('#mobPageIndicator').tap();
+     await touch.locator('#mobilePageJumpTarget').fill('1');
+     await touch.locator('#mobilePageJumpCancel').tap();
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
+     assert.equal(await touch.locator('#mobPageIndicator').textContent(),'2 / 2',
+       'cancel must not change the current page');
+     await touch.locator('#mobPageIndicator').tap();
+     await touch.locator('#mobilePageJumpTarget').fill('1');
+     await touch.locator('#mobilePageJumpGo').tap();
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
      await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
        null,{timeout:30000});
      await touch.locator('#mobLeftPaneBtn').tap();

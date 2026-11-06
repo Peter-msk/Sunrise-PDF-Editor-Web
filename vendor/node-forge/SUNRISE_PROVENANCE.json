@@ -1,0 +1,19 @@
+{
+  "name": "node-forge",
+  "version": "1.4.1",
+  "integrity": "sha512-w5/MfWaeMrpR/5ba6fZyAUTLSuE6aYz7H/3cYrqwZEmf5eQS3IaaLgJt4MBv7HglGFWmV22K8h4U18RJQmw/ow==",
+  "source": "https://registry.npmjs.org/node-forge/-/node-forge-1.4.1.tgz",
+  "tar_sha256": "50e0056cf1143c4434fed833fffa99f29fb8379c0467c2c65ad93dc1665375ea",
+  "executed": false,
+  "files": {
+    "LICENSE": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
+    "README.md": "548e7cd9b92703b46bd34a6c73c1be5df9901a2012a029f87e073b776e53314c",
+    "package.json": "6d5f46f222e0b7e2d2986694018cc9fcd86f8300d1b80fb446b659d8fd16a06a",
+    "dist/prime.worker.min.js.map": "73f786b89ef54b00e0cfb6969b2881e7cffa77b4be3f03e998f70993290716a8",
+    "dist/prime.worker.min.js": "81e28ccf0c0108d4e664d9a7a44b1087f03f61ff10986f0ced3522c5dc400479",
+    "dist/forge.min.js": "fb7a624ee30faad07e3e665d66cef05b6d79d29e5ddb5b497f8f99abb83736bd",
+    "dist/forge.all.min.js": "be0c3650106ac981eb2203993856e079f806f0699729c64565bcb1d1cc61bb3d",
+    "dist/forge.all.min.js.map": "0b21eb8fb1c124e963d564b6462177331027f6e739f48e73184e0f6a81cac3f1",
+    "dist/forge.min.js.map": "5f11be794b0ad083ce9b2bcee1079e7ee1f0771d37beb90d6f13b2b9a8a0eba3"
+  }
+}

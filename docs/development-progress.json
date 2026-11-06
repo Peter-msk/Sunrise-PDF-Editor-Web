@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
-  "asOf": "2026-11-02",
+  "asOf": "2026-11-04",
   "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외. USR-07 원본 Text/Highlight 주석 관리(보수적 제한) Draft PR #28: Node 전체, Chromium, Windows Chrome/Edge CI PASS; 새 UI 실제 현장 조작 미실시, 운영 미배포. 2026-11-02 PR #30: 복합 합성 업무 PDF(6쪽, 한글 계층 북마크, 90도 회전, 비대칭 CropBox) 개별 분할 다운로드/재열기 및 분할 준비 후 편집 상태 변경 방지 검증 Linux Chromium·Windows Chrome·Edge, Node/프로덕션 빌드 4/4 PASS (Actions #41390913711). 외부 실무 PDF·모바일·운영 수용은 미실시. 2026-11-02 PR #37: 일괄 병합 8쪽 단위 페이지 추가 후 UI 이벤트 양보·취소 처리 및 분할/병합 페이지 진행률 추가. Node/빌드, Linux Chromium, Windows Chrome/Edge 전체 CI 4/4 PASS(Actions #41400989415). 기존 공식 점수 유지; 실제 대용량 메모리 실측·현장 모바일 사용성·운영 배포 미실시. 2026-11-02 USR-11 병합 메모리 구조 개선: 원본 PDFPage 문서 참조를 경량 페이지 박스/회전값으로 치환하고 복사가 완료된 PDF 소스 참조를 즉시 해제. 실제 240쪽 합성 병합·RSS 관측 테스트로 검증하며 절대 메모리 상한이나 현장 파일 대응을 주장하지 않음. 2026-11-02 PR #41: 모바일 파일 메뉴(열기·저장·병합), 터치 기반 브라우저 파일 선택·저장 다운로드/재열기 및 병합 창 실기 브라우저 E2E, Linux Chromium/Windows Chrome·Edge+Node 빌드 4/4 PASS(Actions #41407776399). USR-19 소스/자동검증 점수만 근거에 따라 갱신하며 실제 모바일 기기·운영 점수는 유지.",
   "excluded": [
     "USR-20 (OCR)"
@@ -258,11 +258,11 @@
       "id": "USR-09",
       "name": "PDF 압축",
       "phase": 3,
-      "implementation": 75,
-      "automated": 85,
+      "implementation": 78,
+      "automated": 90,
       "practical": 0,
       "deployment": 30,
-      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요"
+      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요 R22: 브라우저 JPEG 재인코딩 출력의 유효한 JPEG 헤더·색상 및 예상 해상도 일치 검사를 저장 전 적용, 불일치 시 PDF 다운로드 차단. 실제 Linux Chromium·Windows Chrome/Edge 합성 사진 PDF에서 강도 20/60/90 압축·이미지 실디코딩·검색 가능한 PDF 텍스트·픽셀 크기 및 PSNR 표본 측정·오염 JPEG 주입 fail-closed 검증(PR #53, CI #41597409431 4/4 PASS). Chromium 표본의 834,452바이트 원본에서 204,499/111,678/11,406바이트 결과와 PSNR 22.3/21.5/20.1dB는 이 합성 문서 한정. 실무 스캔·도면의 글자 가독성·모바일 실기·운영 수용은 미검증."
     },
     {
       "id": "USR-12",
@@ -278,41 +278,41 @@
       "id": "USR-17",
       "name": "이미지·텍스트 추출",
       "phase": 3,
-      "implementation": 82,
-      "automated": 82,
+      "implementation": 85,
+      "automated": 86,
       "practical": 20,
       "deployment": 30,
-      "note": "텍스트/페이지 PNG/내장 RGB 래스터 PNG 추출. 실제 2x2 RGB 이미지 내장 PDF에서 Linux Chromium·Windows Chrome/Edge로 PNG 파일 다운로드 및 헤더 확인. 복잡한 색공간·마스크·원본 JPEG 바이트 미지원, 실무 PDF 품질 검증 미완"
+      "note": "텍스트/페이지 PNG/내장 RGB 래스터 PNG 추출. 실제 2x2 RGB 이미지 내장 PDF에서 Linux Chromium·Windows Chrome/Edge로 PNG 파일 다운로드 및 헤더 확인. 복잡한 색공간·마스크·원본 JPEG 바이트 미지원, 실무 PDF 품질 검증 미완 R20: PDF 직접 DCTDecode /Image XObject에서 표준 JPEG 원본 바이트를 재인코딩 없이 JPG로 제공, 중복·마스크·필터·취소 검사 및 PNG/JPG 선택 UI 추가. 실제 2×2 JPEG pdf-lib 임베딩 기반 원본 바이트 동일성·제외 규칙 검증, PR #51 CI 전체 통과. 실제 다양한 고객 PDF·모바일 원본 JPG 모드의 직접 사용성은 미검증."
     },
     {
       "id": "USR-19",
       "name": "모바일 UX",
       "phase": 3,
-      "implementation": 65,
-      "automated": 65,
+      "implementation": 68,
+      "automated": 70,
       "practical": 10,
       "deployment": 35,
-      "note": "모바일 하단 파일 메뉴를 추가해 PDF 열기·다른 이름으로 저장·병합을 터치로 실행, 문서 미개방 시 저장 버튼 비활성화. 실제 모바일 터치 에뮬레이션의 브라우저 FileChooser 호출·2쪽 페이지 이동·서랍 닫기·Save As 다운로드/디스크 PDF 재열기·병합 창 진입을 Linux Chromium/Windows Chrome·Edge에서 검증(PR #41, Actions #41407776399 전체 4/4 PASS). iOS Safari/Android 실기기와 외부 고객 PDF·운영 수용은 여전히 미완료."
+      "note": "모바일 하단 파일 메뉴를 추가해 PDF 열기·다른 이름으로 저장·병합을 터치로 실행, 문서 미개방 시 저장 버튼 비활성화. 실제 모바일 터치 에뮬레이션의 브라우저 FileChooser 호출·2쪽 페이지 이동·서랍 닫기·Save As 다운로드/디스크 PDF 재열기·병합 창 진입을 Linux Chromium/Windows Chrome·Edge에서 검증(PR #41, Actions #41407776399 전체 4/4 PASS). iOS Safari/Android 실기기와 외부 고객 PDF·운영 수용은 여전히 미완료. R21: 모바일 하단 쪽 표시를 터치 가능한 직접 페이지 이동 버튼으로 확장, 1~전체 쪽 정수 검사·기존 페이지 선택/렌더 경로 재사용·Enter/취소/문서 변경 보호. PR #52에서 390px 터치 에뮬레이션의 잘못된 번호 차단, Enter/버튼 이동, 취소 시 상태 유지와 기존 저장/재열기를 Linux Chromium·Windows Chrome/Edge에서 검사. 실제 Android/iOS 기기 및 실무 PDF 수용은 미검증."
     },
     {
       "id": "USR-05",
       "name": "원문 직접 수정",
       "phase": 4,
-      "implementation": 15,
-      "automated": 60,
+      "implementation": 32,
+      "automated": 82,
       "practical": 10,
       "deployment": 0,
-      "note": "PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완"
+      "note": "PDF.js 기존 텍스트 레이어의 제한된 수평 문자열 위치 인식과 Correction 시각 교정 오버레이, Undo/저장·복원/Chrome·Edge·Chromium 검사. 원문 내용 스트림은 그대로이며 검색·복사 가능. 진정한 원문 직접 수정 불가; OCR 제외/실무 폰트 검증 미완 R24: 신규 '원문 직접 수정' 명령에서 실제 PDF 내용 스트림의 단일 Tj 원문(표준 Base14 Type1/ASCII, 동길이)을 고유 일치 확인 후 교체. 원본 유지, PDF.js 변경된 검색 텍스트 확인, Undo/저장·다운로드·재열기. Node 실제 pdf-lib/브라우저 Linux Chromium·Windows Chrome·Edge의 합성 PDF에서 직접 수정 기능 성공(PR #56). UTF/한글·임베디드 폰트·TJ 다중 조합·텍스트 길이 변경 및 실무 파일 검증 미지원; 민감정보 제거 아님."
     },
     {
       "id": "USR-13",
       "name": "민감정보 완전 삭제",
       "phase": 4,
-      "implementation": 43,
-      "automated": 85,
+      "implementation": 47,
+      "automated": 88,
       "practical": 20,
       "deployment": 0,
-      "note": "페이지별 쉼표 구분 마스크 계획으로 최대 10쪽·40영역(쪽당 12개), 입력 경계/사전 미리 검증, 진행·취소, 선택 쪽만 신규 래스터 PDF 작성, 원본 텍스트·양식·첨부·북마크·편집 메타데이터 비이식 및 출력 PDF 구조 검사. Node·Linux Chromium·Windows Chrome/Edge에서 2쪽·3영역 실다운로드·픽셀/텍스트 확인 PASS. 지정 외 이미지/문구 노출 가능, 문서 전체 완전 삭제/인증 불가. OCR 제외"
+      "note": "페이지별 쉼표 구분 마스크 계획으로 최대 10쪽·40영역(쪽당 12개), 입력 경계/사전 미리 검증, 진행·취소, 선택 쪽만 신규 래스터 PDF 작성, 원본 텍스트·양식·첨부·북마크·편집 메타데이터 비이식 및 출력 PDF 구조 검사. Node·Linux Chromium·Windows Chrome/Edge에서 2쪽·3영역 실다운로드·픽셀/텍스트 확인 PASS. 지정 외 이미지/문구 노출 가능, 문서 전체 완전 삭제/인증 불가. OCR 제외 R23: 래스터 마스크의 소수점 좌표 오른쪽·아래쪽 경계를 끝 좌표 올림으로 전체 포함하며, 적용 후 모서리 4곳·중앙의 실제 불투명 검은 픽셀을 검사. 단일·다중 페이지 공용 구현 및 소수점·비검정 렌더러 차단 테스트 추가(PR #55). 마스크 전체 픽셀/미지정 민감정보 삭제 인증과 실제 고객 문서 검증은 여전히 미완."
     },
     {
       "id": "USR-14",
@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 55,
-      "automated": 87,
+      "implementation": 62,
+      "automated": 92,
       "practical": 20,
       "deployment": 0,
-      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외."
+      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외. R23: 기존 Excel 페이지/텍스트 내보내기 유지, PDF.js 가로 열 좌표 기반 Excel 다열 표 추정 별도 명령 추가. 2행 이상 반복 정렬 좌표만 인식, PDF.js 넓은 공백 항목은 열 구분자로 처리, 불규칙/회전/충돌 셀 거부. 합성 PDF 브라우저 파일 다운로드 회귀. 테두리·병합 셀·실무 문서 전체 복원은 미완. R25: R23-A의 Excel 열 추정 기능을 R24 원문 직접수정·마스킹 검증과 함께 통합. 새 통합 브랜치 CI 및 현장 Office 검증은 별도 판정."
     },
     {
       "id": "TECH-01",

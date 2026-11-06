@@ -29,7 +29,7 @@ const annotation=(pdf,page,subtype,contents,additional={})=>{
  annotation(original,p1,'Text','다음 쪽 의견');
  const raw=await original.save(),savedRaw=Uint8Array.from(raw);
  const doc=await fresh(raw);
- assert.equal(ctx.listNativeAnnotations(doc,0).length,2);
+ assert.equal(ctx.listNativeAnnotations(doc,0).length,3);
  assert.equal(ctx.listNativeAnnotations(doc,1).length,1);
  assert.equal(ctx.listNativeAnnotations(doc,0)[0].text,'초기 한국어 의견');
  assert.throws(()=>ctx.listNativeAnnotations(doc,-1),/페이지/);
@@ -46,21 +46,21 @@ const annotation=(pdf,page,subtype,contents,additional={})=>{
  ctx.updateNativeAnnotation(toDelete,raw,0,1,'delete');
  const deleted=await fresh(await toDelete.save());
  assert.equal(deleted.getPage(0).node.Annots().size(),2);
- assert.equal(ctx.listNativeAnnotations(deleted,0).length,1);
+ assert.equal(ctx.listNativeAnnotations(deleted,0).length,2);
  assert.equal(deleted.getPage(1).node.Annots().size(),1);
  assert.deepEqual(raw,savedRaw,'Original document bytes must be immutable');
  const invalid=await fresh(raw);
- assert.throws(()=>ctx.updateNativeAnnotation(invalid,raw,0,2,'delete'),/안전하게/);
+ const squareDoc=await fresh(raw);ctx.updateNativeAnnotation(squareDoc,raw,0,2,'delete');assert.equal(squareDoc.getPage(0).node.Annots().size(),2);
  assert.throws(()=>ctx.updateNativeAnnotation(invalid,raw,0,0,'edit',''),/1~2000/);
  assert.throws(()=>ctx.updateNativeAnnotation(invalid,raw,0,0,'edit','x'.repeat(2001)),/1~2000/);
- assert.throws(()=>ctx.updateNativeAnnotation(invalid,raw,0,0,'edit','abc\u0000def'),/제어문자/);
+ assert.throws(()=>ctx.updateNativeAnnotation(invalid,raw,0,0,'edit','abc\u0000def'),/Unicode/);
  assert.throws(()=>ctx.updateNativeAnnotation(invalid,raw,0,0,'move','test'),/지원하지/);
  assert.equal(invalid.getPage(0).node.Annots().size(),3);
  const linked=await fresh(raw);
  const reply=linked.context.obj({Type:'Annot',Subtype:'Text',Rect:[1,1,10,10],
    IRT:linked.getPage(0).node.Annots().get(0),Contents:PDFLib.PDFString.of('reply')});
  linked.getPage(0).node.addAnnot(linked.context.register(reply));
- assert.throws(()=>ctx.updateNativeAnnotation(linked,raw,0,0,'delete'),/연결된/);
+ const removed=ctx.updateNativeAnnotation(linked,raw,0,0,'delete');assert.equal(removed.removedCount,2);assert.equal(linked.getPage(0).node.Annots().size(),2);
  const locked=await fresh(raw);
  locked.context.lookup(locked.getPage(0).node.Annots().get(0)).set(n('F'),PDFLib.PDFNumber.of(64));
  assert(!ctx.listNativeAnnotations(locked,0).some(x=>x.index===0));
@@ -77,5 +77,5 @@ const annotation=(pdf,page,subtype,contents,additional={})=>{
  const markerBytes=Uint8Array.from([...raw,...Buffer.from('\n/ByteRange [0 1 2 3]\n')]);
  const markerDoc=await fresh(raw);
  assert.throws(()=>ctx.updateNativeAnnotation(markerDoc,markerBytes,0,0,'edit','blocked'),/전자서명 또는 양식/);
- console.log('PASS: native Text/Highlight Unicode edit+delete, PDF disk-byte roundtrip, unmodified source, foreign annotation preservation, signature/form/reply/locked guards and UI wiring');
+ console.log('PASS: native Text/Highlight Unicode edit+delete, PDF disk-byte roundtrip, unmodified source, other annotation preservation, thread deletion, signature/form/locked guards and UI wiring');
 })().catch(e=>{console.error(e);process.exitCode=1;});

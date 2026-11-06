@@ -1,0 +1,53 @@
+{
+  "release": "R32-DEV7",
+  "base_release": "R32-DEV6",
+  "base_commit": "5781b9546b827a38007bd85c7fffb0a487dd1a4a",
+  "source_changes": [
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "operation": "modified",
+      "dev6_sha256": "1761769d957049b47e35387ba357242cbb3bc2f69a4af9eca5578704be379405",
+      "dev7_sha256": "c0bc88daf9891b559ab4c4ba71eefe1c90db66e2b9a94cc778471e009c1151c5",
+      "old_bytes": 33563,
+      "new_bytes": 36441
+    },
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "operation": "modified",
+      "dev6_sha256": "6ad5a3984a9021c3c79b88f81c795878c6bbf30ab7fe37e0ac6f3d5a6476dceb",
+      "dev7_sha256": "c790e285a60838703de1c46669375ef5958c658be9dfc6e6875a712bc97c0152",
+      "old_bytes": 26840,
+      "new_bytes": 27052
+    },
+    {
+      "path": "src/editor/index.html",
+      "operation": "modified",
+      "dev6_sha256": "02abc1a47bfa07e6d0357dc2372bba642e117d50a558ea3453a3cf8f16820196",
+      "dev7_sha256": "3a0707d0a741bf43e84421ca79b7f01e760a4644030cb433bcb3ed2411fda0f7",
+      "old_bytes": 598849,
+      "new_bytes": 599846
+    }
+  ],
+  "additional_files": [
+    "tests/r32-dev7-fragments-three-columns.cjs",
+    "docs/USR01-19_PROGRESS_CURRENT.md",
+    "docs/USR01-19_PROGRESS_CURRENT.json",
+    "docs/R32_DEV7_IMPLEMENTATION.md",
+    "docs/R32_DEV7_CHANGESET.patch",
+    "README_R32_DEV7.md"
+  ],
+  "affected_functions": [
+    "USR-13",
+    "USR-16",
+    "USR-18"
+  ],
+  "source_implementation": "AUTHORED",
+  "quality_review": "NOT_RUN",
+  "test_execution": "NOT_RUN",
+  "build": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "github_modified": false,
+  "cloud_deployed": false,
+  "legacy_dist_warning": "dist/ is unchanged and does not contain DEV7 changes.",
+  "metric_note": "Updated percentages are provisional source-engineering estimates, NOT measured pass rates."
+}

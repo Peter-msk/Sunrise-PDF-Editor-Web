@@ -1,0 +1,119 @@
+{
+  "release": "R32-DEV4",
+  "base": "R32-DEV3",
+  "scope": "USR-14 PDF AES-256 browser QPDF WASM source integration",
+  "changed_files": [
+    {
+      "path": "README_R32_DEV4.md",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "5a9136a62cd5cd9ee374e19280c6b6abd1f10307ad1b5a91d53991260410e385",
+      "bytes": 2765
+    },
+    {
+      "path": "docs/R32_DEV4_FEATURE_PROGRESS.md",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "ebee88cff26c477e92c50c6ce5b3770666dc81f7420a0ed44294b82d38797b82",
+      "bytes": 7742
+    },
+    {
+      "path": "docs/R32_DEV4_IMPLEMENTATION.md",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "054f3ef353cea4071822e8df846e741d65fb1aa7264fc51a1a2f64e1f4679d4f",
+      "bytes": 4857
+    },
+    {
+      "path": "package-lock.json",
+      "change": "modified",
+      "previous_sha256": "4de0537f373c299100171975998aa7c0e259c376aa0d60825fcaafc76e4f6ebe",
+      "current_sha256": "14295da11a85c17421fed63590399dbc4cd8a5c3e94b260eae50442d30872554",
+      "bytes": 5118
+    },
+    {
+      "path": "package.json",
+      "change": "modified",
+      "previous_sha256": "622b29d802943d2628772efce3d17e1a5b2e9a8bc3d6f9a7d1186b21f89bf62e",
+      "current_sha256": "512b99bfbcf5a282ab0adf3f839da4e24dba2d96705f6f25dbb0623ee492f7e9",
+      "bytes": 5343
+    },
+    {
+      "path": "scripts/build-release.cjs",
+      "change": "modified",
+      "previous_sha256": "fc65dcd5ed2999fad3a78c4164ca2e4d727a3d18e6beade1b444142b3fc4bef3",
+      "current_sha256": "1ae9b05502e5c7d3675563afa1f5b83113b45338add2eced50598a14734af649",
+      "bytes": 3723
+    },
+    {
+      "path": "src/assets/sunrise-pdf-protect-worker.js",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "87c2a48106c26cf63cce583eaad16eb4588cc84de42272d71a7557fb4a789954",
+      "bytes": 2640
+    },
+    {
+      "path": "src/assets/sunrise-pdf-protect.js",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "14107d5e872e25b2b190b56886ce104e5a6cd1b32132a4ec260f4b628ef8bf6b",
+      "bytes": 4005
+    },
+    {
+      "path": "src/assets/sunrise-tool-hub.js",
+      "change": "modified",
+      "previous_sha256": "35c6fab7e7ad23ea61f32c6abaca2b2d73370fe6f738e5e0a47ab425cacc1767",
+      "current_sha256": "ecbba9e53cc7faea92dc168687113b572a1d3cd8c760ecb272c8d3d01f1a7ee3",
+      "bytes": 17332
+    },
+    {
+      "path": "src/editor/index.html",
+      "change": "modified",
+      "previous_sha256": "38ce07a6bf92a7577ff1f60cf60f3b67bcdf032e4a505ce54bd735e5fbf06bbe",
+      "current_sha256": "06f678d476de5a1f71890cb6d19e5ce59b4fa1afc1ff2a891ef121ed0f90e2ce",
+      "bytes": 586501
+    },
+    {
+      "path": "tests/usr14-wasm-aes256-practical.cjs",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "d3e82473d05840fa4d9e088419b5052d124f94103bed9903adc5a7c5ac9d7751",
+      "bytes": 1911
+    },
+    {
+      "path": "tests/usr14-web-integration-contract.cjs",
+      "change": "added",
+      "previous_sha256": null,
+      "current_sha256": "ee98c328da75a8e84878e2b5c63543f3d217f3b09293cc8bba4b3b22f0983c05",
+      "bytes": 1177
+    }
+  ],
+  "dependency": {
+    "package": "pdfstudio",
+    "exact_version": "0.4.0",
+    "bundled_wasm_in_this_zip": false,
+    "dependency_installed": false,
+    "code_path": "node_modules/pdfstudio/dist",
+    "deployment_path": "dist/assets/pdfstudio"
+  },
+  "capability_status": {
+    "usr14_source": "authored_not_practically_verified",
+    "usr14_wasm_runtime": "not_installed",
+    "usr14_practical_encrypted_pdf": "not_generated",
+    "usr15_source": "DEV3 authored_not_practically_verified"
+  },
+  "historical_progress": {
+    "user_19_mean_percent": 68.1,
+    "admin_14_mean_percent": 100.0,
+    "all_33_mean_percent": 81.6,
+    "dev4_measured_completion_percent": null
+  },
+  "tests_executed": false,
+  "build_executed": false,
+  "real_pdf_generated": false,
+  "github_modified": false,
+  "cloudflare_modified": false,
+  "dist_is_stale": true,
+  "completion_claim": "SOURCE_AUTHORED_ONLY",
+  "notes": "A future approved npm installation and build are required to include the qpdf WASM binary. The new feature is not currently deployable."
+}

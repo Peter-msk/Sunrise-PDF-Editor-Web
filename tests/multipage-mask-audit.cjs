@@ -18,7 +18,21 @@ for(const bad of [
 const renders=[],marks=[];
 const makeCanvas=()=>{
  const entry={page:null};
- const ctx={fillStyle:'',fillRect(x,y,w,h){marks.push({page:entry.page,fill:this.fillStyle,x,y,w,h})}};
+ const ctx={
+  fillStyle:'',
+  fillRect(x,y,w,h){marks.push({page:entry.page,fill:this.fillStyle,x,y,w,h})},
+  getImageData(x,y,width=1,height=1){
+   const data=new Uint8ClampedArray(width*height*4);
+   for(let row=0;row<height;row++)for(let col=0;col<width;col++){
+    const px=x+col,py=y+row,offset=(row*width+col)*4;
+    const covered=marks.some(m=>m.page===entry.page&&m.fill==='#000000'&&
+     px>=m.x&&py>=m.y&&px<m.x+m.w&&py<m.y+m.h);
+    data[offset]=covered?0:255;data[offset+1]=covered?0:255;
+    data[offset+2]=covered?0:255;data[offset+3]=255;
+   }
+   return {data};
+  }
+ };
  return {get width(){return entry.width||0},set width(v){entry.width=v},
  get height(){return entry.height||0},set height(v){entry.height=v},
  getContext:()=>ctx,
@@ -49,6 +63,34 @@ const reader={numPages:3,getPage:async n=>{
  assert.deepEqual(await special.checkOutputStructure(output.bytes,PDFLib,2),{pageCount:2,sourceStreamsCopied:false});
  for(const key of ['AcroForm','Outlines','Names','Perms','Metadata','SunriseWebEdits'])
   assert.equal(pdf.catalog.get(PDFLib.PDFName.of(key)),undefined);
+ // Fractional box positions must cover the right/bottom edge as well as
+ // the top/left. A width-only ceil would miss those final pixels.
+ const fractional=special.parseMaskPlan('1,10.25,20.25,4.3,5.3',dims);
+ const before=marks.length;
+ await special.exportMaskedPages({reader,plan:fractional,PDFLib,makeCanvas});
+ const painted=marks.slice(before).find(x=>x.fill==='#000000');
+ assert.deepEqual([painted.x,painted.y,painted.w,painted.h],[20,40,10,12]);
+ // No PDF may be issued if the renderer's readback shows an uncovered pixel.
+ const faultyCanvas=()=>{
+  const canvas=makeCanvas(),context=canvas.getContext('2d');
+  context.getImageData=()=>({data:Uint8ClampedArray.from([255,255,255,255])});
+  return canvas;
+ };
+ await assert.rejects(
+  special.exportMaskedPages({reader,plan,PDFLib,makeCanvas:faultyCanvas}),
+  /마스크가 불투명한 검은색/
+ );
+ // A mask with black corners/center but a non-black interior pixel must fail.
+ const coverageBox={x:12,y:20,width:8,height:6};
+ const faultyPixel={getImageData(x,y,w,h){
+  const data=new Uint8ClampedArray(w*h*4);
+  for(let i=0;i<w*h;i++)data[i*4+3]=255;
+  const missedX=27,missedY=43;
+  if(missedX>=x&&missedX<x+w&&missedY>=y&&missedY<y+h)
+   data[((missedY-y)*w+(missedX-x))*4]=255;
+  return {data};
+ }};
+ assert.throws(()=>special.verifyFullMaskCoverage(faultyPixel,[coverageBox],40,70),/가려지지 않은 픽셀/);
  await assert.rejects(special.exportMaskedPages({reader,plan,PDFLib,makeCanvas,cancelled:()=>true}),/취소/);
  await assert.rejects(special.exportMaskedPages({reader,plan:[],PDFLib,makeCanvas}),/목록/);
  await assert.rejects(special.checkOutputStructure(output.bytes,PDFLib,3),/페이지 수/);

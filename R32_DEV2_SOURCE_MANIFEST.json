@@ -1,0 +1,55 @@
+{
+  "version": "R32-DEV2",
+  "base": "R32-DEV1 (R26 plus R27-R31 integration and DEV1)",
+  "scope": "USR-05 WinAnsi exact source editing; USR-16 estimated DOCX page geometry",
+  "source_files": [
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "operation": "modified",
+      "before_sha256": "66138b19ce511bee2d7e6bcc5518376425281885eaaba5b102b4e9183526a8a2",
+      "after_sha256": "e77d216beefbcd6464ec150e4a45b5e92caa48a0909e1d324b1a6ceeed7e38c9",
+      "added_bytes": 3453
+    },
+    {
+      "path": "src/editor/index.html",
+      "operation": "modified",
+      "before_sha256": "29f6b085fe5fba0ae4b3fe7ff6ccc2e2dee57c554a81c46bcb340cfb805a64ca",
+      "after_sha256": "ba0230085217bc77020699c93766e669d246a45b4315c16000e4697156631b84",
+      "added_bytes": 209
+    },
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "operation": "modified",
+      "before_sha256": "95af7ed37fe37495187d145ad2550e6f4d98f233dad8c59ac79d7bef99c2d8f4",
+      "after_sha256": "97bec52440d47afdbf83bec1e262f67f55be06b596d184b1f89a0db7170e7b0f",
+      "added_bytes": 2061
+    },
+    {
+      "path": "tests/dev2-winansi-source-contract.cjs",
+      "operation": "new",
+      "before_sha256": null,
+      "after_sha256": "952001d1ea0c55a04087d6b233a611ebf20e7b7a1231a6d62dae37e984e8258e",
+      "added_bytes": 1176
+    },
+    {
+      "path": "tests/dev2-office-section-contract.cjs",
+      "operation": "new",
+      "before_sha256": null,
+      "after_sha256": "53c620f5c5718eedfae07d77b21aebbe04c5de36ae8cb3a40c5752ba0d44dafb",
+      "added_bytes": 1657
+    }
+  ],
+  "baseline_code_implementation_pct": {
+    "usr_19": 68.05,
+    "admin_14": 100,
+    "all_33": 81.61
+  },
+  "source_authored": true,
+  "tests_executed": false,
+  "build_executed": false,
+  "browser_acceptance": false,
+  "github_updated": false,
+  "cloudflare_deployed": false,
+  "dist_note": "dist/ is stale and not a DEV2 build",
+  "completion_claim": "source authored only, not QA-passed or functionally complete"
+}
