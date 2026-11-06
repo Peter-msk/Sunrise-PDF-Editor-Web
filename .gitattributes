@@ -1,0 +1,4 @@
+# Keep pinned local vendor assets byte-for-byte identical on Windows and Linux.
+# Windows autocrlf would alter LICENSE/JS files and fail SHA-256 verification.
+vendor/pdfstudio/** -text
+vendor/node-forge/** -text
