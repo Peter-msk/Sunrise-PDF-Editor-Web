@@ -1,0 +1,228 @@
+{
+  "release": "R34-DEV1",
+  "base": "R33-DEV1",
+  "all_requested_functionality_complete": false,
+  "deployment_ready": false,
+  "syntax": "8/8 PASS",
+  "functional_groups": "19/19 PASS",
+  "build": "NOT_RUN",
+  "full_regression": "NOT_RUN",
+  "ci": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "mobile_acceptance": "NOT_RUN",
+  "github_written": false,
+  "cloudflare_deployed": false,
+  "prior_dist_unchanged": true,
+  "files": [
+    {
+      "path": "README.md",
+      "kind": "modified",
+      "before_sha256": "1a5a69f9605a43ac1302c0bf406361e9996277f4ef55fc57f0506402d794269e",
+      "after_sha256": "2787f2ee8392963d368b87e8e16a5e42f283a21602728f39040a99fce1e54b1a",
+      "bytes": 2492
+    },
+    {
+      "path": "README_LEGACY_BEFORE_R34.md",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "1a5a69f9605a43ac1302c0bf406361e9996277f4ef55fc57f0506402d794269e",
+      "bytes": 9622
+    },
+    {
+      "path": "README_R34.md",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "b1daa82f84709fc1dbbcdbbc41ff508be85a1b1c5f9444d7a595c8b1a76d3500",
+      "bytes": 820
+    },
+    {
+      "path": "docs/R34_IMPLEMENTATION.md",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "e18ebcfd043d41f02b028ec8f68699a5205bd9738a4be06082bb6c4efd284d91",
+      "bytes": 4362
+    },
+    {
+      "path": "docs/R34_VALIDATION.json",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "1ea84f00fe8b33fe2f115f74be9269f373f355113c9f10b8575ea809de37c0ae",
+      "bytes": 7473
+    },
+    {
+      "path": "docs/USR01-19_PROGRESS_CURRENT.json",
+      "kind": "modified",
+      "before_sha256": "cb087028b88d266ec82eac312f3d6e7158ae83a18fa7dc0cecdb5429b2a899b0",
+      "after_sha256": "399fa8e6530cf0953f96823ba61190b37dbaaea8805d4f59b0ca9e90dec1fa52",
+      "bytes": 39308
+    },
+    {
+      "path": "docs/USR01-19_PROGRESS_CURRENT.md",
+      "kind": "modified",
+      "before_sha256": "a559baa8945dfc63e69b2289adec6b3137684ffd59c28a72ae4264fbc249d51f",
+      "after_sha256": "1d660096ca63d9be1bb9d87972b2886837892d487c80fb3fc83653e78da2bb02",
+      "bytes": 6210
+    },
+    {
+      "path": "package.json",
+      "kind": "modified",
+      "before_sha256": "311f43ff8aceb6d9173b815c8162a7fdf19cb19e9a256f3feff0e7f3f2cc1686",
+      "after_sha256": "5d3dfa13f50819c8f506b134f1f42ce1a4b3ad614652599f415ae01b2469a287",
+      "bytes": 5590
+    },
+    {
+      "path": "scripts/verify-r34.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "4b6422c1500fcac3ed3e6e4824fdecc8ffaa9208ba73f5a5fde85b7f4410388f",
+      "bytes": 3133
+    },
+    {
+      "path": "src/assets/sunrise-content-editor.js",
+      "kind": "modified",
+      "before_sha256": "c0aafc68e42655f47549bbd1226a83f33f8c8f32ccc8d1de27f29817f8bf3d81",
+      "after_sha256": "02ffcf7d4d83a569f7dfa88089aeefb2c444426aa3387583e37a9a8312e908f6",
+      "bytes": 35990
+    },
+    {
+      "path": "src/assets/sunrise-embedded-images.js",
+      "kind": "modified",
+      "before_sha256": "3e9a3ed37cf1b839fc171a607bb183ce070acc0e817ac921f672771f956849a6",
+      "after_sha256": "5e07c9d71f2199e26c810f42d01136a1806a5bb53dee9ca2e5540a66a45a4239",
+      "bytes": 14711
+    },
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "kind": "modified",
+      "before_sha256": "66cee26ed1f6f4a46a4fdffd433e9af84aa88a2e79ef324557fa2b3099a6016d",
+      "after_sha256": "c103b0832819bb750ccf1431b84db70bebfaa2313854fcd3a694e1cf16395090",
+      "bytes": 52939
+    },
+    {
+      "path": "src/assets/sunrise-outline-transfer.js",
+      "kind": "modified",
+      "before_sha256": "ab7fe74b753e45d9011f09604e830b13c900688db842af02e3ea7366aa386838",
+      "after_sha256": "7002869bae800ca39ece17fb484e0154cf612312762e4fc6b27f6f3c9d86c75f",
+      "bytes": 7230
+    },
+    {
+      "path": "src/assets/sunrise-pdf-cms.js",
+      "kind": "modified",
+      "before_sha256": "994e83d4b767cd73dfd75c1cccae7c7d411c8c392c102e37126d32e25ef4a3c9",
+      "after_sha256": "ea36f96b92d48b8ae356f5c18ba634fb18442cd8f9d5b1ae2ded5d38e5227cb8",
+      "bytes": 34540
+    },
+    {
+      "path": "src/assets/sunrise-pdf-form-tools.js",
+      "kind": "modified",
+      "before_sha256": "0340cd6c9747dace257deff485537c622c198c4787e30392c54eb4c4e6bbedbe",
+      "after_sha256": "d9ff611a0dad2d5e06b1efae45f2ef7bf2e1c988703114d3d89e2fcfe33147c1",
+      "bytes": 31433
+    },
+    {
+      "path": "src/assets/sunrise-pki.js",
+      "kind": "modified",
+      "before_sha256": "b7152c31369457c852b321b7b374fe3a3feb66998ebe57ba18001c99f699da69",
+      "after_sha256": "9783caf2429e22b85b088304099d9feabc62d610f008f102d3751ce12890e0da",
+      "bytes": 3245
+    },
+    {
+      "path": "src/editor/index.html",
+      "kind": "modified",
+      "before_sha256": "d3e360ae2c2338f9670f8fea09b8ca3ab5507084c95ceef8b0f519b8b46e9f1b",
+      "after_sha256": "684f7535fc9cc29164b1f4700bb4b45278791d0f6b4c622e49d2f9c28f18b3d3",
+      "bytes": 640901
+    },
+    {
+      "path": "tests/bookmark-hierarchy.cjs",
+      "kind": "modified",
+      "before_sha256": "2a5814d82d99a32b576959704921e40d50b357eaa7d1cff0ddc5ab509db535a0",
+      "after_sha256": "0559588f09014719b648d31afb672161c9758f7d6235270677ff1167dc4169f6",
+      "bytes": 5795
+    },
+    {
+      "path": "tests/native-annotation-edit.cjs",
+      "kind": "modified",
+      "before_sha256": "293cb0c268b6dd2d5ff7ee06bd822de6e55bbe2ac7f264940abee85c5323fbbc",
+      "after_sha256": "f0f12282b065071c4e03632c93d9a4e6fd7e740500ba168831858a4ad0404292",
+      "bytes": 5918
+    },
+    {
+      "path": "tests/outline-transfer.cjs",
+      "kind": "modified",
+      "before_sha256": "10b52b77d3d3b72e5c7a15ff33c83a8bffd20486b8f72a118842b745824495d9",
+      "after_sha256": "831ddbb64cb73fa547fd9050a92bc00765aa0f1155490f73f06f9112e6b43fcc",
+      "bytes": 3209
+    },
+    {
+      "path": "tests/r34-annotation-appearance.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "eeee34db26a5a115d5b3eaa4db285c0b4afeff05c861cc126959a37344265317",
+      "bytes": 3049
+    },
+    {
+      "path": "tests/r34-cmap-vertical.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "9521cc7e840e491530d0cedd84ef6f88b3abe9cd9fb1e8662208e1e4fde1272c",
+      "bytes": 3831
+    },
+    {
+      "path": "tests/r34-engine-roundtrip.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "d3808719a9a690821ab50374855cfd2f53e7f57a972554faf099803b215f41be",
+      "bytes": 1935
+    },
+    {
+      "path": "tests/r34-form-transfer.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "0ac173ce3db6d5aa36db89e0b770a3af66bf10f26e4e2d644baba4c882c250bb",
+      "bytes": 3607
+    },
+    {
+      "path": "tests/r34-incremental-signatures.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "639ac987bf6d57bae73ebb9cf168adba271a886889a5eea85e4cb0242cfe9f8c",
+      "bytes": 4875
+    },
+    {
+      "path": "tests/r34-mixed-word.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "c49e62cea02c1fde27ce43324860fd2f974278011a502cc6476e7765dd077f3c",
+      "bytes": 3339
+    },
+    {
+      "path": "tests/r34-multiple-tables.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "846d4eb1c90959c7ea24740b49e8a1986a11edbfc8367c647f06416346c2a1fd",
+      "bytes": 1761
+    },
+    {
+      "path": "tests/r34-nested-content.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "3641421ab5403671e3011c0b7eb4c698a90baab810e1ec6d84b781fdad0ba82c",
+      "bytes": 3426
+    },
+    {
+      "path": "tests/r34-pki-container.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "2896a05b13054e97ac02de27631e95f2403e5ffd4a8088791b42bdf4dde48de5",
+      "bytes": 2270
+    },
+    {
+      "path": "tests/r34-worker-encryption.cjs",
+      "kind": "added",
+      "before_sha256": null,
+      "after_sha256": "6118ba89f09764b37fa9ddb6083220315fea6d994eab8b0c13ff7e6ea12ba6c5",
+      "bytes": 2172
+    }
+  ]
+}

@@ -1,6 +1,12 @@
 'use strict';
 // Manual release: require completed full CI for the exact main SHA AND all four
 // required validation jobs. This gate does not cover unapproved direct deployments.
+const fs=require('node:fs');
+const path=require('node:path');
+function assertNoPreviewAssets(root=path.resolve(__dirname,'..')){
+ if(fs.existsSync(path.join(root,'dist','SUNRISE_PREVIEW_ONLY.json')))
+  throw Error('Preview-only assets exist; run the locked production build before release.');
+}
 const REQUIRED_JOBS=Object.freeze([
  'Node contracts and production build',
  'Real Chromium PDF save and reopen',
@@ -40,6 +46,7 @@ async function githubJson(url,token){
  return response.json();
 }
 async function main(){
+ assertNoPreviewAssets();
  const repo=process.env.GITHUB_REPOSITORY||'';
  const sha=process.env.GITHUB_SHA||'';
  const approved=process.env.VALIDATED_COMMIT||'';
@@ -66,4 +73,4 @@ if(require.main===module)main().catch(error=>{
  console.error('RELEASE GATE BLOCKED: '+(error.message||error));
  process.exitCode=1;
 });
-module.exports={validateReleaseEvidence,REQUIRED_JOBS};
+module.exports={validateReleaseEvidence,REQUIRED_JOBS,assertNoPreviewAssets};

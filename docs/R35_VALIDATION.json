@@ -1,0 +1,759 @@
+{
+  "release": "R35-DEV1",
+  "source": "R34-DEV1",
+  "executionTimeUTC": "2026-11-06T14:42:41.452122+00:00",
+  "results": [
+    {
+      "index": 1,
+      "command": "node tests/synthetic-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: page remapping, searchable Korean PDF text, attachment, rotated overlay and saved-item restoration\n",
+      "stderr": ""
+    },
+    {
+      "index": 2,
+      "command": "node tests/rotation-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: multi-page clockwise/counterclockwise, selection, failure atomicity, overlay safety\n",
+      "stderr": ""
+    },
+    {
+      "index": 3,
+      "command": "node tests/lazy-text-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: lazy extraction, shared in-flight work, cached result, stale document guard\n",
+      "stderr": ""
+    },
+    {
+      "index": 4,
+      "command": "node tests/undo-performance-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: overlay undo/redo avoids PDF reload; changed PDF bytes still reload\n",
+      "stderr": ""
+    },
+    {
+      "index": 5,
+      "command": "node tests/placement-gesture-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: click placement coordinates/cancellation and pinch swipe guard\n",
+      "stderr": ""
+    },
+    {
+      "index": 6,
+      "command": "node tests/bookmark-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: Unicode titles, page destinations, append without replacing existing bookmarks, invalid page\n",
+      "stderr": ""
+    },
+    {
+      "index": 7,
+      "command": "node tests/page-range-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: bounded page ranges, PDF filename/mask line parsing and stale editable-state guards\n",
+      "stderr": ""
+    },
+    {
+      "index": 8,
+      "command": "node tests/search-results-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: repeated search matches, overlay, multi-item fallback and stale searches\n",
+      "stderr": ""
+    },
+    {
+      "index": 9,
+      "command": "node tests/highlight-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: native highlight, quad geometry, appearance and existing annotations\n",
+      "stderr": ""
+    },
+    {
+      "index": 10,
+      "command": "node tests/native-annotation-edit.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: native Text/Highlight Unicode edit+delete, PDF disk-byte roundtrip, unmodified source, other annotation preservation, thread deletion, signature/form/locked guards and UI wiring\n",
+      "stderr": ""
+    },
+    {
+      "index": 11,
+      "command": "node tests/save-safety-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: save snapshot, damaged output blocked before URL publication, explicit download confirmation, later edits preserved\n",
+      "stderr": ""
+    },
+    {
+      "index": 12,
+      "command": "node tests/thumbnail-memory-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: offscreen thumbnail release, in-flight render and recovery\n",
+      "stderr": ""
+    },
+    {
+      "index": 13,
+      "command": "node tests/rotate-export-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: rotated searchable text, stamp and watermark save and edit-state restoration\n",
+      "stderr": ""
+    },
+    {
+      "index": 14,
+      "command": "node tests/page-jump-race-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: in-progress page jump survives render; validates integer and document changes\n",
+      "stderr": ""
+    },
+    {
+      "index": 15,
+      "command": "node tests/page-metadata-concurrency-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: bounded parallel page metadata, ordered pages, attachment failure and cleanup\n",
+      "stderr": ""
+    },
+    {
+      "index": 16,
+      "command": "node tests/bookmark-reading-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: nested outlines, named and direct destinations, unavailable links, read errors\n",
+      "stderr": ""
+    },
+    {
+      "index": 17,
+      "command": "node tests/bookmark-page-guard-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: outline protection for delete, cut and reorder; copy and ordinary delete remain available\n",
+      "stderr": "Unable to verify outline destinations Error: missing or ambiguous destination\n    at resolveNamed (evalmachine.<anonymous>:67:43)\n    at destinationPage (evalmachine.<anonymous>:74:38)\n    at allowPageStructureChange (evalmachine.<anonymous>:139:31)\n    at deleteSelectedPagesFromDoc (evalmachine.<anonymous>:265:12)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/bookmark-page-guard-contract.cjs:33:3\nUnable to verify outline destinations Error: missing or ambiguous destination\n    at resolveNamed (evalmachine.<anonymous>:67:43)\n    at destinationPage (evalmachine.<anonymous>:74:38)\n    at allowPageStructureChange (evalmachine.<anonymous>:139:31)\n    at copySelectedPagesToClipboard (evalmachine.<anonymous>:212:20)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/bookmark-page-guard-contract.cjs:35:3\nUnable to verify outline destinations Error: missing or ambiguous destination\n    at resolveNamed (evalmachine.<anonymous>:67:43)\n    at destinationPage (evalmachine.<anonymous>:74:38)\n    at allowPageStructureChange (evalmachine.<anonymous>:139:31)\n    at Object.confirm (evalmachine.<anonymous>:351:18)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/bookmark-page-guard-contract.cjs:37:96\n"
+    },
+    {
+      "index": 18,
+      "command": "node tests/bookmark-rename-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: nested outline rename, Unicode persistence, action preservation, mismatch rejection, atomic failure and undo snapshot\n",
+      "stderr": ""
+    },
+    {
+      "index": 19,
+      "command": "node tests/bookmark-delete-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: nested deletion, subtree deletion, first/last links, closed ancestors and invalid counts\n",
+      "stderr": ""
+    },
+    {
+      "index": 20,
+      "command": "node tests/bookmark-page-preservation-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: direct bookmark survives reorder and unrelated deletion; targeted deletion, invalid numeric destinations and unsupported actions blocked\n",
+      "stderr": ""
+    },
+    {
+      "index": 21,
+      "command": "node tests/page-atomic-publish.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: failed page duplication, deletion, cut and reorder do not publish state\n",
+      "stderr": "페이지 삭제 중단 Error: synthetic serialization failure\n    at pdf.save (/mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:24:28)\n    at Object.deleteSelectedPagesFromDoc (evalmachine.<anonymous>:113:36)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:51:4\n페이지 재배열 실패 Error: synthetic serialization failure\n    at pdf.save (/mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:24:28)\n    at Object.click (evalmachine.<anonymous>:186:47)\n    at async /mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/page-atomic-publish.cjs:66:3\n"
+    },
+    {
+      "index": 22,
+      "command": "node tests/bookmark-named-destination-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: legacy and name-tree destinations, GoTo actions, reorder, referenced-page protection, ambiguous names and chained actions\n",
+      "stderr": ""
+    },
+    {
+      "index": 23,
+      "command": "node tests/bookmark-insert-guard-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: insertion guard blocks invalid numeric bookmark destinations and preserves direct destination on duplicate\n",
+      "stderr": ""
+    },
+    {
+      "index": 24,
+      "command": "node tests/pdf-compression-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: lossless stream compression 137439 -> 1897; weak Flate 90689 -> 924; metadata/bookmark/attachment retained, no-op and unavailable API\n",
+      "stderr": ""
+    },
+    {
+      "index": 25,
+      "command": "node tests/compression-save-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: compression save flow, size report, explicit download confirmation\n",
+      "stderr": ""
+    },
+    {
+      "index": 26,
+      "command": "node tests/bookmark-retarget-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: bookmark page retarget, shared action isolation, save/reopen, undo snapshot and failure safety\n",
+      "stderr": ""
+    },
+    {
+      "index": 27,
+      "command": "node tests/bookmark-action-chain-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: GoTo chains, arrays, shared actions, page operations, target protection, cycles and atomic rejection\n",
+      "stderr": ""
+    },
+    {
+      "index": 28,
+      "command": "node tests/bookmark-retarget-chain-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: GoTo chain destination editing, shared action isolation, next actions preserved, mixed/cyclic rejection\n",
+      "stderr": ""
+    },
+    {
+      "index": 29,
+      "command": "node tests/homepage-contact-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: homepage fixed notice/update rail, feature descriptions, public feed and private inquiry form contract\n",
+      "stderr": ""
+    },
+    {
+      "index": 30,
+      "command": "node tests/contact-worker-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: public release feed, no inquiry listing, validated same-origin private D1 submissions, honeypot and retention cron\n",
+      "stderr": "(node:3441) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 31,
+      "command": "node tests/admin-metrics-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: password-only admin routes fail closed, telemetry whitelist and dashboard contract\n",
+      "stderr": "(node:3452) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 32,
+      "command": "node tests/home-rail-no-overlap-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: administrator navigation visible and notices remain outside centered content across desktop widths\n",
+      "stderr": ""
+    },
+    {
+      "index": 33,
+      "command": "node tests/admin-password-auth-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: first registration and login use browser PBKDF2 and server-only HMAC; rate limits, secure session, logout, HTML error handling\n",
+      "stderr": ""
+    },
+    {
+      "index": 34,
+      "command": "node tests/publication-lifetime.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: first publication retained; KST 7-day boundaries, drafts, edits, future dates and hidden records\n",
+      "stderr": "(node:3481) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 35,
+      "command": "node tests/admin-publications.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: authenticated publication management, draft activation, immutable first date, validation, CSRF and duplicate protection\n",
+      "stderr": "(node:3492) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 36,
+      "command": "node tests/telemetry-day-boundary.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: an editor tab crossing KST midnight registers the next day before sending usage\n",
+      "stderr": ""
+    },
+    {
+      "index": 37,
+      "command": "node tests/admin-inquiry-search.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: inquiry search treats percent, underscore and backslash as literal characters\n",
+      "stderr": "(node:3510) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 38,
+      "command": "node tests/form-page-safety-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: form/XFA/widget page operations fail safely before state change or download; normal documents remain allowed\n",
+      "stderr": ""
+    },
+    {
+      "index": 39,
+      "command": "node tests/form-save-roundtrip.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: basic form values and unchanged XFA survive the tested no-overlay save and reopen\n",
+      "stderr": ""
+    },
+    {
+      "index": 40,
+      "command": "node tests/pdf-input-size-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: valid large PDF metadata allowed; unsafe sizes rejected before read; partial reads blocked in open, merge, insert and drop\n",
+      "stderr": ""
+    },
+    {
+      "index": 41,
+      "command": "node tests/saved-pdf-preflight.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: saved PDF preflight and download gate block missing pages, rotation/box damage and corrupt bytes\n",
+      "stderr": ""
+    },
+    {
+      "index": 42,
+      "command": "node tests/saved-pdf-structure-guard.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: native annotation and catalog structure preservation on normal PDF saves\n",
+      "stderr": ""
+    },
+    {
+      "index": 43,
+      "command": "node tests/comment-report-csv.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: local review report Unicode, original annotation inclusion, formula neutralization and bounded count\n",
+      "stderr": ""
+    },
+    {
+      "index": 44,
+      "command": "node tests/admin-statistics-export.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: authenticated aggregate CSV, 30-day boundaries, privacy and malformed data rejection\n",
+      "stderr": "(node:3563) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 45,
+      "command": "node tests/create-form-field.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: create and reopen Korean text/date/checkbox fields, readonly, invalid inputs and XFA/signature guards\n",
+      "stderr": ""
+    },
+    {
+      "index": 46,
+      "command": "node tests/bulk-form-fields.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: atomic batch AcroForm edit, shared Unicode font, readonly, XFA/signature, invalid value, original unchanged\n",
+      "stderr": ""
+    },
+    {
+      "index": 47,
+      "command": "node tests/admin-inquiry-history.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: inquiry status history ordered, restricted to existing inquiry, private fields omitted and unauthenticated requests denied\n",
+      "stderr": "(node:3588) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 48,
+      "command": "node tests/admin-inquiry-atomic.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: inquiry status and audit update atomically, including rollback and serialized changes\n",
+      "stderr": "(node:3599) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 49,
+      "command": "node tests/admin-inquiry-pagination.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: inquiry keyset pagination, identical timestamps, new rows, filters and invalid cursors\n",
+      "stderr": "(node:3610) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 50,
+      "command": "node tests/batch-compress.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: batch compression isolates failures, checks form values, page geometry, dropped fields, cancellation, and signed files\n",
+      "stderr": ""
+    },
+    {
+      "index": 51,
+      "command": "node tests/auto-text-bookmarks.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: text-only heading bookmarks, repeated running header suppression, page targets, zero OCR, preview, stale document guard\n",
+      "stderr": ""
+    },
+    {
+      "index": 52,
+      "command": "node tests/bookmark-hierarchy.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: inferred chapter hierarchy, manual indent/outdent, nested PDF outline persistence, legacy outline preservation, safe normalization\n",
+      "stderr": ""
+    },
+    {
+      "index": 53,
+      "command": "node tests/outline-transfer.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: merge, split and extract preserve simple PDF bookmarks; unsafe external action rejected\n",
+      "stderr": ""
+    },
+    {
+      "index": 54,
+      "command": "node tests/overlay-table-shape-annotation.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: table rectangular edits, shape UI/save hooks, review panel, safe PDF overlay metadata roundtrip incl. colors/opacity\n",
+      "stderr": ""
+    },
+    {
+      "index": 55,
+      "command": "node tests/embedded-image-extraction.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "Embedded PDF image extraction contracts passed\n",
+      "stderr": ""
+    },
+    {
+      "index": 56,
+      "command": "node tests/admin-password-change.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: password rotation requires valid session, old password proof and same origin; all sessions revoked, new password succeeds\n",
+      "stderr": ""
+    },
+    {
+      "index": 57,
+      "command": "node tests/batch-compress-disk-roundtrip.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: production lossless batch compressor, actual disk bytes saved/reopened, form values, page rotation, per-file failure isolation\n",
+      "stderr": ""
+    },
+    {
+      "index": 58,
+      "command": "node tests/batch-watermark-page-number.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: batch Korean watermark & page numbers, field preservation, corrupt file isolation, signature/rotation guards, cancellation\n",
+      "stderr": ""
+    },
+    {
+      "index": 59,
+      "command": "node tests/batch-split-merge.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: split/merge PDF disk roundtrip; rotation, size and source immutability; safe form/signature/bookmark/annotation rejection; cancellation, atomic merge and UI wiring\n",
+      "stderr": ""
+    },
+    {
+      "index": 60,
+      "command": "node tests/pdf-submission-quality.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: pre-submit geometry, mixed orientation, image-vs-blank candidates, required forms, signatures, unscanned-page warnings, cancel and read-only source\n",
+      "stderr": "Removing XFA form data as pdf-lib does not support reading or writing XFA\n"
+    },
+    {
+      "index": 61,
+      "command": "node tests/pdf-export-bundle.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: CSV formula safety, local JSON preflight, bounded split planning, UI and release build wiring\n",
+      "stderr": ""
+    },
+    {
+      "index": 62,
+      "command": "node tests/special-pdf-guard.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: visual-only correction candidate validation, one-page raster mask output, non-certified signature persistence and safety labels\n",
+      "stderr": ""
+    },
+    {
+      "index": 63,
+      "command": "node tests/r15-stamp-geometry.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS R15: mixed portrait/landscape and rotated watermark, start on PDF page 2, skip 3/5, validations\n",
+      "stderr": ""
+    },
+    {
+      "index": 64,
+      "command": "node tests/multipage-mask-audit.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: multi-page multi-mask plan, bounds, output fresh PDF/no source catalog, cancellation, progress and safeguards\n",
+      "stderr": ""
+    },
+    {
+      "index": 65,
+      "command": "node tests/office-text-export.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: PDF.js line breaks, safe Word/Excel text and ZIP, strict 32767-char/no-silent-loss, XML Unicode, limits and UI wiring\n",
+      "stderr": ""
+    },
+    {
+      "index": 66,
+      "command": "node tests/pdf-encrypt-local-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: signed/unreadable PDF rejection, secure qpdf stdin password transport, atomic output, no overwrite and cleanup\n",
+      "stderr": ""
+    },
+    {
+      "index": 67,
+      "command": "node tests/batch-stress-cancel.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: split 120 pages, merge 240 pages, numeric geometry snapshots, atomic cancellation, safe byte accounting; split=103ms merge=115ms sampled peak RSS MiB=112 arrayBuffers MiB=3\n",
+      "stderr": ""
+    },
+    {
+      "index": 68,
+      "command": "node tests/admin-operational-health.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: private read-only status, D1 fail closed, verified version labels, operator alert UI\n",
+      "stderr": ""
+    },
+    {
+      "index": 69,
+      "command": "node tests/admin-quality-sessions.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: 14-day retained session quality, error warning, 48h inquiry alert, honest 0-session display and UI\n",
+      "stderr": "(node:3770) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 70,
+      "command": "node tests/admin-save-quality.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: save preparation events, deduplication, privacy fields, authenticated aggregate and retention cascade\n",
+      "stderr": "(node:3781) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 71,
+      "command": "node tests/admin-period-filter.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: admin 7/14/30-day visit and error trends, strict whitelist\n",
+      "stderr": "(node:3792) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 72,
+      "command": "node tests/admin-publication-csv-lifecycle.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: real SQLite public 7-day lifetime, immutable first dates after updates/reposting, retained admin entries, private 30-day CSV\n",
+      "stderr": "(node:3803) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 73,
+      "command": "node tests/admin-retention-restore.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: scheduled 90-day inquiry/audit co-retention, 14-day sessions, limits cleanup, idempotence and consistent offline SQLite restore\n",
+      "stderr": "(node:3814) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 74,
+      "command": "node tests/admin-retention-boundary.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: deterministic retention cutoff and UTC/KST boundaries\n",
+      "stderr": "(node:3825) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 75,
+      "command": "node tests/admin-version-metadata.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: authenticated Cloudflare Worker version ID/tag/timestamp, safe fallback, no-leak D1 degradation and admin alert controls\n",
+      "stderr": ""
+    },
+    {
+      "index": 76,
+      "command": "node tests/admin-version-retention-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: receiving Worker attribution, outcome immutability, period/version filters, CSV, telemetry trust, retention success/failure/lease\n",
+      "stderr": "(node:3847) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 77,
+      "command": "node tests/admin-edit-conflicts-pagination.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: historical publication search, pagination, literal filters, stale edit rejection, inquiry/audit consistency and publication lifetime\n",
+      "stderr": "(node:3858) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 78,
+      "command": "node tests/telemetry-foreground-idle.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: foreground segments, focus boundaries, two-minute idle cutoff, resumed input and suspended timer\n",
+      "stderr": ""
+    },
+    {
+      "index": 79,
+      "command": "node tests/admin-schema-session-security.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: current schema readiness, missing columns, real session expiry/revocation, security history privacy, password rotation and tracked scheduled execution\n",
+      "stderr": "(node:3876) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 80,
+      "command": "node tests/admin-deployment-reports.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: signed deployment reports, replay ordering, idempotence, tampering/clock/schema/size rejection and private failure output\n",
+      "stderr": "(node:3887) ExperimentalWarning: SQLite is an experimental feature and might change at any time\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+    },
+    {
+      "index": 81,
+      "command": "node tests/admin-operator-tools.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: real operator processes with synthetic Wrangler, canonical path/overwrite/privacy guards, strict empty-DB import gate and actual SQLite backup/rehearsal\n",
+      "stderr": ""
+    },
+    {
+      "index": 82,
+      "command": "node tests/build-line-endings.cjs",
+      "status": "FAIL",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "node:assert:95\n  throw new AssertionError(obj);\n  ^\n\nAssertionError [ERR_ASSERTION]: node:internal/modules/cjs/loader:1404\n  throw err;\n  ^\n\nError: Cannot find module 'terser'\nRequire stack:\n- /tmp/sunrise-build-endings-4xmEN3/scripts/build-release.cjs\n    at Function._resolveFilename (node:internal/modules/cjs/loader:1401:15)\n    at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)\n    at Function._load (node:internal/modules/cjs/loader:1211:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)\n    at Module.require (node:internal/modules/cjs/loader:1487:12)\n    at require (node:internal/modules/helpers:135:16)\n    at Object.<anonymous> (/tmp/sunrise-build-endings-4xmEN3/scripts/build-release.cjs:3:20)\n    at Module._compile (node:internal/modules/cjs/loader:1730:14) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [ '/tmp/sunrise-build-endings-4xmEN3/scripts/build-release.cjs' ]\n}\n\nNode.js v22.16.0\n\n\n1 !== 0\n\n    at Object.<anonymous> (/mnt/data/pdf_editor_work/Sunrise-PDF-Editor-Web-R34-DEV1/tests/build-line-endings.cjs:16:10)\n    at Module._compile (node:internal/modules/cjs/loader:1730:14)\n    at Object..js (node:internal/modules/cjs/loader:1895:10)\n    at Module.load (node:internal/modules/cjs/loader:1465:32)\n    at Function._load (node:internal/modules/cjs/loader:1282:12)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)\n    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)\n    at node:internal/main/run_main_module:36:49 {\n  generatedMessage: false,\n  code: 'ERR_ASSERTION',\n  actual: 1,\n  expected: 0,\n  operator: 'strictEqual'\n}\n\nNode.js v22.16.0\n"
+    },
+    {
+      "index": 83,
+      "command": "node tests/d1-schema-preflight.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: release D1 metadata gate rejects missing tables/fields and malformed read-only responses\n",
+      "stderr": ""
+    },
+    {
+      "index": 84,
+      "command": "node tests/release-workflow-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: manual release enforces private backup receipt, remote isolated D1 counts, migration, CI and smoke gates\n",
+      "stderr": ""
+    },
+    {
+      "index": 85,
+      "command": "node tests/release-ci-gate-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: manual release requires exact successful main CI and four completed jobs\n",
+      "stderr": ""
+    },
+    {
+      "index": 86,
+      "command": "node tests/progress-metrics-contract.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: product implementation, historical seven-phase score and R15 release evidence stay distinct\n",
+      "stderr": ""
+    },
+    {
+      "index": 87,
+      "command": "node tests/standalone-form-save-integrity.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS: standalone form values, flags, five page boxes and rotation verified after save; corruption/cancel blocked\n",
+      "stderr": ""
+    },
+    {
+      "index": 88,
+      "command": "node tests/batch-content-integrity.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS R18: input-size mismatch isolation, source-byte immutability and page-content fingerprint fail-closed in split/merge\n",
+      "stderr": ""
+    },
+    {
+      "index": 89,
+      "command": "node tests/batch-cancel-boundaries.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS R19: cancelled reads/parses/saves/reopens halt before further heavy PDF work; split and merge success unaffected\n",
+      "stderr": ""
+    },
+    {
+      "index": 90,
+      "command": "node tests/native-jpeg-extraction.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS R20: actual pdf-lib embedded JPEG byte identity, resource dedup, page scope, mask/filter exclusions, cancellation and UI wiring\n",
+      "stderr": ""
+    },
+    {
+      "index": 91,
+      "command": "node tests/source-text-replacement.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS R24: source text Tj operator rewritten; ambiguous, forms, unsupported fonts rejected, source immutable, UI wired\n",
+      "stderr": ""
+    },
+    {
+      "index": 92,
+      "command": "node scripts/verify-r34.cjs --new-only",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "PASS r33-content-editing.cjs\nPASS r33-office-grids.cjs\nPASS r33-signature-integrity.cjs\nPASS r34-form-transfer.cjs\nPASS r34-incremental-signatures.cjs\nPASS r34-nested-content.cjs\nPASS r34-cmap-vertical.cjs\nPASS r34-multiple-tables.cjs\nPASS r34-mixed-word.cjs\nPASS r34-annotation-appearance.cjs\nPASS r34-engine-roundtrip.cjs\nPASS r34-worker-encryption.cjs\nPASS r34-pki-container.cjs\nSyntax 8/8; functional groups 13/13\n",
+      "stderr": ""
+    },
+    {
+      "index": 93,
+      "command": "node tests/r35-variable-cmap.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "stdout": "R35 mixed 1/2-byte CMap: roundtrip, source integrity, boundary ambiguity and unmapped-code guards PASS\n",
+      "stderr": ""
+    }
+  ],
+  "summary": {
+    "total": 93,
+    "passed": 92,
+    "failed": 1,
+    "timeout": 0,
+    "elapsedSeconds": 26.7
+  },
+  "important": "Build-dependent tests cannot pass without pinned terser install; source tree dist is historic and was not built."
+}
