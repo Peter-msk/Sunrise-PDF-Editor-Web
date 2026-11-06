@@ -38,7 +38,7 @@
     status.textContent = '새 PDF 작성이 완료됐습니다. 아래 버튼을 눌러 별도 파일로 다운로드하세요.';
   }
   function getFieldKindDisplay(type) {
-    return ({ text: '텍스트', checkbox: '체크박스', dropdown: '선택 목록',
+    return ({ text: '텍스트', date: '날짜 (YYYY-MM-DD)', checkbox: '체크박스', dropdown: '선택 목록',
       radio: '라디오', optionlist: '복수 선택', signature: '전자서명', other: '기타' })[type] || type;
   }
   function formButton(label, onClick, variant = '') {
@@ -61,7 +61,7 @@
           <legend>새 양식 필드 추가</legend>
           <div class="dialog-form-grid">
             <label for="sunFormKind">필드 종류</label>
-            <select id="sunFormKind" class="dialog-select"><option value="text">텍스트</option><option value="checkbox">체크박스</option><option value="dropdown">선택 목록</option></select>
+            <select id="sunFormKind" class="dialog-select"><option value="text">텍스트</option><option value="date">날짜 (YYYY-MM-DD)</option><option value="checkbox">체크박스</option><option value="dropdown">드롭다운</option><option value="radio">라디오 그룹</option><option value="optionlist">선택 목록</option></select>
             <label for="sunFormName">필드 이름</label><input class="dialog-input" id="sunFormName" placeholder="예: applicant.name">
             <label for="sunFormPage">쪽 번호</label><input class="dialog-input" id="sunFormPage" type="number" min="1" value="1">
             <label for="sunFormX">X (pt)</label><input class="dialog-input" id="sunFormX" type="number" value="60">
@@ -72,12 +72,12 @@
             <label for="sunFormOptions">선택 목록 항목</label><textarea id="sunFormOptions" class="dialog-textarea" rows="2" placeholder="한 줄에 한 항목"></textarea>
           </div>
           <label><input id="sunFormMultiline" type="checkbox"> 텍스트 여러 줄</label>
-          <label style="margin-left:10px"><input id="sunFormReadOnly" type="checkbox"> 읽기 전용</label>
+          <label><input id="sunFormMultiSelect" type="checkbox"> 선택 목록 복수 선택 허용</label><label style="margin-left:10px"><input id="sunFormReadOnly" type="checkbox"> 읽기 전용</label>
           <div style="margin-top:10px"><button type="button" class="dialog-btn" id="sunFormQueueAdd">필드 추가 예약</button></div>
         </fieldset>
         <label for="sunFormFont">유니코드 표시용 선택 글꼴(TTF/OTF, 선택)</label>
         <input type="file" id="sunFormFont" accept=".ttf,.otf,font/ttf,font/otf" style="display:block;width:100%">
-        <p>한글 등 유니코드 양식 표시에는 선택한 글꼴과 편집기의 fontkit이 모두 필요합니다. 지원이 없으면 한글 값 저장을 차단합니다.</p>
+        <p>한글 기본 저장 글꼴을 자동 적용합니다. 별도 글꼴 파일을 선택한 경우에는 편집기의 fontkit 지원이 필요합니다.</p>
         <strong>예약한 수정 작업</strong><div id="sunFormQueue"></div>
         <p id="sunFormStatus" role="status" aria-live="polite"></p><div id="sunFormOutput"></div>`,
       footerHtml: `<div></div><div class="modal-footer-right">
@@ -114,20 +114,21 @@
               if (field.type === 'checkbox') {
                 edit = h('input', undefined, { type: 'checkbox', 'aria-label': `${field.name} 값` });
                 edit.checked = Boolean(field.value);
-              } else if (field.type === 'dropdown') {
+              } else if (['dropdown','radio','optionlist'].includes(field.type)) {
                 edit = h('select', undefined, { 'aria-label': `${field.name} 값` });
                 for (const value of field.options || []) {
                   const option = h('option', value, { value });
                   edit.append(option);
                 }
-                edit.value = field.value?.[0] ?? '';
+                if(field.type==='optionlist'){edit.multiple=Boolean(field.multiselect);for(const option of edit.options)option.selected=(field.value||[]).includes(option.value);}
+                else edit.value=field.type==='radio'?(field.value??''):(field.value?.[0]??'');
               } else {
-                edit = h('input', undefined, { type: 'text', class: 'dialog-input', 'aria-label': `${field.name} 값` });
+                edit = h('input', undefined, { type: field.type === 'date' ? 'date' : 'text', class: 'dialog-input', 'aria-label': `${field.name} 값` });
                 edit.value = field.value ?? '';
               }
               row.append(edit);
               const setButton = formButton('값 변경 예약', () => appendChange({
-                action: 'set', name: field.name, value: field.type === 'checkbox' ? edit.checked : edit.value
+                action: 'set', name: field.name, value: field.type === 'checkbox' ? edit.checked : field.type==='optionlist'?Array.from(edit.selectedOptions,option=>option.value):edit.value
               }));
               setButton.disabled = field.readOnly;
               row.append(setButton);
@@ -160,6 +161,12 @@
           } catch (error) { status.textContent = errorText(error); }
           finally { running = false; }
         });
+        $('sunFormKind').addEventListener('change', () => {
+          const valueInput=$('sunFormValue');
+          valueInput.value='';
+          valueInput.type=$('sunFormKind').value==='date'?'date':'text';
+          valueInput.placeholder=valueInput.type==='date'?'YYYY-MM-DD':'텍스트 또는 선택값';
+        });
         $('sunFormQueueAdd').addEventListener('click', () => {
           if (!sourceInfo) { status.textContent = '현재 양식을 먼저 불러와 주세요.'; return; }
           const kind = $('sunFormKind').value;
@@ -168,11 +175,11 @@
             page: Number($('sunFormPage').value), x: Number($('sunFormX').value),
             y: Number($('sunFormY').value), width: Number($('sunFormWidth').value),
             height: Number($('sunFormHeight').value),
-            readOnly: $('sunFormReadOnly').checked, multiline: $('sunFormMultiline').checked
+            readOnly: $('sunFormReadOnly').checked, multiline: $('sunFormMultiline').checked,multiselect:$('sunFormMultiSelect').checked
           };
           if (kind === 'checkbox') op.value = $('sunFormValue').value.trim().toLowerCase() === 'true';
           else op.value = $('sunFormValue').value;
-          if (kind === 'dropdown') op.options = $('sunFormOptions').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+          if (['dropdown','radio','optionlist'].includes(kind)) op.options = $('sunFormOptions').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
           appendChange(op);
         });
         cancel.addEventListener('click', () => {
@@ -192,6 +199,7 @@
             const fontBytes = await selectedFont($('sunFormFont'));
             const result = await runTracked('local_form_edit', () => core.apply(source, queue, {
               PDFLib: root.PDFLib, readFile, fontBytes, fontkit: getFontkit(),
+              fontProvider:$('sunFormFont').files?.length?undefined:((pdf,texts)=>root.SunriseKoreanFont.embed(pdf,texts)),
               cancelled: () => cancelled || !activeDialog(start),
               onProgress: ({ done, total }) => {
                 if (activeDialog(start)) status.textContent = `양식 수정 중 ${done}/${total}`;

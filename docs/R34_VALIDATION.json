@@ -1,0 +1,216 @@
+{
+  "release": "R34-DEV1",
+  "checkedAt": "2026-11-06T14:21:49.109661+00:00",
+  "scope": "Changed source and focused synthetic regressions only",
+  "syntax": {
+    "passed": 8,
+    "total": 8
+  },
+  "functional": {
+    "passed": 19,
+    "total": 19
+  },
+  "allRequestedFunctionalityComplete": false,
+  "build": "NOT_RUN",
+  "fullRegression": "NOT_RUN",
+  "browserAcceptance": "NOT_RUN",
+  "mobileAcceptance": "NOT_RUN",
+  "ci": "NOT_RUN",
+  "deployment": "NOT_RUN",
+  "results": [
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-content-editor.js",
+      "status": "PASS",
+      "output": ""
+    },
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-office-export.js",
+      "status": "PASS",
+      "output": ""
+    },
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-pdf-cms.js",
+      "status": "PASS",
+      "output": ""
+    },
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-pki.js",
+      "status": "PASS",
+      "output": ""
+    },
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-embedded-images.js",
+      "status": "PASS",
+      "output": ""
+    },
+    {
+      "kind": "syntax",
+      "file": "src/editor/index.html:inline",
+      "status": "PASS"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r33-content-editing.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R33 content editing regressions passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r33-office-grids.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R33 Office grid and visual package regressions passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r33-signature-integrity.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R33 CMS integrity and signed-file preservation regressions passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-incremental-signatures.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 incremental signing: 3 revisions, byte-prefix preservation, all CMS verified independently by OpenSSL, tamper and certification guards passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-nested-content.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 nested Form editing: text/path/rectangle, repeated invocation and other-page isolation passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-cmap-vertical.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 font encodings: embedded source-to-CID CMaps, Identity-V vertical text and quote operators passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-multiple-tables.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 multiple tables: separate merged-cell tables, plain pages, text order and no duplication passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-mixed-word.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 mixed Word: editable text and cells, individually placed image objects, ZIP/XML parsing, clipping rejection and cancellation passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-annotation-appearance.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 annotations: Korean multiline FreeText appearance, rich-text removal, reply preservation/edit and overflow guard passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-engine-roundtrip.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "USR-14 QPDF WASM AES-256 encryption and wrong-password rejection passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-worker-encryption.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 actual password worker: AES-256 lock, correct/wrong unlock, attachment and page retention, lossless compression passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/native-annotation-edit.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "PASS: native Text/Highlight Unicode edit+delete, PDF disk-byte roundtrip, unmodified source, other annotation preservation, thread deletion, signature/form/locked guards and UI wiring"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/embedded-image-extraction.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "Embedded PDF image extraction contracts passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/form-save-roundtrip.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "PASS: basic form values and unchanged XFA survive the tested no-overlay save and reopen"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/standalone-form-save-integrity.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "PASS: standalone form values, flags, five page boxes and rotation verified after save; corruption/cancel blocked"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-form-transfer.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 form transfer: editable merge, collision isolation, partial extraction, radio, source reuse, cycle rejection passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/r34-pki-container.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "R34 PKI: real OpenSSL P12 import, incorrect-password rejection and explicit trust-anchor boundary passed"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/outline-transfer.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "PASS: merge, split and extract preserve simple PDF bookmarks; unsafe external action rejected"
+    },
+    {
+      "kind": "functional",
+      "file": "tests/bookmark-hierarchy.cjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "output": "PASS: inferred chapter hierarchy, manual indent/outdent, nested PDF outline persistence, legacy outline preservation, safe normalization"
+    },
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-pdf-form-tools.js",
+      "status": "PASS"
+    },
+    {
+      "kind": "syntax",
+      "file": "src/assets/sunrise-outline-transfer.js",
+      "status": "PASS"
+    }
+  ],
+  "initialFunctionalAttempt": {
+    "passed": 15,
+    "total": 16,
+    "correctedFailure": "Associated attachment AF handling in page transfer"
+  },
+  "evidenceReuse": "Previously passing unaffected checks retained; corrected and newly added checks executed separately.",
+  "sourceSha256": {
+    "src/editor/index.html": "684f7535fc9cc29164b1f4700bb4b45278791d0f6b4c622e49d2f9c28f18b3d3",
+    "src/assets/sunrise-pdf-form-tools.js": "d9ff611a0dad2d5e06b1efae45f2ef7bf2e1c988703114d3d89e2fcfe33147c1",
+    "src/assets/sunrise-outline-transfer.js": "7002869bae800ca39ece17fb484e0154cf612312762e4fc6b27f6f3c9d86c75f",
+    "src/assets/sunrise-content-editor.js": "02ffcf7d4d83a569f7dfa88089aeefb2c444426aa3387583e37a9a8312e908f6",
+    "src/assets/sunrise-office-export.js": "c103b0832819bb750ccf1431b84db70bebfaa2313854fcd3a694e1cf16395090",
+    "src/assets/sunrise-pdf-cms.js": "ea36f96b92d48b8ae356f5c18ba634fb18442cd8f9d5b1ae2ded5d38e5227cb8",
+    "src/assets/sunrise-pki.js": "9783caf2429e22b85b088304099d9feabc62d610f008f102d3751ce12890e0da",
+    "src/assets/sunrise-embedded-images.js": "5e07c9d71f2199e26c810f42d01136a1806a5bb53dee9ca2e5540a66a45a4239"
+  }
+}

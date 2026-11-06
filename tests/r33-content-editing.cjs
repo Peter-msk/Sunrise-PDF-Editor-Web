@@ -1,0 +1,46 @@
+// Authored regression scenarios. Execution status is recorded separately.
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
+const core=require('../src/assets/sunrise-content-editor.js');
+const korean=require('../src/assets/korean-font.js');
+const n=lib.PDFName.of;
+async function main(){
+  const parsed=core.operations('BT /F1 12 Tf (hello (Tj) \\) BT ET) Tj % ignored Tj\n ET');
+  assert.equal(parsed.filter(x=>x.op==='Tj').length,1,'operators inside strings/comments must not execute');
+  assert.throws(()=>core.operations('BI /W 1 ID abc EI'),/인라인/);
+  const mappings=core.cmap('2 beginbfchar <0001> <AC00> <0002> <B098> endbfchar',2);
+  assert.equal(mappings.get('0001'),'가');
+  assert.throws(()=>core.cmap('1 beginbfchar <0001> <AC00> <0002> <B098> endbfchar',2),/개수/);
+  const pdf=await lib.PDFDocument.create(),font=await pdf.embedFont(lib.StandardFonts.Helvetica);
+  pdf.addPage([400,600]).drawText('HELLO WORLD',{x:30,y:500,font,size:12});
+  const second=pdf.addPage([600,400]);second.setRotation(lib.degrees(90));second.drawText('SECOND',{x:20,y:350,font,size:12});
+  const source=await pdf.save(),copy=source.slice();
+  const target=(await core.listText({bytes:source,pageNumber:1,PDFLib:lib}))[0];
+  assert.equal(target.original,'HELLO WORLD');
+  const changed=await core.replaceText({bytes:source,pageNumber:1,targetId:target.id,original:target.original,replacement:'HELLO PDF',PDFLib:lib});
+  assert.deepEqual(source,copy,'input must be immutable');
+  const reopened=await lib.PDFDocument.load(changed.bytes);
+  assert.equal(reopened.getPageCount(),2);assert.equal(reopened.getPage(1).getRotation().angle,90);
+  assert((await core.listText({bytes:changed.bytes,pageNumber:1,PDFLib:lib})).some(x=>x.original==='HELLO PDF'));
+  const assets={bytes:new Uint8Array(fs.readFileSync('dist/assets/fonts/DroidSansFallback.ttf')),metrics:JSON.parse(fs.readFileSync('dist/assets/fonts/DroidSansFallback.metrics.json','utf8'))};
+  const cid=await lib.PDFDocument.create(),cidFont=await korean.embed(cid,['가나다'],assets);
+  cid.addPage([400,600]).drawText('가나다',{font:cidFont,x:30,y:500,size:12});
+  const cidBytes=await cid.save(),cidTarget=(await core.listText({bytes:cidBytes,pageNumber:1,PDFLib:lib}))[0];
+  assert.equal(cidTarget.original,'가나다');
+  const cidChanged=await core.replaceText({bytes:cidBytes,pageNumber:1,targetId:cidTarget.id,original:'가나다',replacement:'라마바',PDFLib:lib,fontProvider:(p,texts)=>korean.embed(p,texts,assets)});
+  assert((await core.listText({bytes:cidChanged.bytes,pageNumber:1,PDFLib:lib})).some(x=>x.original==='라마바'));
+  const unsafe=await lib.PDFDocument.load(source);unsafe.getForm().createTextField('test').addToPage(unsafe.getPage(0));
+  await assert.rejects(core.listText({bytes:await unsafe.save(),pageNumber:1,PDFLib:lib}),/양식/);
+  const geometry=core.rulesFromOperations(core.operations('q 1 0 0 1 10 20 cm 0 0 100 50 re S Q'));
+  assert.deepEqual(geometry.horizontal.map(x=>x.at).sort((a,b)=>a-b),[20,70]);
+  assert.deepEqual(geometry.vertical.map(x=>x.at).sort((a,b)=>a-b),[10,110]);
+  const shapes=await lib.PDFDocument.create();shapes.addPage([400,600]).drawRectangle({x:40,y:50,width:80,height:30,borderColor:lib.rgb(0,0,0),borderWidth:1});
+  const shapeBytes=await shapes.save(),paths=await core.listVectorPaths({bytes:shapeBytes,pageNumber:1,PDFLib:lib});
+  assert(paths.length>0);
+  const path=paths[0],vector=await core.replaceVectorPath({bytes:shapeBytes,pageNumber:1,targetId:path.id,steps:path.steps,strokeColor:'#FF0000',lineWidth:2,PDFLib:lib});
+  const vectorPdf=await lib.PDFDocument.load(vector.bytes);assert.equal(vectorPdf.getPageCount(),1);
+  const reloadedPaths=await core.listVectorPaths({bytes:vector.bytes,pageNumber:1,PDFLib:lib});assert.equal(reloadedPaths.length,paths.length);
+  console.log('R33 content editing regressions passed');
+}
+main().catch(error=>{console.error(error);process.exitCode=1;});

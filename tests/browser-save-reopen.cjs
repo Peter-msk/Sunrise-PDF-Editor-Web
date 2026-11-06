@@ -131,7 +131,7 @@ async function main(){
      null,{timeout:20000});
    await directTab.locator('#directTextReplacement').fill('TOO LONG TO SUBSTITUTE');
    await directTab.locator('#directTextApply').click();
-   assert.match(await directTab.locator('#directTextStatus').textContent(),/길이가 같은/);
+   assert.match(await directTab.locator('#directTextStatus').textContent(),/같은 바이트 길이|길이가 같은/);
    await directTab.locator('#directTextReplacement').fill('INVOICE 2027');
    await directTab.locator('#directTextApply').click();
    await directTab.locator('#modalBackdrop').waitFor({state:'hidden',timeout:25000});
@@ -141,7 +141,12 @@ async function main(){
    });
    assert(firstText.includes('INVOICE 2027')&&!firstText.includes('INVOICE 2026'),
      'real PDF.js text extraction must show changed source text, not a visual-only overlay');
+   // Modal close precedes the asynchronous view refresh; Edge can still see
+   // operationBusy=true and legitimately ignore a premature Save As command.
+   await directTab.waitForFunction(()=>Boolean(activeDoc())&&!activeDoc().operationBusy,
+     null,{timeout:45000});
    await directTab.evaluate(()=>executeCommand('saveAs'));
+   await directTab.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:15000});
    await directTab.locator('#saveAsConfirmBtn').click();
    await directTab.locator('#saveAsDownloadLink').waitFor({state:'visible',timeout:45000});
    const directDownload=directTab.waitForEvent('download',{timeout:30000});
@@ -560,6 +565,12 @@ async function main(){
    await page.locator('#maskPlanLines').fill('1,70,100,180,40\n1,260,200,50,30\n2,105,100,200,40');
    await page.locator('#maskPlanCheck').click();
    assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 출력 / 3개 영역 적용 예정'));
+   // The editor intentionally blocks redaction until the user has reviewed remaining
+   // text-layer privacy candidates and acknowledged that unmasked data may remain.
+   await page.locator('#maskSensitiveReview').click();
+   await page.waitForFunction(()=>document.querySelector('#maskSensitiveStatus')?.textContent.includes('형식 후보'),
+     null,{timeout:30000});
+   await page.locator('#maskSensitiveAcknowledged').check();
    await page.locator('#maskConfirmed').check();
    const maskingDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#maskExportBtn').click();
@@ -639,6 +650,55 @@ async function main(){
    assert(maskHeight>=105,'masking dialog textarea must not collapse under flex layout');
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
+   // R23: exercise the new explicit Excel-column command in a real browser.
+   // Keep the original text-only Excel route unchanged.
+   const tableFixture=await PDFLib.PDFDocument.create();
+   const tableSheet=tableFixture.addPage([420,595]);
+   for(const [left,right,y] of [
+     ['Item','Amount',500],['Alpha','1234',470],['Beta','5678',440]
+   ]){
+     tableSheet.drawText(left,{x:42,y,size:12});
+     tableSheet.drawText(right,{x:240,y,size:12});
+   }
+   // R26 multi-page table: first page omits the middle Excel column.
+   const richSheet=tableFixture.addPage([420,595]);
+   for(const [left,middle,right,y] of [
+     ['Item','Units','Amount',500],['Gamma','2','9999',470],['Delta','3','8888',440]
+   ]){
+     richSheet.drawText(left,{x:42,y,size:12});
+     richSheet.drawText(middle,{x:140,y,size:12});
+     richSheet.drawText(right,{x:240,y,size:12});
+   }
+   richSheet.drawText('REVIEW NOTE',{x:340,y:410,size:12});
+   const tablePage=await context.newPage(),tableErrors=[];
+   tablePage.on('pageerror',e=>tableErrors.push(e.message));
+   await tablePage.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
+   await tablePage.waitForFunction(()=>Boolean(window.SunriseOfficeExport&&window.pdfjsLib),null,{timeout:40000});
+   await tablePage.locator('#openPdfInput').setInputFiles({
+     name:'columns-sample.pdf',mimeType:'application/pdf',buffer:Buffer.from(await tableFixture.save())
+   });
+   await tablePage.waitForFunction(()=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes('columns-sample.pdf'),null,{timeout:40000});
+   const tableDownload=tablePage.waitForEvent('download',{timeout:30000});
+   await tablePage.evaluate(()=>executeCommand('exportExcelColumns'));
+   const diagnostics=await tablePage.evaluate(async()=>{
+     const info=await activeDoc().pdfJsDoc.getPage(1).then(p=>p.getTextContent());
+     return {text:info.items.map(x=>({str:x.str,x:x.transform?.[4],y:x.transform?.[5],width:x.width,hasEOL:x.hasEOL})),
+       toast:document.getElementById('toastContainer')?.textContent,
+       module:typeof window.SunriseOfficeExport?.xlsxColumns};
+   });
+   console.log('R23 browser PDF table diagnostics:',JSON.stringify(diagnostics));
+   const tableFile=await tableDownload;
+   assert.match(tableFile.suggestedFilename(),/_columns\.xlsx$/);
+   const tablePath=path.join(downloadDir,'real-columns.xlsx');
+   await tableFile.saveAs(tablePath);
+   const sheetBytes=fs.readFileSync(tablePath);
+   assert.equal(sheetBytes.readUInt32LE(0),0x04034b50,'table workbook must be an actual XLSX ZIP');
+   for(const fragment of ['Item','Amount','Units','Alpha','1234','Beta','5678',
+     'Gamma','9999','Delta','8888','REVIEW NOTE','D2','D3','D4','C5','D5','E8'])
+     assert(sheetBytes.includes(Buffer.from(fragment)),'missing original table cell or column '+fragment);
+   assert.equal(tableErrors.length,0,'Excel table export browser errors: '+tableErrors.join(' | '));
+   await tablePage.close();
+   console.log('PASS R26: real two-page PDF -> stable Excel columns and off-grid note');
    console.log('PASS: PDF edit/save/reopen; office-style nested-bookmark split, stale-plan protection, raster masking, embedded PNG/reports, mobile touch save/reopen');
    await context.close();
 

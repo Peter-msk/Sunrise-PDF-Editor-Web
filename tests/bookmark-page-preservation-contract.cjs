@@ -4,7 +4,7 @@ const section=(a,b)=>{const i=src.indexOf(a),j=src.indexOf(b,i);assert(i>=0&&j>i
 let notice='', snapshots=0, callback, clipboard={sourceName:'old'};
 const state={get pageClipboard(){return clipboard},set pageClipboard(v){clipboard=v}};
 const elements={reorderInput:{value:'3, 1, 2'},reorderConfirmBtn:{addEventListener:(_,f)=>callback=f},reorderCancelBtn:{addEventListener(){}},reorderReverseBtn:{addEventListener(){}}};
-const ctx=vm.createContext({window:{PDFLib:lib},state,Set,Array,console:{warn(){}},showToast:s=>notice=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},closeModal(){},openModal:c=>c.onMount(),document:{getElementById:id=>elements[id]},remapPageItems(){}});
+const ctx=vm.createContext({window:{PDFLib:lib},state,Set,Array,activeDoc:()=>ctx.doc,verifyPdfPageGeometry:()=>{},parsePageCountAndMeta:async()=>({pdfJsDoc:{destroy:async()=>{}}}),console:{warn(){},error(){}},showToast:s=>notice=s,saveUndoSnapshot:()=>snapshots++,reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},closeModal(){},openModal:c=>c.onMount(),document:{getElementById:id=>elements[id]},remapPageItems(){}});
 vm.runInContext(section('    function allowPageStructureChange(', '    function openPastePagesModal(')+section('    async function deleteSelectedPagesFromDoc(', '    async function rotateSelectedPages('),require('./helpers/editor-metrics.cjs')(ctx));
 async function fixture(type='direct'){
  const pdf=await lib.PDFDocument.create();pdf.addPage();pdf.addPage();pdf.addPage();const c=pdf.context;

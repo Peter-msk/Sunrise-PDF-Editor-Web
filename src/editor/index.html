@@ -19,7 +19,11 @@
   <script src="/assets/sunrise-comment-report.js"></script>
   <script src="/assets/sunrise-embedded-images.js"></script>
   <script src="/assets/sunrise-special-pdf.js"></script>
+  <script src="/assets/sunrise-content-editor.js"></script>
   <script src="/assets/sunrise-office-export.js"></script>
+  <script src="/assets/sunrise-pdf-cms.js"></script>
+  <script src="/assets/sunrise-pki.js"></script>
+  <script src="/assets/sunrise-pdf-protect.js"></script>
   <!-- SUNRISE-LOCAL-R07: independent browser-only modules -->
   <script src="/assets/sunrise-local-ui.js"></script>
   <script src="/assets/sunrise-local-metrics.js"></script>
@@ -1987,6 +1991,7 @@
               { id: "openPdf", label: "PDF 열기", icon: "fa-folder-open", shortcut: "Ctrl+O" },
               { id: "newBlankDoc", label: "새 빈 문서", icon: "fa-file-circle-plus", shortcut: "Ctrl+Alt+Shift+N" },
               { id: "saveAs", label: "다른 이름으로 저장", icon: "fa-floppy-disk", shortcut: "Ctrl+Shift+S", docReq: true },
+              { id: "compressPdfLossless", label: "무손실 압축 (그림·도면 품질 유지)", icon: "fa-box-archive", docReq: true },
               { id: "compressPdf", label: "PDF 압축", icon: "fa-file-zipper", docReq: true },
               { id: "mergePdf", label: "PDF 병합", icon: "fa-object-group", shortcut: "Ctrl+M" },
               { id: "printPdf", label: "인쇄", icon: "fa-print", shortcut: "Ctrl+P", docReq: true },
@@ -2058,7 +2063,11 @@
             actions: [
               { id: "insertText", label: "텍스트 삽입", icon: "fa-font", shortcut: "Ctrl+T", docReq: true },
               { id: "visualTextCorrection", label: "텍스트 시각 교정 (원문 유지)", icon: "fa-pen", docReq: true },
+              { id: "directUnicodeText", label: "한글·길이 변경 원문 수정", icon: "fa-language", docReq: true },
+              { id: "editSourceVectorPath", label: "원본 선·곡선·도형 수정", icon: "fa-bezier-curve", docReq: true },
+              { id: "editSourceRectangle", label: "원본 사각형·표 테두리 좌표 수정", icon: "fa-vector-square", docReq: true },
               { id: "directSourceText", label: "원문 직접 수정 (표준 영문/숫자 한정)", icon: "fa-file-pen", docReq: true },
+              { id: "batchDirectSourceText", label: "원문 여러 곳 직접 수정 (영문/숫자)", icon: "fa-list-check", docReq: true },
               { id: "createFormField", label: "PDF 양식 입력칸 만들기", icon: "fa-square-check", docReq: true },
               { id: "fillFormField", label: "PDF 양식 입력값 수정", icon: "fa-pen-to-square", docReq: true },
               { id: "fillAllFormFields", label: "PDF 양식 여러 칸 한번에 입력", icon: "fa-list-check", docReq: true },
@@ -2076,6 +2085,9 @@
               { id: "manageNativeAnnotations", label: "원본 PDF 주석 관리", icon: "fa-comments", docReq: true },
               { id: "insertStamp", label: "스탬프", icon: "fa-stamp", shortcut: "Ctrl+Alt+T", docReq: true },
               { id: "insertVisualSignature", label: "시각 서명 (인증서 아님)", icon: "fa-signature", docReq: true },
+              { id: "verifyCertificateSignature", label: "인증서 서명 무결성 검사", icon: "fa-shield-halved", docReq: true },
+              { id: "signWithCertificatePem", label: "인증서 전자서명 (PEM·P12/PFX · 실험)", icon: "fa-file-signature", docReq: true },
+              { id: "protectPdfAes256", label: "PDF 열기 암호 보호 (AES-256 · 실험)", icon: "fa-lock", docReq: true },
               { id: "maskedPageExport", label: "다중 페이지·영역 마스킹 PDF", icon: "fa-user-shield", docReq: true },
               { id: "insertWatermark", label: "워터마크", icon: "fa-droplet", shortcut: "Ctrl+Alt+W", docReq: true },
             ],
@@ -2105,8 +2117,18 @@
             actions: [
               { id: "imageToPdf", label: "이미지로 PDF 만들기", icon: "fa-file-image" },
               { id: "extractText", label: "텍스트 추출", icon: "fa-file-lines", shortcut: "Ctrl+Shift+X", docReq: true },
+              { id: "exportWordMixed", label: "Word 글자·표·이미지 혼합 복원 (편집 가능)", icon: "fa-file-word", docReq: true },
+              { id: "exportWordGrids", label: "Word 표·병합 셀 복원 (명확한 테두리)", icon: "fa-table", docReq: true },
+              { id: "exportWordVisual", label: "Word 원본 모양 유지 (페이지 이미지)", icon: "fa-file-image", docReq: true },
+              { id: "exportExcelGrids", label: "Excel 표·병합 셀 복원 (페이지별)", icon: "fa-table-cells", docReq: true },
               { id: "exportWordText", label: "Word 문서 (텍스트 전용)", icon: "fa-file-word", docReq: true },
-              { id: "exportExcelText", label: "Excel 표 (페이지/텍스트)", icon: "fa-file-excel", docReq: true },
+              { id: "exportWordLayout", label: "Word 단락·표 구조 추정 (실험 기능)", icon: "fa-table-list", docReq: true },
+              { id: "exportWordTwoColumns", label: "Word 좌·우 2단 읽기 순서 추정 (실험)", icon: "fa-columns", docReq: true },
+              { id: "exportWordThreeColumns", label: "Word 가로 3단 읽기 순서 추정 (실험)", icon: "fa-table-columns", docReq: true },
+              { id: "exportWordAutoColumns", label: "Word 1·2·3단 자동 감지 (실험)", icon: "fa-file-word", docReq: true },
+              { id: "exportExcelText", label: "Excel 텍스트 (페이지/텍스트)", icon: "fa-file-excel", docReq: true },
+              { id: "exportExcelPerPage", label: "Excel 페이지별 워크시트 (최대 50쪽)", icon: "fa-file-excel", docReq: true },
+              { id: "exportExcelColumns", label: "Excel 표 열 추정 (정렬된 표)", icon: "fa-table-columns", docReq: true },
               { id: "exportCurrentImage", label: "현재 페이지 이미지 저장", icon: "fa-image", shortcut: "Ctrl+I", docReq: true },
               { id: "exportAllImages", label: "페이지 이미지 일괄 변환", icon: "fa-images", shortcut: "Ctrl+Shift+I", docReq: true },
               { id: "extractEmbeddedImages", label: "내장 이미지 추출", icon: "fa-photo-film", docReq: true },
@@ -2141,6 +2163,8 @@
             title: "문서 보안",
             actions: [
               { id: "editMetadata", label: "메타데이터 편집", icon: "fa-tags", shortcut: "Ctrl+Alt+D", docReq: true },
+              { id: "protectPdfAes256", label: "PDF 열기 암호 (AES-256 · 실험)", icon: "fa-lock", docReq: true },
+              { id: "unlockPdfPassword", label: "PDF 암호 해제 (암호 필요 · 실험)", icon: "fa-lock-open", docReq: false },
             ],
           },
           {
@@ -2397,34 +2421,36 @@
       document.getElementById("modalBackdrop").classList.remove("open");
     }
 
+    const pendingDownloads=[];
     function downloadBytes(bytes, filename, mime = "application/pdf") {
-      const blob = new Blob([bytes], { type: mime });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.textContent = "직접 다운로드: " + filename;
-      // Mobile browsers can reject synthetic clicks after async PDF processing.
-      // Keep a real, user-activated fallback link with a bounded lifetime.
-      let fallback;
-      if (isMobileViewport()) {
-        fallback = document.createElement("div");
-        fallback.className = "sunrise-toast download-fallback";
-        const hint = document.createElement("span");
-        hint.textContent = "저장이 시작되지 않으면 아래 파일 링크를 터치하세요.";
-        fallback.append(hint, a);
-        document.getElementById("toastContainer").appendChild(fallback);
-      } else {
-        document.body.appendChild(a);
-      }
-      a.click();
-      if (!fallback) a.remove();
-      setTimeout(() => {
-        a.remove();
-        fallback?.remove();
-        URL.revokeObjectURL(url);
-      }, 60000);
+      const blob=new Blob([bytes],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');
+      const safeName=String(filename||'document.pdf').replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').slice(0,180);
+      a.href=url;a.download=safeName;a.textContent='직접 다운로드: '+safeName;
+      let fallback,timer,entry;
+      const dispose=()=>{
+        clearTimeout(timer);a.remove();fallback?.remove();URL.revokeObjectURL(url);
+        const i=pendingDownloads.indexOf(entry);if(i>=0)pendingDownloads.splice(i,1);
+      };
+      entry={size:blob.size,dispose};
+      while(pendingDownloads.length>=3||pendingDownloads.length&&pendingDownloads.reduce((sum,x)=>sum+x.size,blob.size)>128*1024*1024)pendingDownloads[0].dispose();
+      pendingDownloads.push(entry);
+      if(isMobileViewport()){
+        fallback=document.createElement('div');fallback.className='sunrise-toast download-fallback';fallback.setAttribute('role','status');
+        const hint=document.createElement('span');hint.textContent='파일 링크를 터치해 저장하세요.';fallback.append(hint,a);
+        if(typeof File==='function'&&typeof navigator.share==='function'&&typeof navigator.canShare==='function'){
+          const file=new File([blob],safeName,{type:mime});
+          try{if(navigator.canShare({files:[file]})){
+            const share=document.createElement('button');share.type='button';share.className='dialog-btn';share.textContent='다른 앱으로 저장';
+            share.addEventListener('click',async()=>{try{await navigator.share({files:[file]});}catch(error){if(error?.name!=='AbortError')hint.textContent='앱으로 보내지 못했습니다. 직접 다운로드 링크를 이용하세요.';}});fallback.append(share);
+          }}catch{hint.textContent='직접 다운로드 링크를 터치해 저장하세요.';}
+        }
+        const close=document.createElement('button');close.type='button';close.className='dialog-btn';close.textContent='닫기';close.addEventListener('click',dispose);fallback.append(close);
+        document.getElementById('toastContainer').append(fallback);
+      }else document.body.append(a);
+      try{a.click();}catch(error){if(!fallback){dispose();throw error;}}
+      if(!fallback)a.remove();timer=setTimeout(dispose,120000);
     }
+    window.addEventListener('pagehide',()=>{while(pendingDownloads.length)pendingDownloads[0].dispose();});
 
     // =========================================================================
     // Left / Right Panel Collapse & Customizable Panel Add / Remove
@@ -3310,6 +3336,7 @@
         attachmentsReadable: info.attachmentsReadable,
         overlays: restored.overlays.map((item) => ({ ...item, id: `ov_${overlayIdCounter++}` })),
         editRestorationBlocked: restored.warning,
+        signedReadOnly:Boolean(restored.signed),signedSourceBytes:restored.signed?bytes:null,signedMetadata:restored.signed?JSON.stringify(info.metadata):null,
         history: [`문서 열기: ${fileName} (${info.pageCount}쪽)`],
         undoStack: [],
         redoStack: [],
@@ -3335,6 +3362,7 @@
       state.docs.push(newDoc);
       addRecentFile(fileName, info.pageCount, originalBytes);
 
+      if(restored.signed)showToast("전자서명 또는 서명 관련 구조를 보존하기 위해 읽기 전용으로 열었습니다.","fa-file-signature");
       if (restored.warning) showToast("이 PDF의 저장된 편집 항목을 안전하게 복원하지 못했습니다. 원본 표시는 유지됩니다.", "fa-circle-exclamation");
 
       if (options.switchActive !== false) {
@@ -4433,7 +4461,7 @@
         }
         const cache = doc.outlineCache;
         let html = `
-          <div style="padding:6px;color:var(--text-muted);font-size:11px">북마크 이름·페이지·계층 변경과 삭제는 PDF 저장 시 반영됩니다. 새 북마크의 ←/→로 1~4단계를 조정할 수 있습니다. 연쇄 동작은 페이지와 순번을 입력해 변경할 수 있습니다(예: 3,2). 다른 이동은 유지됩니다. 페이지는 전체 맞춤으로 엽니다. 상위 북마크를 삭제하면 하위 북마크도 함께 삭제됩니다.</div>
+          <div style="padding:6px;color:var(--text-muted);font-size:11px">북마크 이름·페이지·계층 변경과 삭제는 PDF 저장 시 반영됩니다. 새 북마크의 ←/→로 1~32단계를 조정할 수 있습니다. 연쇄 동작은 페이지와 순번을 입력해 변경할 수 있습니다(예: 3,2). 다른 이동은 유지됩니다. 페이지는 전체 맞춤으로 엽니다. 상위 북마크를 삭제하면 하위 북마크도 함께 삭제됩니다.</div>
           <div style="display:flex;gap:6px;margin-bottom:8px">
             <button type="button" class="compact-btn" id="bmAddNowBtn" style="flex:1"><i class="fa-solid fa-plus"></i> 현재 쪽 북마크</button>
             <button type="button" class="compact-btn" id="bmAutoGenBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> 전체 표시</button>
@@ -4448,8 +4476,8 @@
         if (cache.status === "ready" && !cache.rows.length && !doc.bookmarks.length)
           html += `<div style="padding:12px;color:var(--text-muted)">등록된 북마크가 없습니다.</div>`;
         doc.bookmarks.forEach((bm, idx) => {
-          const depth = Number.isInteger(bm.level) ? Math.max(0, Math.min(3, bm.level)) : 0;
-          html += `<div class="list-row-item" data-bm-idx="${idx}" style="padding-left:${depth * 12 + 8}px">
+          const depth = Number.isInteger(bm.level) ? Math.max(0, Math.min(window.SunriseAutoBookmarks.MAX_OUTLINE_LEVEL, bm.level)) : 0;
+          html += `<div class="list-row-item" data-bm-idx="${idx}" style="padding-left:${Math.min(depth,8) * 12 + 8}px">
             <span><i class="fa-solid fa-bookmark" style="color:var(--primary);margin-right:6px"></i>${escapeHtml(bm.title)} <small>${bm.page + 1}쪽 · ${depth + 1}단계</small></span>
             <span><button type="button" class="compact-btn" data-bm-outdent="${idx}" aria-label="북마크 상위 단계로">←</button>
             <button type="button" class="compact-btn" data-bm-indent="${idx}" aria-label="북마크 하위 단계로">→</button>
@@ -4885,9 +4913,13 @@
         if (!Number.isInteger(bm.page) || bm.page<0 || bm.page>=pages.length || !String(bm.title || '').trim())
           throw new Error("북마크 제목 또는 페이지가 올바르지 않습니다.");
         const requested = bm.level === undefined ? 0 : bm.level;
-        if (!Number.isInteger(requested) || requested<0 || requested>3)
-          throw new Error("북마크 단계는 1~4단계 안에서 지정해 주세요.");
+        if (!Number.isInteger(requested) || requested<0 || requested>31)
+          throw new Error("북마크 단계는 1~32단계 안에서 지정해 주세요.");
         const level=Math.min(requested,i?lastDepth+1:0);
+        if(bm.destinationView){
+          const view=bm.destinationView,lengths={XYZ:4,Fit:1,FitH:2,FitV:2,FitR:5,FitB:1,FitBH:2,FitBV:2};
+          if(!Array.isArray(view)||lengths[view[0]]!==view.length||view.slice(1).some(v=>v!==null&&!Number.isFinite(v))||view[0]==='FitR'&&view.slice(1).some(v=>v===null))throw Error("북마크 보기 좌표가 올바르지 않습니다.");
+        }
         normalized.push({...bm,level});
         lastDepth=level;
       }
@@ -4914,7 +4946,7 @@
       const entries=normalized.map(bm=>({
         level:bm.level,children:[],item:ctx.obj({
           Title:PDFHexString.fromText(String(bm.title)),
-          Dest:[pages[bm.page].ref,name('Fit')]
+          Dest:[pages[bm.page].ref,...(Array.isArray(bm.destinationView)?[name(bm.destinationView[0]),...bm.destinationView.slice(1)]:[name('Fit')])]
         })
       }));
       for (const entry of entries) entry.ref=ctx.register(entry.item);
@@ -4947,10 +4979,44 @@
       } else root.set(name('First'),top[0].ref);
       root.set(name('Last'),top[top.length-1].ref);
       root.set(name('Count'),PDFNumber.of(oldCount+entries.length));
+      // Verify the actual linked outline tree before the caller serializes it.
+      if(!window.SunriseOutlineTransfer?.read)
+        throw new Error("PDF 북마크 구조 검사 엔진을 찾을 수 없습니다.");
+      const savedOutlines=window.SunriseOutlineTransfer.read(pdfDoc,window.PDFLib);
+      const actual=savedOutlines.slice(-normalized.length);
+      if(actual.length!==normalized.length||actual.some((item,i)=>
+          item.title!==String(normalized[i].title)||item.page!==normalized[i].page||
+          item.level!==normalized[i].level))
+        throw new Error("북마크를 추가한 후 계층 또는 페이지 연결이 달라졌습니다.");
+    }
+
+    function layoutOverlayText(text,font,size,maxWidth) {
+      if(!Number.isFinite(size)||size<=0||!(maxWidth>0))throw Error('텍스트 배치 크기를 확인하세요.');
+      const graphemes=typeof Intl.Segmenter==='function'?new Intl.Segmenter('ko',{granularity:'grapheme'}):null;
+      const split=value=>graphemes?Array.from(graphemes.segment(value),part=>part.segment):Array.from(value);
+      const lines=[];
+      for(const paragraph of text.split(/\r?\n/)){
+        let line='';
+        for(const token of paragraph.match(/\S+|\s+/gu)||[]){
+          if(font.widthOfTextAtSize(line+token,size)<=maxWidth){line+=token;continue;}
+          if(line){lines.push(line);line='';}
+          for(const cluster of split(token)){
+            if(font.widthOfTextAtSize(cluster,size)>maxWidth)throw Error('한 글자의 폭이 텍스트 상자보다 큽니다. 상자를 넓혀 주세요.');
+            if(line&&font.widthOfTextAtSize(line+cluster,size)>maxWidth){lines.push(line);line='';}
+            line+=cluster;
+          }
+        }
+        lines.push(line);
+      }
+      return lines;
     }
 
     async function compileDocumentWithOverlays(doc) {
       if (!window.PDFLib) throw new Error("PDF 편집 엔진을 사용할 수 없습니다.");
+      if(doc.signedReadOnly){
+        if(doc.bytes!==doc.signedSourceBytes||doc.overlays.length||doc.bookmarks.length||doc.attachments.some(item=>item.isNew)||JSON.stringify(doc.metadata)!==doc.signedMetadata)throw Error("서명된 문서의 편집 내용은 서명을 보존하며 저장할 수 없습니다. 원본을 다시 여세요.");
+        return doc.bytes.slice();
+      }
       if (!window.SunriseEditState || !window.SunriseKoreanFont) throw new Error("PDF 편집 구성요소를 불러오지 못했습니다.");
       const { PDFDocument, degrees, rgb } = window.PDFLib;
       const pdfDoc = await PDFDocument.load(doc.bytes);
@@ -4988,18 +5054,7 @@
           const text = String(item.text || "").normalize("NFC").replace(/\t/g, " ");
           const lineHeight = fontSize * 1.3;
           const maxWidth = item.width ? Math.max(1, item.width - 14) : Infinity;
-          const lines = [];
-          for (const paragraph of text.split(/\r?\n/)) {
-            let line = "";
-            for (const char of paragraph) {
-              const candidate = line + char;
-              if (line && textFont.widthOfTextAtSize(candidate, fontSize) > maxWidth) {
-                lines.push(line);
-                line = char;
-              } else line = candidate;
-            }
-            lines.push(line);
-          }
+          const lines=layoutOverlayText(text,textFont,fontSize,maxWidth);
           const viewPage = await doc.pdfJsDoc.getPage(item.pageIndex + 1);
           const viewport = viewPage.getViewport({ scale: 1 });
           const colorValue = /^#[0-9a-f]{6}$/i.test(item.color || "") ? item.color.slice(1) : "1B2631";
@@ -5008,7 +5063,11 @@
           for (const [lineIndex, line] of lines.entries()) {
             if (!line) continue;
             const [viewX,viewY] = overlayPoint(item, 7, 4 + fontSize * 1.05 + lineIndex * lineHeight);
-            if(item.type==="Text" && !(item.rotation||0) && (viewX<0||viewY<0||viewY>viewport.height||viewX+textFont.widthOfTextAtSize(line,fontSize)>viewport.width+0.5))throw Error((item.pageIndex+1)+"쪽 텍스트가 페이지 바깥으로 넘어갑니다. 글자 크기·줄바꿈 너비·위치를 조절해 주세요.");
+            if(item.type==="Text"){
+              const lineWidth=textFont.widthOfTextAtSize(line,fontSize),top=4+lineIndex*lineHeight;
+              const corners=[[7,top],[7+lineWidth,top],[7,top+lineHeight],[7+lineWidth,top+lineHeight]].map(([x,y])=>overlayPoint(item,x,y));
+              if(corners.some(([x,y])=>x<-.5||y<-.5||x>viewport.width+.5||y>viewport.height+.5))throw Error((item.pageIndex+1)+"쪽 텍스트가 회전·줄바꿈 후 페이지 바깥으로 넘어갑니다. 상자·위치·크기를 조절해 주세요.");
+            }
             const [x,y] = viewport.convertToPdfPoint(viewX, viewY);
             page.drawText(line, { x, y, font: textFont, size: fontSize, color,
               rotate: degrees((viewPage.rotate || 0) - (item.rotation || 0)), opacity: item.opacity ?? 1 });
@@ -5158,6 +5217,7 @@
             병합할 PDF를 2개 이상 추가하거나 이 창으로 파일을 드래그하세요. 페이지와 삽입한 표시가 합쳐집니다. 일반 페이지 목적지 북마크는 병합 결과의 페이지에 맞춰 이식합니다. 외부 링크·특수 목적지는 손실 방지를 위해 병합을 차단합니다. 원본의 문서 첨부파일은 포함되지 않습니다.
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px">
+            <label><input id="mergeFlattenForms" type="checkbox"> 양식이 있으면 현재 보이는 모양으로 평탄화 (입력 기능 제거)</label>
             <strong id="mergeSummaryLabel" style="color:var(--primary);font-size:13px">병합 대상: 0개 파일 (총 0쪽)</strong>
             <span style="font-size:11.5px;color:var(--text-muted)">원본 파일은 변경되지 않으며 새 PDF로 병합됩니다.</span>
           </div>
@@ -5387,8 +5447,9 @@
 
       const openAfter = Boolean(document.getElementById("mergeOpenAfterCheck")?.checked);
       const downloadNow = Boolean(document.getElementById("mergeDownloadCheck")?.checked);
+      const flattenForms=Boolean(document.getElementById('mergeFlattenForms')?.checked);
       const queue=state.mergeQueue.slice();
-      const sameQueue=()=>queue.length===state.mergeQueue.length &&
+      const sameQueue=()=>Boolean(document.getElementById('mergeFlattenForms')?.checked)===flattenForms&&queue.length===state.mergeQueue.length &&
         queue.every((item,i)=>item===state.mergeQueue[i] &&
           item.bytes===state.mergeQueue[i]?.bytes);
       const mergeButton=document.getElementById("mergeExecuteBtn");
@@ -5404,18 +5465,25 @@
         for (const item of queue) {
           if(!sameQueue())throw Error("병합 목록이 변경되어 작업을 중단했습니다.");
           const srcPdf = await PDFDocument.load(item.bytes);
-          if (!allowPageFormStructure(srcPdf)) return;
+          if(flattenForms)window.SunrisePdfFormTools.flattenForTransfer(srcPdf,window.PDFLib);
+
           const indices = srcPdf.getPageIndices();
           const sourceBookmarks=window.SunriseOutlineTransfer.read(srcPdf,window.PDFLib);
           mergedBookmarks.push(...window.SunriseOutlineTransfer.subset(sourceBookmarks,indices,totalMergedPages)
             .map(bookmark=>({...bookmark,level:bookmark.level})));
-          const copiedPages = await mergedPdf.copyPages(srcPdf, indices);
-          copiedPages.forEach((p) => mergedPdf.addPage(p));
+          const copiedPages = await window.SunrisePdfFormTools.transferPages(srcPdf,mergedPdf,indices,window.PDFLib);
           totalMergedPages += copiedPages.length;
         }
 
         if(mergedBookmarks.length)appendPdfBookmarks(mergedPdf,mergedBookmarks);
-        const mergedBytes = await mergedPdf.save();
+        if(mergedPdf.getPageCount()!==totalMergedPages || totalMergedPages<1)
+          throw Error("병합 대상 페이지 수가 일치하지 않습니다.");
+        const mergedBytes = await mergedPdf.save({updateFieldAppearances:false});
+        // Validate the *serialized* artifact before opening or downloading it.
+        const reopenedMerge = await PDFDocument.load(mergedBytes,{updateMetadata:false});
+        verifyPdfPageGeometry(mergedPdf,reopenedMerge,"병합");
+        if(reopenedMerge.getPageCount()!==totalMergedPages)
+          throw Error("병합 결과의 페이지 수가 저장 과정에서 변경되었습니다.");
         if(!sameQueue())throw Error("병합 목록이 변경되어 결과를 저장하지 않았습니다.");
         if(openAfter)validatePdfByteLength(mergedBytes.byteLength);
         closeModal();
@@ -5445,6 +5513,13 @@
       const doc = activeDoc();
       if (doc?.operationBusy) { showToast("페이지 작업을 처리하고 있습니다. 잠시 기다려 주세요.", "fa-hourglass-half"); return; }
 
+      if(doc?.signedReadOnly){
+        if(cmdId==='saveAs'){try{const original=await compileDocumentWithOverlays(doc);downloadBytes(original,doc.name);}catch(error){showToast(error.message,'fa-file-signature');}return;}
+        const allowed=new Set(['openPdf','newBlankDoc','printPdf','closeDoc','extractText','extractEmbeddedImages','saveAllAttachments','verifyCertificateSignature','signWithCertificatePem','inspectSavedPdf','checkPdfQuality','nextPage','prevPage','firstPage','lastPage','gotoPage','searchDoc','advancedSearch','checkSavedPdf','comparePdf','visualCompare','reviewOpinionTable','exportAttachmentsCsv','selectPageRange','selectAllPages','selectOddPages','selectEvenPages','exportCurrentImage','exportAllImages']);
+        if(!allowed.has(cmdId)&&! /^(zoom|fit|show|toggle|openPanel|openSettings|exportWord|exportExcel)/.test(cmdId)){
+          showToast('서명 보존을 위해 읽기 전용 문서의 변경 작업을 차단했습니다.','fa-file-signature');return;
+        }
+      }
       switch (cmdId) {
         case "openPdf":
           document.getElementById("openPdfInput").click();
@@ -5459,6 +5534,9 @@
           openSaveAsModal(doc);
           break;
 
+        case "compressPdfLossless":
+          if(doc)openLosslessCompressionModal(doc);
+          break;
         case "compressPdf":
           if (!doc) return;
           openSaveAsModal(doc, true);
@@ -5650,9 +5728,22 @@
           if (!doc) return;
           await openVisualTextCorrectionModal(doc);
           break;
+        case "directUnicodeText":
+          if(doc)openDirectSourceTextModal(doc,true);
+          break;
+        case "editSourceVectorPath":
+          if(doc)openSourceVectorPathModal(doc);
+          break;
+        case "editSourceRectangle":
+          if(doc)openSourceRectangleModal(doc);
+          break;
         case "directSourceText":
           if (!doc) return;
           openDirectSourceTextModal(doc);
+          break;
+        case "batchDirectSourceText":
+          if (!doc) return;
+          openBatchDirectSourceTextModal(doc);
           break;
 
         case "insertTable":
@@ -5697,6 +5788,20 @@
         case "insertVisualSignature":
           if (!doc) return;
           openStyledInsertModal(doc, "VisualSignature", "시각적 서명 표시 (인증서·암호학적 서명 아님)", "서명자 이름");
+          break;
+        case "verifyCertificateSignature":
+          if(doc)openCertificateVerificationModal(doc);
+          break;
+        case "signWithCertificatePem":
+          if (!doc) return;
+          openCertificateSignatureModal(doc);
+          break;
+        case "protectPdfAes256":
+          if (!doc) return;
+          openPdfPasswordProtectionModal(doc);
+          break;
+        case "unlockPdfPassword":
+          openPdfPasswordUnlockModal();
           break;
         case "maskedPageExport":
           if (!doc) return;
@@ -5754,13 +5859,49 @@
           if (!doc) return;
           openExtractTextModal(doc);
           break;
+        case "exportWordMixed":
+          if(doc)openAdvancedOfficeExport(doc,"docx-mixed");
+          break;
+        case "exportWordGrids":
+          if(doc)openAdvancedOfficeExport(doc,"docx-grids");
+          break;
+        case "exportWordVisual":
+          if(doc)openAdvancedOfficeExport(doc,"docx-visual");
+          break;
+        case "exportExcelGrids":
+          if(doc)openAdvancedOfficeExport(doc,"xlsx-grids");
+          break;
         case "exportWordText":
           if (!doc) return;
           await exportOfficeText(doc,"docx");
           break;
+        case "exportWordLayout":
+          if (!doc) return;
+          await exportOfficeText(doc,"docx-layout");
+          break;
+        case "exportWordTwoColumns":
+          if (!doc) return;
+          await exportOfficeText(doc,"docx-two-columns");
+          break;
+        case "exportWordThreeColumns":
+          if (!doc) return;
+          await exportOfficeText(doc,"docx-three-columns");
+          break;
+        case "exportWordAutoColumns":
+          if (!doc) return;
+          await exportOfficeText(doc,"docx-auto-columns");
+          break;
         case "exportExcelText":
           if (!doc) return;
           await exportOfficeText(doc,"xlsx");
+          break;
+        case "exportExcelPerPage":
+          if (!doc) return;
+          await exportOfficeText(doc,"xlsx-pages");
+          break;
+        case "exportExcelColumns":
+          if (!doc) return;
+          await exportOfficeText(doc,"xlsx-columns");
           break;
 
         case "exportCurrentImage":
@@ -6037,7 +6178,13 @@
       pdfCompressionSettings(settings.strength);
       if (!Number.isInteger(settings.quality) || settings.quality < 1 || settings.quality > 100 ||
           !Number.isInteger(settings.maxEdge) || settings.maxEdge < 0 || settings.maxEdge > 10000) throw new Error('이미지 압축 설정이 올바르지 않습니다.');
-      if (!settings.strength) return {...await compressPdfLossless(bytes), images:0, skipped:0};
+      if (!settings.strength) {
+        const optimized=await compressPdfLossless(bytes);
+        const before=await PDFDocument.load(bytes,{updateMetadata:false});
+        const after=await PDFDocument.load(optimized.bytes,{updateMetadata:false});
+        verifyBatchPdfStructure(before,after);
+        return {...optimized,images:0,skipped:0};
+      }
       const pdf = await PDFDocument.load(bytes, {updateMetadata:false});
       const images = pdf.context.enumerateIndirectObjects().filter(([,o]) => o instanceof PDFRawStream && o.dict.get(n('Subtype')) === n('Image'));
       // Mask images can be referenced from another image; never JPEG-encode them.
@@ -6117,8 +6264,12 @@
       if (output.length >= bytes.length) { output = bytes; changed = 0; }
       const result = await compressPdfLossless(output);
       const verified = await PDFDocument.load(result.bytes, {updateMetadata:false});
+      const originalPdf=await PDFDocument.load(bytes,{updateMetadata:false});
+      verifyBatchPdfStructure(originalPdf,verified);
       if (verified.getPageCount() !== pdf.getPageCount()) throw new Error('압축 후 페이지 수가 다릅니다.');
-      return {...result, originalSize:bytes.length, changed:result.changed + changed, images:changed, skipped};
+      const imageChanges=result.bytes===bytes?0:changed;
+      return {...result, originalSize:bytes.length, changed:result.changed + imageChanges,
+        images:imageChanges, skipped};
     }
 
     // Losslessly optimize eligible streams; never return a larger PDF.
@@ -6340,7 +6491,7 @@
         onMount:()=>{
           const get=id=>document.getElementById(id),start=get('markStart'),cancel=get('markCancel');
           const status=get('markStatus'),results=get('markResults'),kind=get('markKind'),text=get('markText'),input=get('markPdfFiles');
-          let running=false,cancelled=false;
+          let running=false,cancelled=false,completed=0,failures=0;
           const sync=()=>{text.disabled=kind.value!=='watermark'};
           kind.addEventListener('change',sync);sync();
           const open=()=>get('modalBackdrop').classList.contains('open')&&get('markStart')===start;
@@ -6349,23 +6500,33 @@
             if(running)return;
             const files=Array.from(input.files||[]),settings={kind:kind.value,text:text.value};
             try{validateBatchOfficeFiles(files)}catch(error){status.textContent=error.message;return;}
-            running=true;cancelled=false;start.disabled=true;cancel.textContent='작업 취소';
+            running=true;cancelled=false;completed=0;failures=0;
+            start.disabled=true;cancel.textContent='작업 취소';
             input.disabled=kind.disabled=text.disabled=true;results.replaceChildren();
             try{
               await batchMarkPdfs(files,settings,{
                 cancelled:()=>cancelled||!open(),
                 progress:(index,total,name,detail)=>{if(!open())return;status.textContent=`${index+1}/${total} 처리 중: ${name}`+(detail?.page?` · ${detail.page}/${detail.totalPages}쪽`:"")},
-                result:({name,bytes})=>{
+                result:({name,bytes,originalSize})=>{
+                  if(!open()||cancelled)return;
                   const row=document.createElement('p'),button=document.createElement('button');
+                  const note=document.createElement('span'),size=n=>(n/1048576).toFixed(2)+' MiB';
                   button.type='button';
                   const suffix=settings.kind==='watermark'?'_watermarked':'_numbered';
                   button.textContent=`${name} 결과 다운로드`;
+                  note.textContent=' · 원본 '+size(originalSize)+' → 결과 '+size(bytes.byteLength);
                   button.addEventListener('click',()=>downloadBytes(bytes,name.replace(/\.pdf$/i,'')+suffix+'.pdf'));
-                  row.append(button);results.append(row);
+                  row.append(button,note);results.append(row);completed++;
                 },
-                error:({name,message})=>{const row=document.createElement('p');row.textContent=`${name}: ${message}`;results.append(row)}
+                error:({name,message})=>{
+                  if(!open())return;
+                  const row=document.createElement('p');row.textContent=`${name}: ${message}`;
+                  results.append(row);failures++;
+                }
               });
-              if(open())status.textContent=cancelled?'취소했습니다. 완료한 파일은 다운로드할 수 있습니다.':'일괄 작업이 완료됐습니다. 파일을 확인해 주세요.';
+              if(open())status.textContent=cancelled
+                ?'취소했습니다. 완료 '+completed+'개 · 실패 '+failures+'개. 완료한 파일은 내려받을 수 있습니다.'
+                :'일괄 작업 결과: 완료 '+completed+'개 · 실패 '+failures+'개. 각 파일을 확인하세요.';
             }catch(error){if(open())status.textContent=error.message||'작업을 처리하지 못했습니다.';}
             finally{running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
               input.disabled=false;kind.disabled=false;sync()}
@@ -7067,7 +7228,7 @@
             <input type="text" id="extractRangeInput" class="dialog-input" value="${escapeHtml(selDefault || String(doc.currentPage + 1))}" />
             <label for="extractNameInput">결과 파일명:</label>
             <input type="text" id="extractNameInput" class="dialog-input" value="${escapeHtml(doc.name.replace(/\.pdf$/i, "") + "_extracted.pdf")}" />
-          </div>
+          </div><label><input id="extractFlattenForms" type="checkbox"> 양식이 있으면 현재 보이는 모양으로 평탄화 (입력 기능 제거)</label>
         `,
         footerHtml: `
           <div></div>
@@ -7079,7 +7240,14 @@
         onMount: () => {
           document.getElementById("extractCancelBtn").addEventListener("click", closeModal);
           document.getElementById("extractConfirmBtn").addEventListener("click", async () => {
+            if(activeDoc()!==doc||doc.operationBusy){
+              showToast("다른 문서 작업이 진행 중입니다.","fa-circle-exclamation");return;
+            }
+            const originalBytes=doc.bytes,captured=captureSaveState(doc,false);
+            const unchanged=()=>activeDoc()===doc&&doc.bytes===originalBytes&&
+              saveStateIsCurrent(doc,captured);
             const metricFinish=beginOperationMetric('page_extract');let metricOutcome='cancelled';
+            doc.operationBusy=true;
             try {
             const rangeStr = document.getElementById("extractRangeInput").value;
             let outName = (document.getElementById("extractNameInput").value || "extracted.pdf").trim();
@@ -7090,21 +7258,31 @@
               return;
             }
             const { PDFDocument } = window.PDFLib;
-            const srcDoc = await PDFDocument.load(await compileDocumentWithOverlays(doc));
-            if (!allowPageFormStructure(srcDoc)) return;
+            const compiled = await compileDocumentWithOverlays(doc);
+            if(!unchanged())throw Error("추출 중 원본 문서가 변경되었습니다.");
+            const srcDoc = await PDFDocument.load(compiled);
+            if(document.getElementById('extractFlattenForms')?.checked)window.SunrisePdfFormTools.flattenForTransfer(srcDoc,window.PDFLib);
             const outDoc = await PDFDocument.create();
             const sourceBookmarks=window.SunriseOutlineTransfer.read(srcDoc,window.PDFLib);
-            const copied = await outDoc.copyPages(srcDoc, indices);
-            copied.forEach((p) => outDoc.addPage(p));
+            await window.SunrisePdfFormTools.transferPages(srcDoc,outDoc,indices,window.PDFLib);
             const transferred=window.SunriseOutlineTransfer.subset(sourceBookmarks,indices);
             if(transferred.length)appendPdfBookmarks(outDoc,transferred);
-            const outBytes = await outDoc.save();
+            if(outDoc.getPageCount()!==indices.length)
+              throw Error("추출 페이지 수가 요청과 일치하지 않습니다.");
+            const outBytes = await outDoc.save({updateFieldAppearances:false});
+            const extracted = await PDFDocument.load(outBytes,{updateMetadata:false});
+            verifyPdfPageGeometry(outDoc,extracted,"추출");
+            if(!unchanged())throw Error("저장 전 문서가 변경되어 추출 결과를 폐기합니다.");
             closeModal();
             await openPdfFromBytes(outName, outBytes, { switchActive: true });
             downloadBytes(outBytes, outName);
             showToast(`${indices.length}개 페이지를 추출했습니다: ${outName}`, "fa-file-export");
             metricOutcome='succeeded';
-            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
+            } catch(error) {
+              metricOutcome='failed';
+              console.error("PDF 추출 중단",error);
+              showToast("PDF 추출 중단: "+String(error?.message||error),"fa-circle-exclamation");
+            } finally {doc.operationBusy=false;metricFinish(metricOutcome);}
           });
         },
       });
@@ -7199,13 +7377,14 @@
           <div class="dialog-info-box">1~100쪽씩 분할하고 최대 50개의 결과 파일을 제공합니다.
             PDF 파일 크기에 고정된 MB 제한은 없습니다. 대용량 문서는 <strong>파일 목록만 먼저 준비하고,
             저장 버튼을 누른 파일 하나씩 생성</strong>하여 동시에 결과 파일을 메모리에 쌓지 않습니다.
-            일반 페이지 목적지 북마크는 해당 분할 결과에 이식합니다. 특수 목적지 및 양식 포함 원본은 지원하지 않습니다.</div>
+            일반 페이지 목적지 북마크는 해당 분할 결과에 이식합니다. 지원되는 이름·보기 목적지도 이식합니다. 양식 포함 문서는 평탄화를 선택한 경우 처리하며 기존 서명·XFA는 제외합니다.</div>
           <div class="dialog-form-grid">
             <label for="splitRangeInput">분할 페이지 범위:</label>
             <input id="splitRangeInput" class="dialog-input" maxlength="4096" value="1-${doc.pageCount}">
             <label for="splitSizeInput">파일당 페이지 수:</label>
             <input id="splitSizeInput" class="dialog-input" type="number" min="1" max="100" value="1">
           </div>
+          <label><input id="splitFlattenForms" type="checkbox"> 양식이 있으면 현재 보이는 모양으로 평탄화 (입력 기능 제거)</label>
           <p id="splitPlanStatus" role="status">페이지 범위를 지정하세요.</p>
           <div id="splitReadyResults" style="max-height:35vh;overflow:auto;display:grid;gap:6px"></div>
         `,
@@ -7216,7 +7395,7 @@
           const input=document.getElementById("splitRangeInput"),per=document.getElementById("splitSizeInput");
           const start=document.getElementById("splitPrepareBtn"),status=document.getElementById("splitPlanStatus");
           const results=document.getElementById("splitReadyResults");
-          const close=document.getElementById("splitCloseBtn");
+          const close=document.getElementById("splitCloseBtn"),flatten=document.getElementById('splitFlattenForms');
           const open=()=>document.getElementById("modalBackdrop")?.classList.contains("open")&&
             document.getElementById("splitPrepareBtn")===start;
           const valid=()=>open()&&activeDoc()===doc&&doc.bytes===source&&
@@ -7224,7 +7403,7 @@
           let running=false,sourcePdf=null,sourceBookmarks=null,planGeneration=0;
           const setBusy=busy=>{
             running=busy;doc.operationBusy=busy;
-            start.disabled=busy;input.disabled=busy;per.disabled=busy;close.disabled=busy;
+            start.disabled=busy;input.disabled=busy;per.disabled=busy;close.disabled=busy;flatten.disabled=busy;
             results.querySelectorAll("button").forEach(button=>{button.disabled=busy;});
           };
           const discard=()=>{
@@ -7243,7 +7422,7 @@
                 "쪽. 목록 준비 후 필요한 파일만 생성할 수 있습니다.";
             }catch(error){status.textContent=error.message;}
           };
-          input.addEventListener("input",refresh);per.addEventListener("input",refresh);
+          input.addEventListener("input",refresh);per.addEventListener("input",refresh);flatten.addEventListener('change',refresh);
           refresh();
           start.addEventListener("click",async()=>{
             if(running||doc.operationBusy)return;
@@ -7260,8 +7439,9 @@
               const compiled=await compileDocumentWithOverlays(doc);
               if(!valid()||generation!==planGeneration)throw Error("분할 대상 문서가 변경되었습니다.");
               const pdf=await PDFDocument.load(compiled);
+              if(flatten.checked)window.SunrisePdfFormTools.flattenForTransfer(pdf,window.PDFLib);
               if(!valid()||generation!==planGeneration)throw Error("분할 대상 문서가 변경되었습니다.");
-              if(!allowPageFormStructure(pdf)){outcome="cancelled";return;}
+              // Each generated part validates and preserves its selected form tree.
               const bookmarks=window.SunriseOutlineTransfer.read(pdf,window.PDFLib);
               const plans=chunks.map((indices,i)=>{
                 // Validate bookmark destinations before exposing downloads.
@@ -7291,12 +7471,12 @@
                   try{
                     status.textContent=(i+1)+"/"+plans.length+"번 파일 생성 중 · "+spec.indices.length+"쪽";
                     const part=await PDFDocument.create();
-                    const copied=await part.copyPages(pdf,spec.indices);
+                    await window.SunrisePdfFormTools.transferPages(pdf,part,spec.indices,window.PDFLib);
                     if(!valid()||generation!==planGeneration)throw Error("파일 생성 중 문서가 변경되었습니다.");
-                    copied.forEach(page=>part.addPage(page));
+
                     if(spec.transferred.length)appendPdfBookmarks(part,spec.transferred);
                     part.setTitle(spec.title);
-                    const bytes=await part.save();
+                    const bytes=await part.save({updateFieldAppearances:false});
                     if(!bytes?.byteLength)throw Error("분할 결과가 비어 있습니다.");
                     // Reopen the actual serialized PDF and compare page geometry
                     // before publishing any download, as in the general save path.
@@ -7332,6 +7512,9 @@
     }
 
     async function deleteSelectedPagesFromDoc(doc) {
+      if(doc.operationBusy||activeDoc()!==doc)return;
+      const originalReader=doc.pdfJsDoc;
+      doc.operationBusy=true;
       const finish=beginOperationMetric('page_delete');let outcome='cancelled';
       try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
@@ -7362,14 +7545,25 @@
           return { ...bm, page: bm.page - shift };
         });
       const nextBytes=await pdfDoc.save();
-      if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 삭제를 취소했습니다.","fa-circle-exclamation");return;}
+      const reopened=await PDFDocument.load(nextBytes,{updateMetadata:false});
+      verifyPdfPageGeometry(pdfDoc,reopened,"페이지 삭제");
+      if(reopened.getPageCount()!==doc.pageCount-indices.length)
+        throw Error("삭제 후 페이지 수가 올바르지 않습니다.");
+      const parsed=await parsePageCountAndMeta(nextBytes);
+      if(doc.bytes!==originalBytes||doc.pdfJsDoc!==originalReader||activeDoc()!==doc){
+        await parsed.pdfJsDoc.destroy();
+        showToast("문서 상태가 변경되어 삭제를 취소했습니다.","fa-circle-exclamation");return;
+      }
       saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 삭제`);
       doc.overlays=nextOverlays;doc.bookmarks=nextBookmarks;doc.bytes=nextBytes;
-      await reloadDocPdfJs(doc);
+      await reloadDocPdfJs(doc,{info:parsed});
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 삭제했습니다.`, "fa-trash-can");
       outcome='succeeded';
-      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
+      } catch(error) {
+        outcome='failed';console.error("페이지 삭제 중단",error);
+        showToast("페이지 삭제 중단: "+String(error?.message||error),"fa-circle-exclamation");
+      } finally {doc.operationBusy=false;finish(outcome);}
     }
 
     function openReorderPagesModal(doc) {
@@ -7403,6 +7597,9 @@
           });
           document.getElementById("reorderCancelBtn").addEventListener("click", closeModal);
           document.getElementById("reorderConfirmBtn").addEventListener("click", async () => {
+            if(doc.operationBusy||activeDoc()!==doc)return;
+            const originalReader=doc.pdfJsDoc;
+            doc.operationBusy=true;
             const metricFinish=beginOperationMetric('page_reorder');let metricOutcome='cancelled';
             try {
             const tokens = document.getElementById("reorderInput").value.split(",").map((s) => s.trim());
@@ -7421,17 +7618,26 @@
             for (let i = pages.length - 1; i >= 0; i--) pdfDoc.removePage(i);
             nums.forEach((i) => pdfDoc.addPage(pages[i]));
             const updatedBytes = await pdfDoc.save();
-            if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 순서 변경을 취소했습니다.","fa-circle-exclamation");return;}
+            const reopened=await PDFDocument.load(updatedBytes,{updateMetadata:false});
+            verifyPdfPageGeometry(pdfDoc,reopened,"페이지 순서 변경");
+            const info=await parsePageCountAndMeta(updatedBytes);
+            if(doc.bytes!==originalBytes||doc.pdfJsDoc!==originalReader||activeDoc()!==doc){
+              await info.pdfJsDoc.destroy();
+              showToast("문서 상태가 변경되어 순서 변경을 취소했습니다.","fa-circle-exclamation");return;
+            }
             saveUndoSnapshot(doc, "페이지 순서 변경");
             remapPageItems(doc, nums);
             doc.currentPage = nums.indexOf(doc.currentPage);
             doc.bytes = updatedBytes;
-            await reloadDocPdfJs(doc);
+            await reloadDocPdfJs(doc,{info});
             closeModal();
             await refreshAllViews();
             showToast("페이지 순서를 변경했습니다.", "fa-shuffle");
             metricOutcome='succeeded';
-            } catch(error) {metricOutcome='failed';throw error;} finally {metricFinish(metricOutcome);}
+            } catch(error) {
+              metricOutcome='failed';console.error("페이지 재배열 실패",error);
+              showToast("페이지 순서 변경 중단: "+String(error?.message||error),"fa-circle-exclamation");
+            } finally {doc.operationBusy=false;metricFinish(metricOutcome);}
           });
         },
       });
@@ -7612,6 +7818,19 @@
           }
         }
         const output=await pdf.save({updateFieldAppearances:false});
+        const checked=await PDFDocument.load(output,{updateMetadata:false});
+        const checkedFields=checked.getForm().getFields();
+        if(checkedFields.length!==existing.size)
+          throw new Error('저장 후 PDF 양식 필드 수가 변경되었습니다.');
+        const checkedMap=new Map(checkedFields.map(field=>[field.getName(),field]));
+        for(const change of changes){
+          const field=checkedMap.get(change.name);
+          if(typeof change.value==='string'){
+            if(!(field instanceof PDFTextField)||field.getText()!==change.value)
+              throw new Error('양식 텍스트 값이 저장 후 일치하지 않습니다: '+change.name);
+          }else if(!(field instanceof PDFCheckBox)||field.isChecked()!==change.value)
+            throw new Error('양식 체크 상태가 저장 후 일치하지 않습니다: '+change.name);
+        }
         outcome='succeeded';
         return output;
       }finally{finish(outcome);}
@@ -7790,16 +8009,18 @@
 
     // USR-05: a deliberately narrow *real* text-stream edit, distinct from
     // visual correction. Refuse unsupported fonts/encodings instead of faking it.
-    function openDirectSourceTextModal(doc) {
+    function openDirectSourceTextModal(doc,advanced=false) {
+      if(!doc||doc.operationBusy)return;
+      const captured=captureSaveState(doc,false);
       const source=doc.bytes,reader=doc.pdfJsDoc,pageNumber=doc.currentPage+1;
       if(!window.SunriseSpecialPdf?.replaceSimpleSourceText){
         showToast("원문 직접 수정 엔진을 찾을 수 없습니다.","fa-circle-exclamation");return;
       }
       openModal({
-        title:"PDF 원문 직접 수정 · 표준 영문/숫자",
+        title:advanced?"한글·길이 변경 원문 수정":"PDF 원문 직접 수정 · Type1 WinAnsi",
         icon:"fa-file-pen",width:"610px",
-        bodyHtml:'<div class="dialog-info-box"><strong>실제 PDF 텍스트 스트림을 변경합니다.</strong> '+
-          '표준 Type1 글꼴의 단일 ASCII 문자열만 지원하며, 원문과 수정문은 글자 수가 같아야 합니다. '+
+        bodyHtml:advanced?' <div class="dialog-info-box">수정할 글자를 선택하고 새 문구를 입력하세요. 기존 영역 너비에 맞춰 글자 폭을 조정합니다. 원래 글꼴에 새 문자가 없으면 한글 저장 글꼴을 사용합니다. 서명·양식·특수 레이어는 지원하지 않습니다. 개인정보 삭제에는 사용하지 마세요.</div><p id="directTextStatus" role="status">현재 페이지 원문을 읽는 중입니다.</p><div class="dialog-form-grid"><label for="directTextOriginal">수정할 문구</label><select id="directTextOriginal" class="dialog-select" disabled></select><label for="directTextReplacement">새 문구 (최대 500자)</label><input id="directTextReplacement" class="dialog-input" maxlength="500" spellcheck="false"></div>':'<div class="dialog-info-box"><strong>실제 PDF 텍스트 스트림을 변경합니다.</strong> '+
+          '표준 Type1 글꼴의 단일 WinAnsi 문자열만 지원하며, 원문과 수정문은 인코딩 바이트 수가 같아야 합니다. '+
           '한글·임베디드 글꼴·서명·양식·여러 위치의 동일 문구는 거부합니다. '+
           '새 문구의 글자 너비에 따라 배열이 달라질 수 있습니다. '+
           '<strong>복원 가능한 흔적이 남을 수 있어 개인정보 완전 삭제에는 사용하면 안 됩니다.</strong></div>'+
@@ -7807,7 +8028,7 @@
           '<div class="dialog-form-grid">'+
           '<label for="directTextOriginal">수정할 원문 텍스트</label>'+
           '<select id="directTextOriginal" class="dialog-select" disabled><option>검색 중…</option></select>'+
-          '<label for="directTextReplacement">새 텍스트 (동일 길이)</label>'+
+          '<label for="directTextReplacement">새 텍스트 (동일 바이트 길이)</label>'+
           '<input id="directTextReplacement" class="dialog-input" type="text" maxlength="120" spellcheck="false">'+
           '</div>',
         footerHtml:'<div></div><div class="modal-footer-right">'+
@@ -7819,21 +8040,26 @@
             apply=document.getElementById("directTextApply"),
             status=document.getElementById("directTextStatus");
           const valid=()=>activeDoc()===doc&&doc.bytes===source&&
-            doc.pdfJsDoc===reader&&doc.currentPage+1===pageNumber&&select.isConnected;
+            doc.pdfJsDoc===reader&&doc.currentPage+1===pageNumber&&select.isConnected&&saveStateIsCurrent(doc,captured);
           document.getElementById("directTextCancel").addEventListener("click",closeModal);
-          let candidates=[];
+          let candidates=[],records=[];
           apply.addEventListener("click",async()=>{
             if(!valid()||doc.operationBusy)return;
             const original=candidates[Number(select.value)],replacement=field.value;
             if(!original||!replacement||original===replacement||
-               original.length!==replacement.length||!/^[\x20-\x7e]{1,120}$/.test(replacement)){
-              status.textContent="기존 글자와 길이가 같은 영문·숫자·기본 ASCII 문구를 입력하세요.";
+               (!advanced&&(!window.SunriseSpecialPdf.isSourceTextCandidate(replacement)||
+               !window.SunriseSpecialPdf.isSourceTextCandidate(original)||
+               [...replacement].length!==[...original].length))){
+              status.textContent="표준 Type1 WinAnsi에서 같은 바이트 길이로 표현 가능한 문구만 입력하세요.";
               return;
             }
             doc.operationBusy=true;apply.disabled=true;
             const finish=beginOperationMetric("source_text_replace");let outcome="failed",info=null;
             try{
-              const output=await window.SunriseSpecialPdf.replaceSimpleSourceText({
+              const output=advanced?await window.SunriseContentEditor.replaceText({
+                bytes:source,pageNumber,targetId:records[Number(select.value)]?.id,original,replacement,
+                PDFLib:window.PDFLib,fontProvider:(pdf,texts)=>window.SunriseKoreanFont.embed(pdf,texts)
+              }):await window.SunriseSpecialPdf.replaceSimpleSourceText({
                 bytes:source,pageNumber,original,replacement,PDFLib:window.PDFLib
               });
               if(!valid())return;
@@ -7842,7 +8068,7 @@
               info=await parsePageCountAndMeta(output.bytes);
               const verifyPage=await info.pdfJsDoc.getPage(pageNumber);
               const items=(await verifyPage.getTextContent()).items.map(item=>item.str);
-              if(!items.includes(replacement)||items.includes(original))
+              if(advanced?!items.join("\n").includes(replacement):(!items.includes(replacement)||items.includes(original)))
                 throw Error("저장 후 검색 가능한 텍스트 검증에 실패했습니다.");
               if(!valid())return;
               saveUndoSnapshot(doc,"PDF 원문 텍스트 직접 수정");
@@ -7867,9 +8093,14 @@
             if(!valid())return;
             const seen=new Set();
             candidates=layer.items.map(item=>item.str)
-              .filter(value=>typeof value==="string"&&/^[\x20-\x7e]{1,120}$/.test(value))
+              .filter(value=>window.SunriseSpecialPdf.isSourceTextCandidate(value))
               .filter(value=>{if(seen.has(value))return false;seen.add(value);return true;})
               .slice(0,100);
+            if(advanced){
+              records=await window.SunriseContentEditor.listText({bytes:source,pageNumber,PDFLib:window.PDFLib});
+              if(!valid())return;
+              records=records.slice(0,500);candidates=records.map(record=>record.original);
+            }
             select.replaceChildren();
             for(let i=0;i<candidates.length;i++){
               const option=document.createElement("option");
@@ -7877,7 +8108,7 @@
               select.appendChild(option);
             }
             if(!candidates.length){
-              status.textContent="현재 페이지에 지원하는 기본 ASCII 텍스트 조각이 없습니다.";
+              status.textContent=advanced?"현재 페이지에서 직접 수정할 수 있는 텍스트를 찾지 못했습니다.":"현재 페이지에 지원하는 표준 WinAnsi 텍스트 조각이 없습니다.";
               return;
             }
             select.disabled=false;apply.disabled=false;field.value=candidates[0];
@@ -7888,6 +8119,378 @@
           }catch(error){
             if(valid())status.textContent="페이지 텍스트 판독 실패: "+String(error?.message||error);
           }
+        }
+      });
+    }
+
+    async function openSourceVectorPathModal(doc) {
+      if(!doc||doc.operationBusy||!window.SunriseContentEditor?.listVectorPaths)return;
+      const source=doc.bytes,pageNumber=doc.currentPage+1,captured=captureSaveState(doc,false);
+      let paths;
+      try{paths=await window.SunriseContentEditor.listVectorPaths({bytes:source,pageNumber,PDFLib:window.PDFLib});}
+      catch(error){showToast(error.message,'fa-triangle-exclamation');return;}
+      if(activeDoc()!==doc||!saveStateIsCurrent(doc,captured))return;
+      if(!paths.length){showToast('현재 페이지에서 수정 가능한 원본 도형 경로를 찾지 못했습니다.','fa-bezier-curve');return;}
+      openModal({title:'원본 선·곡선·도형 수정',icon:'fa-bezier-curve',width:'700px',
+        bodyHtml:'<p>선택한 원본 경로의 선·곡선 좌표를 수정합니다. 좌표는 원본 도형의 로컬 PDF 포인트입니다. 표의 다른 선과 문구는 자동 이동하지 않습니다. 색상·선 두께는 체크한 항목만 변경하며 이후 도형의 스타일은 유지합니다.</p><select id="sourcePathChoice" class="dialog-select"></select><div id="sourcePathSteps" style="max-height:38vh;overflow:auto;margin:10px 0"></div><div class="dialog-form-grid"><label><input id="sourcePathStrokeOn" type="checkbox"> 선색 변경</label><input id="sourcePathStroke" type="color" value="#000000"><label><input id="sourcePathFillOn" type="checkbox"> 채움색 변경</label><input id="sourcePathFill" type="color" value="#ffffff"><label><input id="sourcePathWidthOn" type="checkbox"> 선 두께 변경 (pt)</label><input id="sourcePathWidth" class="dialog-input" type="number" min="0.1" max="100" step="0.1" value="1"></div><p id="sourcePathStatus" role="status"></p>',
+        footerHtml:'<button id="sourcePathApply" type="button" class="dialog-btn primary">원본 경로 변경</button><button id="sourcePathClose" type="button" class="dialog-btn">닫기</button>',
+        onMount:()=>{
+          const get=id=>document.getElementById(id),select=get('sourcePathChoice'),host=get('sourcePathSteps'),button=get('sourcePathApply'),status=get('sourcePathStatus');
+          const labels={m:'시작점',l:'직선 끝점',c:'곡선 제어점·끝점',v:'곡선 두 번째 제어점·끝점',y:'곡선 첫 번째 제어점·끝점',h:'경로 닫기',re:'사각형 X·Y·너비·높이'};
+          for(let i=0;i<paths.length;i++){const option=document.createElement('option');option.value=i;option.textContent=(i+1)+'. '+(paths[i].clip?'클리핑 · ':'')+paths[i].steps.length+'개 선·곡선 단계';select.append(option);}
+          const draw=()=>{
+            host.replaceChildren();const path=paths[Number(select.value)];
+            const stroke=!path.clip&&['S','s','B','B*','b','b*'].includes(path.paint),fill=!path.clip&&['f','f*','B','B*','b','b*'].includes(path.paint);
+            for(const [id,enabled] of [['sourcePathStrokeOn',stroke],['sourcePathWidthOn',stroke],['sourcePathFillOn',fill]]){get(id).disabled=!enabled;if(!enabled)get(id).checked=false;}
+            path.steps.forEach((step,index)=>{
+              const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-bottom:7px';
+              const label=document.createElement('span');label.textContent=(index+1)+'. '+labels[step.operator];row.append(label);
+              step.values.forEach((value,j)=>{const input=document.createElement('input');input.type='number';input.step='0.1';input.value=value;input.className='dialog-input';input.style.width='92px';input.dataset.step=index;input.dataset.coordinate=j;input.setAttribute('aria-label',label.textContent+' 좌표 '+(j+1));row.append(input);});host.append(row);
+            });
+          };
+          select.addEventListener('change',draw);draw();get('sourcePathClose').addEventListener('click',closeModal);
+          const valid=()=>status.isConnected&&get('modalBackdrop').classList.contains('open')&&activeDoc()===doc&&doc.currentPage+1===pageNumber&&saveStateIsCurrent(doc,captured);
+          button.addEventListener('click',async()=>{
+            if(!valid()||doc.operationBusy)return;
+            const path=paths[Number(select.value)],steps=path.steps.map(step=>({operator:step.operator,values:step.values.slice()}));
+            const inputs=Array.from(host.querySelectorAll('input'));
+            if(inputs.some(input=>!input.value.trim())){status.textContent='모든 경로 좌표를 입력하세요.';return;}
+            for(const input of inputs)steps[Number(input.dataset.step)].values[Number(input.dataset.coordinate)]=Number(input.value);
+            const settings={};if(get('sourcePathStrokeOn').checked)settings.strokeColor=get('sourcePathStroke').value;if(get('sourcePathFillOn').checked)settings.fillColor=get('sourcePathFill').value;if(get('sourcePathWidthOn').checked)settings.lineWidth=Number(get('sourcePathWidth').value);
+            let info=null;doc.operationBusy=true;button.disabled=true;
+            try{
+              const result=await window.SunriseContentEditor.replaceVectorPath({bytes:source,pageNumber,targetId:path.id,steps,...settings,PDFLib:window.PDFLib});
+              info=await parsePageCountAndMeta(result.bytes);if(!valid())return;
+              saveUndoSnapshot(doc,'원본 벡터 경로 수정');doc.bytes=result.bytes;await reloadDocPdfJs(doc,{info});info=null;
+              closeModal();await refreshAllViews();showToast('원본 도형 경로를 수정했습니다. PDF를 새 파일로 저장하세요.','fa-bezier-curve');
+            }catch(error){if(status.isConnected)status.textContent=error.message;}
+            finally{if(info)await info.pdfJsDoc.destroy();doc.operationBusy=false;if(button.isConnected)button.disabled=false;}
+          });
+        }});
+    }
+
+    async function openSourceRectangleModal(doc) {
+      if(!doc||doc.operationBusy||!window.SunriseContentEditor)return;
+      const source=doc.bytes,pageNumber=doc.currentPage+1,captured=captureSaveState(doc,false);
+      let records;
+      try{records=await window.SunriseContentEditor.listRectangles({bytes:source,pageNumber,PDFLib:window.PDFLib});}
+      catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
+      if(!saveStateIsCurrent(doc,captured)||activeDoc()!==doc)return;
+      if(!records.length){showToast("현재 페이지에 수정 가능한 원본 사각형이 없습니다.","fa-vector-square");return;}
+      openModal({title:"원본 사각형·표 테두리 좌표 수정",icon:"fa-vector-square",width:"580px",
+        bodyHtml:'<p>PDF 원본 사각형의 좌표와 크기를 변경합니다. 원본의 채우기·선 스타일을 유지합니다. 단위는 PDF 포인트이며 변환된 도형은 로컬 좌표를 사용합니다. 표의 다른 선이나 셀 내용은 자동 이동하지 않습니다.</p><select id="sourceRectChoice" class="dialog-select"></select><div class="dialog-form-grid">'+
+          ["x","y","width","height"].map(key=>'<label for="sourceRect_'+key+'">'+({x:"X",y:"Y",width:"너비",height:"높이"}[key])+'</label><input type="number" step="0.1" class="dialog-input" id="sourceRect_'+key+'">').join('')+'</div><p id="sourceRectStatus" role="status"></p>',
+        footerHtml:'<button id="sourceRectApply" class="dialog-btn primary" type="button">원본 좌표 변경</button><button id="sourceRectClose" class="dialog-btn" type="button">닫기</button>',
+        onMount:()=>{
+          const get=id=>document.getElementById(id),select=get('sourceRectChoice'),button=get('sourceRectApply'),status=get('sourceRectStatus');
+          for(let i=0;i<records.length;i++){const option=document.createElement('option');option.value=i;option.textContent=(i+1)+'. '+[records[i].x,records[i].y,records[i].width,records[i].height].join(', ');select.append(option);}
+          const sync=()=>{const r=records[Number(select.value)];for(const key of ['x','y','width','height'])get('sourceRect_'+key).value=r[key];};
+          select.addEventListener('change',sync);sync();get('sourceRectClose').addEventListener('click',closeModal);
+          const valid=()=>status.isConnected&&get('modalBackdrop').classList.contains('open')&&activeDoc()===doc&&saveStateIsCurrent(doc,captured)&&doc.currentPage+1===pageNumber;
+          button.addEventListener('click',async()=>{
+            if(!valid()||doc.operationBusy)return;
+            const values=Object.fromEntries(['x','y','width','height'].map(k=>[k,get('sourceRect_'+k).value]));
+            if(Object.values(values).some(v=>String(v).trim()==='')){status.textContent='모든 좌표와 크기를 입력하세요.';return;}
+            let info=null;doc.operationBusy=true;button.disabled=true;
+            try{
+              const result=await window.SunriseContentEditor.replaceRectangle({bytes:source,pageNumber,targetId:records[Number(select.value)]?.id,...values,PDFLib:window.PDFLib});
+              info=await parsePageCountAndMeta(result.bytes);if(!valid())return;
+              saveUndoSnapshot(doc,'원본 사각형 수정');doc.bytes=result.bytes;await reloadDocPdfJs(doc,{info});info=null;
+              closeModal();await refreshAllViews();showToast('원본 사각형을 수정했습니다. 새 PDF로 저장하세요.','fa-vector-square');
+            }catch(error){if(status.isConnected)status.textContent=error.message;}
+            finally{if(info)await info.pdfJsDoc.destroy();doc.operationBusy=false;if(button.isConnected)button.disabled=false;}
+          });
+        }});
+    }
+
+    // R27–R29: PDF.js preflight, candidate picker and local TSV workflows
+    // before atomic source-stream edits. No network upload or auto-save.
+    // The source file is never mutated; a successful batch is one Undo record.
+    function openBatchDirectSourceTextModal(doc) {
+      // Never open a source-edit transaction while another operation is pending.
+      if(!doc||doc.operationBusy||activeDoc()!==doc)return;
+      const engine=window.SunriseSpecialPdf;
+      if(!engine?.replaceSimpleSourceTextBatch||!engine?.parseSourceTextBatch||
+         !engine?.serializeSourceTextBatch){
+        showToast('원문 일괄 수정 엔진을 찾을 수 없습니다.','fa-circle-exclamation');return;
+      }
+      const source=doc.bytes,reader=doc.pdfJsDoc;
+      // R35: an input PDF byte reference alone does not cover overlays,
+      // bookmarks, metadata or attachments. Reuse the existing R26 snapshot
+      // contract without copying a potentially large PDF buffer.
+      const captured=captureSaveState(doc,false);
+      openModal({
+        title:'PDF 여러 곳 원문 직접 수정 · Type1 WinAnsi',
+        icon:'fa-list-check',width:'760px',
+        bodyHtml:'<div class="dialog-info-box">'+
+          '<strong>최대 8개 원문을 하나의 편집 작업으로 처리합니다.</strong> '+
+          '엑셀에서 <strong>페이지번호 [Tab] 기존 문구 [Tab] 새 문구</strong> 3열을 복사해 붙여넣으세요. '+
+          '먼저 <strong>수정 항목 미리보기</strong>로 현재 PDF에서 실제 문구를 확인한 다음 적용할 수 있습니다. '+
+          '표준 Type1·단일 Tj 또는 안전한 분절 TJ·WinAnsi·동일 바이트 길이만 지원하며 한글·임베디드 글꼴·서명·양식은 거부합니다. '+
+          '다른 항목 중 하나라도 실패하면 수정 결과 전체를 적용하지 않습니다. '+
+          '<strong>민감정보 완전 삭제 기능은 아닙니다.</strong></div>'+
+          '<div class="dialog-form-grid" style="margin-top:12px">'+
+          '<label for="sourceBatchCandidatePage">원문 후보 탐색 페이지 (1~'+doc.pageCount+')</label>'+
+          '<input id="sourceBatchCandidatePage" class="dialog-input" type="number" min="1" max="'+doc.pageCount+'" value="'+(doc.currentPage+1)+'">'+
+          '<label for="sourceBatchCandidate">선택한 페이지 원문 후보</label>'+
+          '<select id="sourceBatchCandidate" class="dialog-select" disabled><option>후보 불러오기를 누르세요</option></select>'+
+          '<label for="sourceBatchCandidateNew">새 문구 (동일 바이트 길이)</label>'+
+          '<input id="sourceBatchCandidateNew" class="dialog-input" type="text" maxlength="120" spellcheck="false">'+
+          '</div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">'+
+          '<button type="button" class="dialog-btn" id="sourceBatchFind">선택 페이지 후보 불러오기</button>'+
+          '<button type="button" class="dialog-btn" id="sourceBatchInsert" disabled>수정 목록에 추가</button>'+
+          '</div>'+
+          '<p id="sourceBatchCandidateStatus" role="status" aria-live="polite">'+
+          '한글/특수 글꼴은 지원하지 않습니다. 현재 페이지에서 WinAnsi로 표현 가능한 텍스트만 표시합니다.</p>'+
+          '<label for="sourceBatchRows" style="display:block;margin:12px 0 6px">원문 수정 목록 (최대 8줄)</label>'+
+          '<textarea id="sourceBatchRows" class="dialog-input" rows="8" maxlength="5000" '+
+          'spellcheck="false" style="width:100%;min-height:150px;white-space:pre;resize:vertical" '+
+          'placeholder="1&#9;INVOICE 2026&#9;INVOICE 2027&#10;2&#9;STATUS DRAFT&#9;STATUS FINAL"></textarea>'+
+          '<input id="sourceBatchPlanFile" type="file" accept=".tsv,.txt,text/plain,text/tab-separated-values" hidden>'+ 
+          '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">'+
+          '<button type="button" class="dialog-btn" id="sourceBatchImport">로컬 TSV 불러오기</button>'+
+          '<button type="button" class="dialog-btn" id="sourceBatchExport">수정 목록 TSV 저장</button>'+
+          '</div>'+
+          '<div id="sourceBatchPreview" role="region" aria-label="수정 대상 미리보기" '+
+          'style="max-height:170px;overflow:auto;margin-top:10px"></div>'+
+          '<p id="sourceBatchStatus" role="status" aria-live="polite">'+
+          '문구가 정확히 일치하는지 사전 점검한 후 적용할 수 있습니다. 원본 PDF는 유지됩니다.</p>',
+        footerHtml:'<div></div><div class="modal-footer-right">'+
+          '<button type="button" class="dialog-btn" id="sourceBatchInspect">수정 항목 미리보기</button>'+
+          '<button type="button" class="dialog-btn primary" id="sourceBatchApply" disabled>전체 원문 수정</button>'+
+          '<button type="button" class="dialog-btn" id="sourceBatchCancel">취소</button></div>',
+        onMount:()=>{
+          const input=document.getElementById('sourceBatchRows');
+          const status=document.getElementById('sourceBatchStatus');
+          const preview=document.getElementById('sourceBatchPreview');
+          const inspect=document.getElementById('sourceBatchInspect');
+          const apply=document.getElementById('sourceBatchApply');
+          const find=document.getElementById('sourceBatchFind');
+          const pick=document.getElementById('sourceBatchCandidate');
+          const candidatePageInput=document.getElementById('sourceBatchCandidatePage');
+          const candidateNew=document.getElementById('sourceBatchCandidateNew');
+          const insert=document.getElementById('sourceBatchInsert');
+          const candidateStatus=document.getElementById('sourceBatchCandidateStatus');
+          const importButton=document.getElementById('sourceBatchImport');
+          const exportButton=document.getElementById('sourceBatchExport');
+          const planFile=document.getElementById('sourceBatchPlanFile');
+          let serial=0,checked=null,candidateSerial=0,candidatePage=0,candidates=[];
+          const current=()=>activeDoc()===doc&&doc.bytes===source&&
+            doc.pdfJsDoc===reader&&saveStateIsCurrent(doc,captured)&&input.isConnected;
+          const invalidate=()=>{
+            ++serial;checked=null;apply.disabled=true;
+            preview.replaceChildren();
+          };
+          document.getElementById('sourceBatchCancel').addEventListener('click',()=>{++candidateSerial;closeModal();});
+          input.addEventListener('input',()=>{
+            invalidate();
+            status.textContent='수정 목록이 변경되었습니다. 다시 미리보기로 확인해 주세요.';
+          });
+          candidatePageInput.addEventListener('input',()=>{
+            ++candidateSerial;candidatePage=0;candidates=[];
+            pick.disabled=true;insert.disabled=true;pick.replaceChildren();
+            candidateStatus.textContent='페이지가 변경되었습니다. 후보를 다시 읽어 주세요.';
+          });
+          // R29: discover exact WinAnsi PDF.js text items without requiring
+          // users to type existing strings. Eligibility is still finally
+          // checked by the PDF content-stream engine at apply time.
+          find.addEventListener('click',async()=>{
+            if(!current()||doc.operationBusy||find.disabled)return;
+            const own=++candidateSerial,pageNumber=Number(candidatePageInput.value);
+            if(!Number.isSafeInteger(pageNumber)||pageNumber<1||pageNumber>doc.pageCount){
+              candidateStatus.textContent='원문 후보 탐색 페이지 번호를 확인하세요.';return;
+            }
+            candidatePage=0;candidates=[];pick.disabled=true;insert.disabled=true;
+            pick.replaceChildren();find.disabled=true;
+            candidateStatus.textContent=pageNumber+'쪽 원문 후보를 읽고 있습니다.';
+            try{
+              const page=await reader.getPage(pageNumber);
+              const items=(await page.getTextContent()).items;
+              if(!current()||own!==candidateSerial||Number(candidatePageInput.value)!==pageNumber)return;
+              const counts=new Map(),order=[];
+              for(const item of items){
+                const value=item?.str;
+                if(typeof value!=='string'||!window.SunriseSpecialPdf.isSourceTextCandidate(value))continue;
+                if(!counts.has(value))order.push(value);
+                counts.set(value,(counts.get(value)||0)+1);
+              }
+              candidates=order.filter(x=>counts.get(x)===1).slice(0,100);
+              for(let i=0;i<candidates.length;i++){
+                const option=document.createElement('option');
+                option.value=String(i);option.textContent=(i+1)+'. '+candidates[i].slice(0,90);
+                pick.appendChild(option);
+              }
+              if(!candidates.length){
+                candidateStatus.textContent='이 페이지에서 중복 없는 WinAnsi 텍스트 조각을 찾지 못했습니다.';
+                return;
+              }
+              candidatePage=pageNumber;pick.disabled=false;insert.disabled=false;
+              candidateNew.value=candidates[0];
+              candidateStatus.textContent=candidates.length+'개 후보. 수정문을 변경한 뒤 목록에 추가하세요.';
+            }catch(error){
+              if(current()&&own===candidateSerial)
+                candidateStatus.textContent='원문 후보 읽기 실패: '+String(error?.message||error);
+            }finally{if(find.isConnected)find.disabled=false;}
+          });
+          pick.addEventListener('change',()=>{
+            const value=candidates[Number(pick.value)];
+            if(value)candidateNew.value=value;
+          });
+          insert.addEventListener('click',()=>{
+            if(!current()||doc.operationBusy||!candidatePage||candidatePage!==Number(candidatePageInput.value)){
+              candidateStatus.textContent='후보 탐색 페이지가 변경되었습니다. 해당 페이지 후보를 다시 읽어 주세요.';
+              insert.disabled=true;return;
+            }
+            const original=candidates[Number(pick.value)],replacement=candidateNew.value;
+            if(!original||!window.SunriseSpecialPdf.isSourceTextCandidate(replacement)||
+               replacement===original||replacement.length!==original.length){
+              candidateStatus.textContent='같은 길이의 다른 WinAnsi 문구를 입력해야 합니다.';return;
+            }
+            const row=candidatePage+'\t'+original+'\t'+replacement;
+            const combined=input.value.trim()?input.value.replace(/\n+$/,'')+'\n'+row:row;
+            try{
+              engine.parseSourceTextBatch(combined,doc.pageCount);
+              if(combined.length>5000)throw Error('수정 목록 5,000자를 초과했습니다.');
+              input.value=combined;invalidate();
+              status.textContent='수정 항목을 추가했습니다. 미리보기를 다시 실행해 주세요.';
+              candidateStatus.textContent='후보 '+original+' → '+replacement+' 추가됨';
+            }catch(error){candidateStatus.textContent='목록 추가 실패: '+String(error?.message||error);}
+          });
+          // Both import and export are local-only; no server or D1 transfer.
+          importButton.addEventListener('click',()=>{
+            if(current()&&!doc.operationBusy)planFile.click();
+          });
+          planFile.addEventListener('change',async()=>{
+            const file=planFile.files?.[0];planFile.value='';
+            if(!file||!current()||doc.operationBusy)return;
+            try{
+              if(file.size>5000)throw Error('TSV 파일이 5,000바이트를 초과합니다.');
+              const content=(await file.text()).replace(/^\uFEFF/,'');
+              if(!current()||doc.operationBusy)return;
+              engine.parseSourceTextBatch(content,doc.pageCount);
+              input.value=content;invalidate();
+              status.textContent='로컬 TSV를 불러왔습니다. 수정 항목 미리보기로 확인하세요.';
+            }catch(error){
+              if(current())status.textContent='TSV 불러오기 실패: '+String(error?.message||error);
+            }
+          });
+          exportButton.addEventListener('click',()=>{
+            if(!current()||doc.operationBusy)return;
+            try{
+              const edits=engine.parseSourceTextBatch(input.value,doc.pageCount);
+              const bytes=new TextEncoder().encode(engine.serializeSourceTextBatch(edits,doc.pageCount));
+              downloadBytes(bytes,'Sunrise_PDF_원문수정계획.tsv','text/tab-separated-values;charset=utf-8');
+              status.textContent='TSV를 로컬에 저장했습니다. 개인·기밀 문구가 포함될 수 있으니 파일을 보호하세요.';
+            }catch(error){status.textContent='TSV 저장 중단: '+String(error?.message||error);}
+          });
+          inspect.addEventListener('click',async()=>{
+            if(!current()||doc.operationBusy||inspect.disabled)return;
+            invalidate();
+            const own=serial,raw=input.value;
+            inspect.disabled=true;apply.disabled=true;
+            try{
+              const edits=engine.parseSourceTextBatch(raw,doc.pageCount);
+              const grouped=new Map();
+              for(const edit of edits){
+                const arr=grouped.get(edit.pageNumber)||[];
+                arr.push(edit);grouped.set(edit.pageNumber,arr);
+              }
+              status.textContent='PDF 텍스트 레이어를 읽고 '+edits.length+'개 문구를 확인하고 있습니다.';
+              for(const [pageNumber,group] of grouped){
+                const page=await reader.getPage(pageNumber);
+                if(!current()||serial!==own||input.value!==raw)return;
+                const layer=await page.getTextContent();
+                if(!current()||serial!==own||input.value!==raw)return;
+                const strings=layer.items.map(item=>item.str).filter(value=>typeof value==='string');
+                for(const edit of group){
+                  const matches=strings.filter(value=>value===edit.original).length;
+                  if(matches!==1)
+                    throw Error(pageNumber+'쪽의 "'+edit.original.slice(0,35)+'" 문구는 '+
+                      matches+'개 발견됐습니다. 정확히 1개인 항목만 수정할 수 있습니다.');
+                }
+              }
+              if(!current()||serial!==own||input.value!==raw)return;
+              const table=document.createElement('table');
+              table.style.cssText='width:100%;border-collapse:collapse;font-size:12px';
+              const head=document.createElement('thead');
+              const header=document.createElement('tr');
+              for(const title of ['쪽','현재 문구','변경 문구']){
+                const th=document.createElement('th');th.textContent=title;
+                th.style.cssText='padding:5px;border-bottom:1px solid #bbb;text-align:left';
+                header.appendChild(th);
+              }
+              head.appendChild(header);table.appendChild(head);
+              const body=document.createElement('tbody');
+              for(const edit of edits){
+                const row=document.createElement('tr');
+                for(const value of [edit.pageNumber,edit.original,edit.replacement]){
+                  const td=document.createElement('td');td.textContent=String(value);
+                  td.style.cssText='padding:5px;border-bottom:1px solid #ddd;overflow-wrap:anywhere';
+                  row.appendChild(td);
+                }
+                body.appendChild(row);
+              }
+              table.appendChild(body);preview.replaceChildren(table);
+              checked={raw,edits};
+              apply.disabled=false;
+              status.textContent=edits.length+'개 문구를 확인했습니다. 글꼴·PDF 구조는 적용 시 최종 판정합니다.';
+            }catch(error){
+              if(current()&&serial===own)
+                status.textContent='사전 점검 실패: '+String(error?.message||error);
+            }finally{if(inspect.isConnected)inspect.disabled=false;}
+          });
+          apply.addEventListener('click',async()=>{
+            if(!current()||doc.operationBusy||!checked||checked.raw!==input.value)return;
+            const edits=checked.edits;
+            doc.operationBusy=true;apply.disabled=true;inspect.disabled=true;input.disabled=true;
+            const finish=beginOperationMetric('source_text_replace');
+            let outcome='failed',info=null;
+            try{
+              const output=await engine.replaceSimpleSourceTextBatch({
+                bytes:source,edits,PDFLib:window.PDFLib,cancelled:()=>!current(),
+                onProgress:progress=>{
+                  if(current())status.textContent=progress.done+'/'+progress.total+
+                    '개 원문 수정 완료 — PDF 구조를 보존하며 처리 중';
+                }
+              });
+              if(!current()){outcome='cancelled';return;}
+              info=await parsePageCountAndMeta(output.bytes);
+              if(info.pageCount!==doc.pageCount)
+                throw Error('일괄 수정 후 페이지 수가 달라져 적용을 거부합니다.');
+              const grouped=new Map();
+              for(const edit of edits){
+                const group=grouped.get(edit.pageNumber)||[];
+                group.push(edit);grouped.set(edit.pageNumber,group);
+              }
+              for(const [pageNumber,group] of grouped){
+                if(!current()){outcome='cancelled';return;}
+                const page=await info.pdfJsDoc.getPage(pageNumber);
+                const strings=(await page.getTextContent()).items.map(item=>item.str);
+                if(!current()){outcome='cancelled';return;}
+                for(const edit of group){
+                  if(strings.filter(x=>x===edit.replacement).length!==1||strings.includes(edit.original))
+                    throw Error(pageNumber+'쪽의 수정 후 텍스트를 확인할 수 없어 전체 적용을 중단했습니다.');
+                }
+              }
+              if(!current()){outcome='cancelled';return;}
+              saveUndoSnapshot(doc,'PDF 원문 여러 곳 직접 수정 ('+edits.length+'개)');
+              doc.bytes=output.bytes;
+              await reloadDocPdfJs(doc,{info});
+              info=null;outcome='succeeded';
+              closeModal();await refreshAllViews();
+              showToast(edits.length+'개 원문 수정 완료. 다른 이름으로 저장해 주세요.','fa-file-pen');
+            }catch(error){
+              if(current())status.textContent='일괄 수정 미적용: '+String(error?.message||error);
+            }finally{
+              if(info)info.pdfJsDoc.destroy().catch(()=>{});
+              doc.operationBusy=false;
+              if(apply.isConnected)apply.disabled=false;
+              if(inspect.isConnected)inspect.disabled=false;
+              if(input.isConnected)input.disabled=false;
+              finish(outcome);
+            }
+          });
         }
       });
     }
@@ -7993,6 +8596,9 @@
           마스크를 기재하지 않은 페이지도 이미지로 재생성하므로 원본의 페이지를 빠뜨리지 않습니다.
           새 PDF에 원본 텍스트·양식·첨부·북마크·편집 메타데이터를 복사하지 않지만,
           <strong>가리지 않은 이미지·글자는 여전히 보입니다. 문서 전체 개인정보 자동 탐지·완전 삭제를 보장하지 않습니다.</strong>
+          지정한 사각형 내부의 모든 출력 픽셀을 확인하고 이미지 기반 PDF 구조를 검사합니다.
+          텍스트 레이어에서 주민번호·전화·이메일·사업자번호 및 Luhn 확인 카드번호 <strong>형식</strong> 후보를 찾아 검토할 수 있지만
+          이미지·일부 멀리 떨어진 분절 문구·기타 개인정보는 탐지하지 못합니다. 인접한 텍스트 조각을 이어 형식 후보를 확인하더라도 0건은 안전 보장을 의미하지 않습니다.
           원본 PDF는 변경하지 않습니다. 서명·양식이나 편집기 삽입 항목이 있는 문서는 출력하지 않습니다.
         </div>
         <p style="font-size:12px;margin:8px 0">한 줄에 <strong>페이지,X,Y,너비,높이</strong> (쉼표 구분, 왼쪽 위 pt).
@@ -8042,6 +8648,13 @@
           <button type="button" id="maskPlanCheck" class="dialog-btn">대상 페이지·영역 검증</button>
           <span id="maskPlanPreview" style="font-size:12px;color:var(--muted)" role="status">아직 검증하지 않았습니다.</span>
         </div>
+        <div style="border:1px solid var(--border);border-radius:6px;padding:9px;margin:8px 0">
+          <button type="button" id="maskSensitiveReview" class="dialog-btn">텍스트 개인정보 후보 탐색</button>
+          <p id="maskSensitiveStatus" role="status" aria-live="polite" style="font-size:12px;margin:6px 0">출력 전에 후보를 살펴보세요. 스캔 이미지·그림 속 정보는 탐지하지 못합니다.</p>
+          <label style="display:flex;gap:8px;font-size:12px">
+            <input type="checkbox" id="maskSensitiveAcknowledged"> 후보 목록과 남는 정보 위험을 직접 검토했습니다.
+          </label>
+        </div>
         <label style="display:flex;gap:8px;margin:10px 0">
           <input id="maskConfirmed" type="checkbox"> 선택한 출력 범위에 따라 새 이미지 기반 PDF를 생성하며,
           마스킹하지 않은 부분의 개인정보는 여전히 노출될 수 있음을 확인했습니다.
@@ -8057,6 +8670,9 @@
           const lines=document.getElementById("maskPlanLines");
           const preview=document.getElementById("maskPlanPreview");
           const check=document.getElementById("maskPlanCheck");
+          const reviewButton=document.getElementById("maskSensitiveReview");
+          const reviewStatus=document.getElementById("maskSensitiveStatus");
+          const reviewConfirmed=document.getElementById("maskSensitiveAcknowledged");
           const scope=document.getElementById("maskExportScope");
           const scopeDetails=document.getElementById("maskScopeDetails");
           const confirmed=document.getElementById("maskConfirmed");
@@ -8071,10 +8687,15 @@
           const drawRemove=document.getElementById("maskDrawRemove");
           const drawApply=document.getElementById("maskDrawApply");
           const editInputs=["maskEditX","maskEditY","maskEditW","maskEditH"].map(id=>document.getElementById(id));
-          let stopped=false,running=false,validated=null;
+          let stopped=false,running=false,scanning=false,validated=null,reviewed=null;
+          const captured=captureSaveState(doc,false);
+          const resetReview=()=>{
+            reviewed=null;reviewConfirmed.checked=false;
+            reviewStatus.textContent="마스크 또는 출력 범위가 변경되어 개인정보 후보 탐색을 다시 해야 합니다.";
+          };
           const scopeMode=()=>scope.value==="all";
           const updateScope=()=>{
-            validated=null;confirmed.checked=false;
+            validated=null;confirmed.checked=false;resetReview();
             scopeDetails.textContent=scopeMode()?
               "원본 "+reader.numPages+"쪽을 모두 새 이미지 PDF로 출력합니다(최대 30쪽). 가리지 않은 부분은 계속 보입니다.":
               "목록에 있는 페이지 "+'만 출력하며 목록에 없는 페이지는 제외합니다.';
@@ -8082,13 +8703,13 @@
           };
           scope.addEventListener("change",updateScope);updateScope();
           const valid=()=>!stopped&&activeDoc()===doc&&doc.pdfJsDoc===reader&&
-            doc.bytes===source&&doc.currentPage===index&&status.isConnected&&
+            doc.bytes===source&&saveStateIsCurrent(doc,captured)&&doc.currentPage===index&&status.isConnected&&
             document.getElementById("modalBackdrop")?.classList.contains("open")&&
             document.getElementById("maskExportBtn")===submit;
           let previewGeneration=0,previewTask=null,drawnPage=0,drawSize=null,drag=null;
           const planLines=()=>lines.value.split(/\r?\n/).map(row=>row.trim()).filter(Boolean);
           const invalidate=()=>{
-            validated=null;confirmed.checked=false;
+            validated=null;confirmed.checked=false;resetReview();
             preview.textContent="영역이 변경되었습니다. 다시 검증해 주세요.";
           };
           const chosenPage=()=>Number(drawPage.value);
@@ -8276,6 +8897,41 @@
           check.addEventListener("click",()=>{
             try{inspect()}catch(error){validated=null;preview.textContent="검증 실패: "+(error?.message||error);}
           });
+          reviewButton.addEventListener("click",async()=>{
+            if(scanning||running||!valid())return;
+            let plan;
+            try{plan=inspect();}catch(error){reviewStatus.textContent="후보 탐색 준비 실패: "+error.message;return;}
+            scanning=true;reviewButton.disabled=true;submit.disabled=true;
+            reviewed=null;reviewConfirmed.checked=false;
+            const input=lines.value,entire=scopeMode();
+            try{
+              const targets=entire?Array.from({length:reader.numPages},(_,i)=>i+1):
+                plan.map(item=>item.pageNumber);
+              const records=[];
+              for(const pageNumber of targets){
+                if(!valid()||input!==lines.value||entire!==scopeMode())throw Error("후보 탐색 중 문서 또는 영역이 변경됐습니다.");
+                reviewStatus.textContent=pageNumber+"쪽 텍스트 레이어를 확인하는 중입니다.";
+                const page=await reader.getPage(pageNumber);
+                const viewport=page.getViewport({scale:1});
+                let content=null,unreadable=false;
+                try{content=await page.getTextContent();}catch{unreadable=true;}
+                records.push({pageNumber,width:viewport.width,height:viewport.height,
+                  rotation:viewport.rotation,items:content?.items||[],unreadable});
+              }
+              const result=window.SunriseSpecialPdf.reviewSensitiveTextCandidates({pages:records,plan});
+              if(!valid()||input!==lines.value||entire!==scopeMode())return;
+              reviewed={input,entire,result};
+              reviewStatus.textContent="형식 후보 "+result.candidates+"건 (분절 텍스트 "+result.fragmentedCandidates+"건 포함) / 마스크 밖 "+result.outside+
+                "건 ("+(result.outsidePages.length?result.outsidePages.join(", ")+"쪽":"없음")+") / 위치 전체 포함 "+result.covered+
+                "건 / 텍스트 없는 쪽 "+result.imageOnlyPages+" / 판독 제외 "+result.skippedPages+
+                "쪽. 실제 개인정보는 더 남을 수 있습니다.";
+            }catch(error){
+              if(reviewStatus.isConnected)reviewStatus.textContent="후보 탐색 실패: "+(error?.message||error);
+            }finally{
+              scanning=false;if(reviewButton.isConnected)reviewButton.disabled=false;
+              if(submit.isConnected&&!running)submit.disabled=false;
+            }
+          });
           document.getElementById("maskExportClose").addEventListener("click",()=>{
             stopped=true;previewGeneration++;
             previewTask?.cancel();drag=null;
@@ -8283,7 +8939,10 @@
             else closeModal();
           });
           submit.addEventListener("click",async()=>{
-            if(!valid()||running||doc.operationBusy)return;
+            if(!valid()||running||scanning||doc.operationBusy)return;
+            if(!reviewed||reviewed.input!==lines.value||reviewed.entire!==scopeMode()||!reviewConfirmed.checked){
+              showToast("개인정보 텍스트 후보를 탐색하고 남는 정보 위험을 검토해 주세요.","fa-triangle-exclamation");return;
+            }
             if(!confirmed.checked){
               showToast("출력 페이지와 남는 정보에 대한 확인이 필요합니다.","fa-triangle-exclamation");return;
             }
@@ -8300,6 +8959,7 @@
             }catch(error){status.textContent="사전 검사 실패: "+(error?.message||error);return;}
             const finish=beginOperationMetric("page_extract");let outcome="failed";
             running=true;submit.disabled=true;check.disabled=true;lines.disabled=true;scope.disabled=true;confirmed.disabled=true;
+            reviewButton.disabled=true;reviewConfirmed.disabled=true;
             drawPage.disabled=true;drawPrev.disabled=true;drawNext.disabled=true;drawRegions.disabled=true;drawRemove.disabled=true;
             drawApply.disabled=true;editInputs.forEach(field=>{field.disabled=true;});
             try{
@@ -8311,6 +8971,9 @@
                   "쪽 처리 · 검정 영역 "+p.maskCount+"개 적용 중…";}
               });
               if(!valid())throw Error("변환 중 문서가 변경되었습니다.");
+              status.textContent="저장될 PDF를 다시 열어 텍스트·주석·첨부와 마스크 픽셀을 검사합니다.";
+              await window.SunriseSpecialPdf.auditMaskedOutput({bytes:output.bytes,pdfjsLib:window.pdfjsLib,plan,sourcePages:output.sourcePages,cancelled:()=>!valid()});
+              if(!valid())throw Error("결과 검사 중 문서가 변경되었습니다.");
               const basename=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,65)||"document";
               downloadBytes(output.bytes,basename+(output.includeUnmaskedPages?"_all_pages_masked_":"_masked_")+output.pages+"pages.pdf","application/pdf");
               status.textContent=output.pages+"쪽 / "+output.maskCount+
@@ -8321,8 +8984,387 @@
               if(stopped)outcome="cancelled";
             }finally{
               running=false;if(status.isConnected){submit.disabled=false;check.disabled=false;lines.disabled=false;scope.disabled=false;confirmed.disabled=false;
+                reviewButton.disabled=false;reviewConfirmed.disabled=false;
                 drawPage.disabled=false;drawPrev.disabled=false;drawNext.disabled=false;drawRegions.disabled=false;updateMaskList();}
               finish(outcome);
+            }
+          });
+        }
+      });
+    }
+
+    function openLosslessCompressionModal(doc) {
+      if(!doc||doc.operationBusy||!window.SunrisePdfProtect?.compressPdf)return;
+      const captured=captureSaveState(doc),current=()=>activeDoc()===doc&&saveStateIsCurrent(doc,captured);
+      openModal({title:'무손실 PDF 압축',icon:'fa-box-archive',width:'550px',
+        bodyHtml:'<p>이미지 해상도·색상과 도면을 바꾸지 않고 PDF 내부 스트림을 재압축합니다. 파일에 따라 용량이 줄지 않을 수 있습니다. 최대 20MiB·200쪽이며 기존 서명·XFA는 지원하지 않습니다.</p><p id="losslessStatus" role="status">압축할 문서를 확인하세요.</p><div id="losslessOutput"></div>',
+        footerHtml:'<button id="losslessRun" type="button" class="dialog-btn primary">무손실 압축</button><button id="losslessClose" type="button" class="dialog-btn">닫기</button>',
+        onMount:()=>{
+          const get=id=>document.getElementById(id),run=get('losslessRun'),status=get('losslessStatus'),close=get('losslessClose');
+          let controller=null,running=false;
+          const valid=()=>status.isConnected&&get('modalBackdrop').classList.contains('open')&&current();
+          const observer=new MutationObserver(()=>{if(!valid()){controller?.abort();observer.disconnect();}});observer.observe(get('modalBackdrop'),{attributes:true,attributeFilter:['class']});
+          close.addEventListener('click',()=>{controller?.abort();closeModal();});
+          run.addEventListener('click',async()=>{
+            if(running||!valid())return;running=true;run.disabled=true;controller=new AbortController();get('losslessOutput').replaceChildren();
+            try{
+              const original=await window.PDFLib.PDFDocument.load(doc.bytes,{updateMetadata:false});window.SunrisePdfProtect.assertUnsignedPdf(original,window.PDFLib);
+              const compiled=await compileDocumentWithOverlays(captured.snapshot);if(!valid())return;
+              status.textContent='문서 스트림을 재압축하고 구조를 확인합니다.';
+              const result=await window.SunrisePdfProtect.compressPdf({bytes:compiled,signal:controller.signal});if(!valid())return;
+              await verifySavedPdfBytes(compiled,result.bytes);if(!valid())return;
+              const button=document.createElement('button');button.type='button';button.className='dialog-btn primary';button.textContent='압축 결과 다운로드';
+              const filename=doc.name.replace(/\.pdf$/i,'')+'_lossless.pdf';button.addEventListener('click',()=>downloadBytes(result.bytes,filename));get('losslessOutput').append(button);
+              status.textContent=(compiled.length/1048576).toFixed(2)+' MiB → '+(result.bytes.length/1048576).toFixed(2)+' MiB'+(result.bytes.length>=compiled.length?' · 용량 감소가 없어 원본 바이트를 유지했습니다.':' · 이미지 재인코딩 없이 압축했습니다.');
+            }catch(error){if(valid())status.textContent=error.name==='AbortError'?'압축을 취소했습니다.':error.message;}
+            finally{running=false;controller=null;if(run.isConnected)run.disabled=false;}
+          });
+        }});
+    }
+
+    // USR-14 DEV4: encryption is performed by locally bundled qpdf WASM in
+    // a dedicated Worker; the editor's unencrypted PDF stays unchanged.
+    function openPdfPasswordProtectionModal(doc) {
+      if (!doc || doc.operationBusy || activeDoc() !== doc) return;
+      if (!window.SunrisePdfProtect?.protectPdf) {
+        showToast('PDF 암호 보호 엔진을 불러오지 못했습니다.', 'fa-circle-exclamation');
+        return;
+      }
+      const captured = captureSaveState(doc, false);
+      const isCurrent = () => activeDoc() === doc && !doc.operationBusy && saveStateIsCurrent(doc, captured);
+      openModal({
+        title: 'PDF 열기 암호 설정 · AES-256 (실험 기능)',
+        icon: 'fa-lock', width: '580px',
+        bodyHtml: `
+          <div class="dialog-info-box">
+            <strong>별도의 AES-256 암호 보호 PDF</strong>를 생성합니다. 원본 파일은 변경하지 않습니다.
+            PDF 내용은 브라우저 안의 WebAssembly에서 처리하며 서버로 업로드되지 않습니다.
+            보호 파일은 비밀번호를 잃어버리면 복구하지 못할 수 있습니다.
+            별도 소유자 암호를 설정하지 않으면 임의의 강력한 소유자 암호가 생성됩니다. 생성된 소유자 암호는 따로 저장·제공하지 않습니다.
+            <strong>이 기능은 아직 실기검증 전이며 기존 전자서명·XFA는 거부하며 일반 PDF 양식은 보존합니다.</strong>
+          </div>
+          <div class="dialog-form-grid" style="margin-top:12px">
+            <label for="pdfProtectPassword">PDF 열기 비밀번호 (12자 이상, UTF-8 최대 127바이트)</label>
+            <input id="pdfProtectPassword" class="dialog-input" type="password" minlength="12" maxlength="127" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+            <label for="pdfProtectConfirm">열기 비밀번호 확인</label>
+            <input id="pdfProtectConfirm" class="dialog-input" type="password" minlength="12" maxlength="127" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+            <label for="pdfProtectOwnerPassword">소유자 암호 (선택·열기 암호와 달라야 함)</label>
+            <input id="pdfProtectOwnerPassword" class="dialog-input" type="password" minlength="12" maxlength="127" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="비워두면 임의의 강력한 소유자 암호 생성">
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;margin-top:12px">
+            <input id="pdfProtectAcknowledged" type="checkbox" style="margin-top:4px">
+            <span>비밀번호를 별도로 보관했으며, 암호화 후 수정하려면 다시 암호를 풀어야 한다는 점을 확인했습니다.</span>
+          </label>
+          <p id="pdfProtectStatus" role="status" aria-live="polite">두 비밀번호를 동일하게 입력한 뒤 실행하세요.</p>`,
+        footerHtml: '<div></div><div class="modal-footer-right">' +
+          '<button type="button" id="pdfProtectStart" class="dialog-btn primary">AES-256 암호 보호 PDF 생성</button>' +
+          '<button type="button" id="pdfProtectClose" class="dialog-btn">취소 / 닫기</button></div>',
+        onMount: () => {
+          const input = document.getElementById('pdfProtectPassword');
+          const confirm = document.getElementById('pdfProtectConfirm');
+          const ownerInput = document.getElementById('pdfProtectOwnerPassword');
+          const acknowledged = document.getElementById('pdfProtectAcknowledged');
+          const status = document.getElementById('pdfProtectStatus');
+          const button = document.getElementById('pdfProtectStart');
+          const backdrop = document.getElementById('modalBackdrop');
+          let running = false, controller = null;
+          const watching = new MutationObserver(() => {
+            if (!backdrop.classList.contains('open') || !status.isConnected) {
+              controller?.abort(); watching.disconnect();
+              input.value = ''; confirm.value = ''; ownerInput.value = '';
+            }
+          });
+          watching.observe(backdrop, {attributes:true,attributeFilter:['class']});
+          document.getElementById('pdfProtectClose').addEventListener('click', () => {
+            controller?.abort(); input.value=''; confirm.value=''; ownerInput.value=''; closeModal();
+          });
+          button.addEventListener('click', async () => {
+            if (running || !isCurrent() || !status.isConnected || !backdrop.classList.contains('open')) {
+              if(status.isConnected) status.textContent='문서가 변경되었습니다. 암호 설정 창을 다시 열어 주세요.';
+              return;
+            }
+            if(input.value !== confirm.value || !acknowledged.checked) {
+              status.textContent='비밀번호 두 개를 동일하게 입력하고 확인란을 선택하세요.';
+              return;
+            }
+            let password = input.value, ownerPassword = ownerInput.value;
+            try {
+              window.SunrisePdfProtect.validatePassword(password);
+              if(ownerPassword){
+                window.SunrisePdfProtect.validatePassword(ownerPassword);
+                if(ownerPassword===password)throw Error('소유자 암호는 열기 암호와 달라야 합니다.');
+              }
+            }catch(error) { status.textContent = String(error?.message || '비밀번호 형식 오류'); return; }
+            // Remove DOM secrets before starting the asynchronous PDF processing.
+            input.value='';confirm.value='';ownerInput.value='';
+            running=true;button.disabled=true;acknowledged.disabled=true;
+            controller = new AbortController();
+            status.textContent='원본 PDF 상태와 기존 서명 구조를 확인하고 있습니다.';
+            try {
+              const frozen = {
+                ...doc,
+                overlays:JSON.parse(JSON.stringify(doc.overlays)),
+                bookmarks:JSON.parse(JSON.stringify(doc.bookmarks)),
+                metadata:JSON.parse(JSON.stringify(doc.metadata)),
+                attachments:doc.attachments.map(a=>({...a,bytes:a.bytes}))
+              };
+              if (!isCurrent()) throw Error('암호 보호 실행 전 문서가 변경되었습니다.');
+              // Check the *original* PDF, before any flatten/save step can remove
+              // certification or signature structure. Never invalidate a signature.
+              const originalPdf = await window.PDFLib.PDFDocument.load(doc.bytes,{updateMetadata:false});
+              const n = window.PDFLib.PDFName.of;
+              window.SunrisePdfProtect.assertUnsignedPdf(originalPdf,window.PDFLib);
+              const compiled = await compileDocumentWithOverlays(frozen);
+              if (!isCurrent() || controller.signal.aborted || !status.isConnected || !backdrop.classList.contains('open'))
+                throw Error('암호 보호 처리 도중 문서 또는 창이 변경됐습니다.');
+              if (compiled.byteLength > window.SunrisePdfProtect.LIMIT_BYTES)
+                throw Error('20MiB를 초과하는 PDF는 이 암호 보호 기능에서 지원하지 않습니다.');
+              const pdf = await window.PDFLib.PDFDocument.load(compiled,{updateMetadata:false});
+              window.SunrisePdfProtect.assertUnsignedPdf(pdf,window.PDFLib);
+              if (pdf.getPageCount() > 200) throw Error('이 기능은 최대 200쪽 PDF까지 지원합니다.');
+              status.textContent='브라우저 내 QPDF WASM으로 AES-256 암호를 적용하고 결과를 확인하고 있습니다.';
+              const result = await window.SunrisePdfProtect.protectPdf({
+                bytes:compiled instanceof Uint8Array ? compiled : new Uint8Array(compiled),
+                password, ownerPassword, signal:controller.signal
+              });
+              if(!isCurrent() || controller.signal.aborted || !status.isConnected || !backdrop.classList.contains('open'))
+                throw Error('암호 보호 결과를 저장하기 전에 문서 또는 창이 변경됐습니다.');
+              if(result.pages !== pdf.getPageCount()) throw Error('암호 보호 결과 페이지 수가 다릅니다.');
+              const fileName = (doc.name.replace(/\.pdf$/i,'') || 'document')
+                .replace(/[\\/:*?"<>|]/g,'_').slice(0,100) + '_AES256_protected.pdf';
+              downloadBytes(result.bytes,fileName,'application/pdf');
+              status.textContent = 'AES-256 암호 보호 PDF 다운로드를 요청했습니다. 별도의 PDF 뷰어에서 비밀번호 입력과 내용·페이지 표시를 확인하세요.';
+            } catch (error) {
+              if(status.isConnected && backdrop.classList.contains('open'))
+                status.textContent = error?.name === 'AbortError' ? '암호 보호 작업을 취소했습니다.' :
+                  '암호 보호 PDF 생성 실패: ' + String(error?.message || '처리할 수 없습니다.');
+            } finally {
+              password = null; ownerPassword = null; controller = null; running = false;
+              if(button.isConnected) { button.disabled=false; acknowledged.disabled=false; }
+            }
+          });
+        }
+      });
+    }
+
+    // USR-14 DEV5: unlock an independently selected encrypted PDF without
+    // first loading it in PDF.js (the editor cannot open encrypted PDFs yet).
+    function openPdfPasswordUnlockModal(){
+      const engine=window.SunrisePdfProtect;
+      if(!engine?.unlockPdf){
+        showToast('PDF 암호 해제 엔진을 불러오지 못했습니다.','fa-circle-exclamation');
+        return;
+      }
+      openModal({
+        title:'PDF 열기 암호 해제 · 별도 파일',icon:'fa-lock-open',width:'560px',
+        bodyHtml:`<div class="dialog-info-box">
+          이미 암호가 설정된 PDF를 <strong>별도 파일</strong>로 해제합니다. 열기 암호를 알고 있어야 하며,
+          원본 파일은 수정하지 않습니다. 브라우저 안의 QPDF WebAssembly를 이용하는 <strong>미검증 실험 기능</strong>입니다.
+          서명·권한·복잡한 객체가 있는 PDF는 내용 보존을 별도 뷰어에서 확인해야 합니다.
+          </div>
+          <div class="dialog-form-grid" style="margin-top:12px">
+            <label for="pdfUnlockFile">암호화된 원본 PDF (20MiB 이하)</label>
+            <input id="pdfUnlockFile" class="dialog-input" type="file" accept=".pdf,application/pdf">
+            <label for="pdfUnlockPassword">PDF 열기 비밀번호</label>
+            <input id="pdfUnlockPassword" class="dialog-input" type="password" autocomplete="off" spellcheck="false">
+          </div>
+          <p id="pdfUnlockStatus" role="status" aria-live="polite">해제할 PDF와 해당 파일의 열기 암호를 선택하세요.</p>`,
+        footerHtml:'<div></div><div class="modal-footer-right">'+
+          '<button type="button" id="pdfUnlockRun" class="dialog-btn primary">암호 해제 PDF 생성</button>'+
+          '<button type="button" id="pdfUnlockClose" class="dialog-btn">취소 / 닫기</button></div>',
+        onMount:()=>{
+          const fileInput=document.getElementById('pdfUnlockFile');
+          const passwordInput=document.getElementById('pdfUnlockPassword');
+          const status=document.getElementById('pdfUnlockStatus');
+          const button=document.getElementById('pdfUnlockRun');
+          const backdrop=document.getElementById('modalBackdrop');
+          let busy=false,controller=null;
+          const observer=new MutationObserver(()=>{
+            if(!backdrop.classList.contains('open')||!status.isConnected){
+              controller?.abort();passwordInput.value='';observer.disconnect();
+            }
+          });
+          observer.observe(backdrop,{attributes:true,attributeFilter:['class']});
+          document.getElementById('pdfUnlockClose').addEventListener('click',()=>{
+            controller?.abort();passwordInput.value='';closeModal();
+          });
+          button.addEventListener('click',async()=>{
+            if(busy)return;
+            const sourceFile=fileInput.files?.[0];
+            if(!sourceFile||sourceFile.size<100||sourceFile.size>engine.LIMIT_BYTES){
+              status.textContent='PDF 파일을 선택하세요. 지원 크기는 100바이트~20MiB입니다.';return;
+            }
+            let password=passwordInput.value;
+            if(!password){status.textContent='PDF 열기 암호를 입력하세요.';return;}
+            passwordInput.value='';busy=true;button.disabled=true;fileInput.disabled=true;
+            controller=new AbortController();
+            try{
+              status.textContent='암호화된 PDF를 불러와 암호를 확인하고 있습니다.';
+              const input=new Uint8Array(await sourceFile.arrayBuffer());
+              if(controller.signal.aborted||!status.isConnected||!backdrop.classList.contains('open'))return;
+              const result=await engine.unlockPdf({bytes:input,password,signal:controller.signal});
+              if(controller.signal.aborted||!status.isConnected||!backdrop.classList.contains('open'))return;
+              const filename=(sourceFile.name.replace(/\.pdf$/i,'')||'document')
+                .replace(/[\\/:*?"<>|]/g,'_').slice(0,100)+'_unlocked.pdf';
+              downloadBytes(result.bytes,filename,'application/pdf');
+              status.textContent='암호 해제 PDF 다운로드를 요청했습니다. 독립 뷰어에서 내용과 페이지를 확인하세요.';
+            }catch(error){
+              if(status.isConnected&&backdrop.classList.contains('open'))
+                status.textContent=error?.name==='AbortError'?'암호 해제 작업을 취소했습니다.':
+                  'PDF 암호 해제 실패: '+String(error?.message||'처리할 수 없습니다.');
+            }finally{
+              password=null;passwordInput.value='';controller=null;busy=false;
+              if(button.isConnected){button.disabled=false;fileInput.disabled=false;}
+            }
+          });
+        }
+      });
+    }
+
+    function openCertificateVerificationModal(doc) {
+      if(!doc||!window.SunrisePdfCms?.verifyPdfSignature)return;
+      const source=doc.bytes;
+      openModal({title:'인증서 서명 무결성 검사',icon:'fa-shield-halved',width:'590px',
+        bodyHtml:'<p>단일 RSA-SHA256/CMS 서명과 최종 파일의 ByteRange 해시를 검사합니다. 인증서 발급기관 신뢰·폐기·타임스탬프·법적 효력이나 모든 PAdES 규격을 판정하는 검사는 아닙니다.</p><p id="certificateVerifyStatus" role="status">검사를 시작하세요.</p><div id="certificateVerifyResult"></div>',
+        footerHtml:'<button id="certificateVerifyRun" class="dialog-btn primary" type="button">서명 무결성 검사</button><button id="certificateVerifyClose" class="dialog-btn" type="button">닫기</button>',
+        onMount:()=>{
+          const button=document.getElementById('certificateVerifyRun'),status=document.getElementById('certificateVerifyStatus'),host=document.getElementById('certificateVerifyResult');
+          const valid=()=>status.isConnected&&document.getElementById('modalBackdrop').classList.contains('open')&&activeDoc()===doc&&doc.bytes===source;
+          document.getElementById('certificateVerifyClose').addEventListener('click',closeModal);
+          button.addEventListener('click',async()=>{
+            if(!valid()||button.disabled)return;button.disabled=true;host.replaceChildren();status.textContent='파일 전체 해시와 CMS 서명을 확인하고 있습니다.';
+            try{
+              const result=await window.SunrisePdfCms.verifyPdfSignature({bytes:source,PDFLib:window.PDFLib});if(!valid())return;
+              status.textContent='서명 암호학적 무결성 확인: '+(result.cryptographicIntegrity?'일치':'불일치')+' / 현재 인증서 유효기간: '+(result.certificateCurrentlyValid?'기간 내':'기간 밖')+'. 발급기관 신뢰·폐기·타임스탬프는 미확인입니다.';
+              const save=document.createElement('button');save.type='button';save.className='dialog-btn';save.textContent='검사 결과 JSON 저장';
+              save.addEventListener('click',()=>downloadBytes(new TextEncoder().encode(JSON.stringify(result,null,2)),'signature_integrity_report.json','application/json'));host.append(save);
+            }catch(error){if(valid())status.textContent='서명을 확인하지 못했습니다: '+error.message;}
+            finally{if(button.isConnected)button.disabled=false;}
+          });
+        }});
+    }
+
+    // USR-15 DEV3: detached certificate signature; the resulting PDF is a
+    // new download. Never mutate the editor document after signing it.
+    function openCertificateSignatureModal(doc) {
+      if (!doc || doc.operationBusy || activeDoc() !== doc) return;
+      const signer = window.SunrisePdfCms;
+      if (!signer?.signPdfWithPem) {
+        showToast('인증서 서명 처리 엔진이 없습니다.', 'fa-circle-exclamation');
+        return;
+      }
+      const captured = captureSaveState(doc, false);
+      const current = () => activeDoc() === doc && !doc.operationBusy && saveStateIsCurrent(doc, captured);
+      openModal({
+        title: '인증서 전자서명 · PEM·P12/PFX (실험 기능)',
+        icon: 'fa-file-signature', width: '620px',
+        bodyHtml: `
+          <div class="dialog-info-box">
+            브라우저 내부에서 <strong>SHA-256 / RSA·CMS 분리형 전자서명</strong>을 생성합니다.
+            원본은 수정하지 않고 새 PDF를 다운로드합니다. 서명 후 PDF를 다시 저장하거나 변경하면
+            서명이 무효화될 수 있습니다.
+            <strong>인증서 신뢰·폐기 상태·타임스탬프·PAdES 적합성은 검증하지 않습니다.</strong>
+            지원: PEM X.509 인증서와 일반 PKCS#8 또는 PBES2/PBKDF2/AES-256-CBC 암호화 PKCS#8 RSA 개인키(2048~4096비트).
+            P12/PFX의 RSA 인증서·개인키도 가져올 수 있습니다. 일반 PDF 양식은 보존합니다. 일반 기존 서명은 원본 바이트를 보존하며 추가 서명합니다. 변경 제한이 있는 인증 서명·공동인증서 저장소·스마트카드·XFA는 지원하지 않습니다.
+          </div>
+          <div class="dialog-form-grid" style="margin-top:12px">
+            <label for="cmsInputMode">인증서 형식</label>
+            <select id="cmsInputMode" class="dialog-select"><option value="pem">PEM 인증서 + 개인키</option><option value="p12">P12/PFX 파일</option></select>
+            <label for="cmsContainerFile">P12/PFX 파일 (선택한 형식이 P12/PFX일 때)</label>
+            <input id="cmsContainerFile" class="dialog-input" type="file" accept=".p12,.pfx">
+            <label for="cmsRootFile">신뢰할 루트 인증서 PEM (선택, 본인이 확인한 발급기관)</label>
+            <input id="cmsRootFile" class="dialog-input" type="file" accept=".pem,.crt,.cer">
+            <label for="cmsCertFile">X.509 인증서 PEM (체인 포함 가능)</label>
+            <input id="cmsCertFile" class="dialog-input" type="file" accept=".pem,.crt,.cer,text/plain">
+            <label for="cmsKeyFile">개인키 PEM (PKCS#8, 암호화된 키도 지원)</label>
+            <input id="cmsKeyFile" class="dialog-input" type="file" accept=".pem,.key,text/plain">
+            <label for="cmsKeyPassword">개인키 또는 P12/PFX 비밀번호</label>
+            <input id="cmsKeyPassword" class="dialog-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="일반 개인키는 비워두세요">
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:8px;margin:12px 0">
+            <input id="cmsConfirm" type="checkbox" style="margin-top:4px">
+            <span>개인키는 이 브라우저에서만 읽으며, 출력 후 변경하면 서명이 무효화될 수 있다는 점을 확인했습니다.</span>
+          </label>
+          <p id="cmsStatus" role="status" aria-live="polite">인증서와 개인키를 선택하세요. 개인키를 웹사이트에 업로드하지 않습니다.</p>`,
+        footerHtml: '<div></div><div class="modal-footer-right">' +
+          '<button type="button" id="cmsSignBtn" class="dialog-btn primary">인증서 서명 PDF 생성</button>' +
+          '<button type="button" id="cmsCancelBtn" class="dialog-btn">닫기</button></div>',
+        onMount: () => {
+          const modeInput=document.getElementById('cmsInputMode'),containerInput=document.getElementById('cmsContainerFile'),rootInput=document.getElementById('cmsRootFile');
+          const certInput = document.getElementById('cmsCertFile');
+          const keyInput = document.getElementById('cmsKeyFile');
+          const keyPasswordInput = document.getElementById('cmsKeyPassword');
+          const confirmInput = document.getElementById('cmsConfirm');
+          const status = document.getElementById('cmsStatus');
+          const button = document.getElementById('cmsSignBtn');
+          let working = false,controller=null;
+          const sync=()=>{const p12=modeInput.value==='p12';containerInput.disabled=!p12;certInput.disabled=keyInput.disabled=p12;};
+          modeInput.addEventListener('change',sync);sync();
+          const backdrop = document.getElementById('modalBackdrop');
+          const modalActive = () => status.isConnected && backdrop.classList.contains('open');
+          const observer = new MutationObserver(() => {
+            if(!modalActive()){
+              controller?.abort();keyPasswordInput.value=''; observer.disconnect();
+            }
+          });
+          observer.observe(backdrop,{attributes:true,attributeFilter:['class']});
+          document.getElementById('cmsCancelBtn').addEventListener('click', () => {
+            controller?.abort();keyPasswordInput.value=''; keyInput.value=''; certInput.value='';containerInput.value=''; closeModal();
+          });
+          button.addEventListener('click', async () => {
+            if (working || !modalActive() || !current()) {
+              if (status.isConnected) status.textContent = '편집 문서가 변경되었습니다. 창을 다시 열어 주세요.';
+              return;
+            }
+            const p12=modeInput.value==='p12';
+            const certFile = certInput.files?.[0], keyFile = keyInput.files?.[0],containerFile=containerInput.files?.[0],rootFile=rootInput.files?.[0];
+            if ((p12?!containerFile:!certFile||!keyFile) || !confirmInput.checked) {
+              status.textContent = '인증서·개인키 파일과 확인 항목을 모두 선택하세요.';
+              return;
+            }
+            if ((p12?containerFile.size>512*1024:certFile.size > 128*1024 || keyFile.size > 48*1024)||(rootFile?.size||0)>128*1024) {
+              status.textContent = '인증서 또는 개인키 파일 크기가 제한을 초과합니다.';
+              return;
+            }
+            working = true;controller=new AbortController(); button.disabled = true;modeInput.disabled=containerInput.disabled=rootInput.disabled=true;
+            certInput.disabled = true;keyInput.disabled = true;keyPasswordInput.disabled = true;confirmInput.disabled = true;
+            status.textContent = '서명할 PDF를 준비하고 인증서와 키 쌍을 확인하고 있습니다.';
+            let privateKeyPem = null, certificatePem = null,containerBytes=null;
+            let keyPassword = keyPasswordInput.value;
+            keyPasswordInput.value = '';
+            try {
+              // Snapshot guard covers overlays, bookmarks, attachments and metadata.
+              const frozen = captured.snapshot || {
+                ...doc, overlays: JSON.parse(JSON.stringify(doc.overlays)),
+                bookmarks: JSON.parse(JSON.stringify(doc.bookmarks)),
+                metadata: JSON.parse(JSON.stringify(doc.metadata)),
+                attachments: doc.attachments.map(a => ({...a, bytes:a.bytes}))
+              };
+              let trustAnchorsPem=rootFile?await rootFile.text():null;
+              if(p12)containerBytes=new Uint8Array(await containerFile.arrayBuffer());
+              else{const [certText,keyText]=await Promise.all([certFile.text(),keyFile.text()]);certificatePem=certText;privateKeyPem=keyText;}
+              if (!current() || !modalActive()) throw Error('서명 도중 문서 또는 창이 변경되었습니다.');
+              const pdfBytes = await compileDocumentWithOverlays(frozen);
+              if (!current() || !modalActive()) throw Error('서명 도중 문서 또는 창이 변경되었습니다.');
+              status.textContent = 'CMS 서명을 생성하고 PDF ByteRange를 확인하고 있습니다.';
+              const signingOptions={bytes:pdfBytes instanceof Uint8Array?pdfBytes:new Uint8Array(pdfBytes),PDFLib:window.PDFLib,signal:controller.signal,trustAnchorsPem,incremental:true};
+              const output=p12?await window.SunrisePki.signPdfWithPkcs12({...signingOptions,container:containerBytes,password:keyPassword}):await signer.signPdfWithPem({...signingOptions,certificatePem,privateKeyPem,keyPassword,profile:'cades'});
+              if (!current() || !modalActive()) throw Error('서명 완료 전 문서 또는 창이 변경되었습니다.');
+              const baseName = doc.name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_').slice(0,100);
+              downloadBytes(output.bytes, baseName + '_cert_signed.pdf');
+              status.textContent = '서명 PDF 다운로드를 요청했습니다. '+(output.pkiTrustVerified?'선택한 루트 기준 체인 확인 완료. ':'인증서 신뢰 미확인. ')+'폐기 상태·타임스탬프·외부 뷰어 적합성은 확인하지 않았습니다.';
+            } catch (error) {
+              if (modalActive()) status.textContent = '서명 파일 생성 실패: ' + String(error?.message || error);
+            } finally {
+              // The private key is not stored in application state or browser storage.
+              containerBytes?.fill(0);containerBytes=null;privateKeyPem = null; certificatePem = null; keyPassword = null;controller=null;
+              keyPasswordInput.value = '';
+              keyInput.value = ''; certInput.value = '';containerInput.value='';
+              working = false;
+              if (button.isConnected) {
+                button.disabled = false;modeInput.disabled=rootInput.disabled=false;sync();
+                keyPasswordInput.disabled = false;confirmInput.disabled = false;
+              }
             }
           });
         }
@@ -8375,7 +9417,9 @@
         onMount: () => {
           document.getElementById("insCancelBtn").addEventListener("click", closeModal);
           document.getElementById("insConfirmBtn").addEventListener("click", () => {
-            const text = document.getElementById("insTextInput").value.replace(/\r\n?/g,"\n").trim() || defaultText;
+            const rawText=document.getElementById("insTextInput").value.replace(/\r\n?/g,"\n").trim();
+            const text=type==="Text"?rawText:(rawText||defaultText);
+            if(!text){showToast("삽입할 문구를 입력하세요.","fa-triangle-exclamation");return;}
             let fontSize,textWidth;
             try {
               if(text.length>4000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(text))throw Error("문구는 4000자 이내이며 제어문자를 포함할 수 없습니다.");
@@ -8398,8 +9442,15 @@
 
             const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
             try {
-            saveUndoSnapshot(doc, `${title}: ${text}`);
             const targetPages = scope === "all" ? Array.from({ length: doc.pageCount }, (_, i) => i) : [doc.currentPage];
+            // Refuse unknown geometry: never place text outside an unusually small page.
+            if(targetPages.some(index=>{
+              const box=doc.pageSizes?.[index];
+              return !box||![box.width,box.height].every(Number.isFinite)||
+                box.width<90||box.height<90||
+                (type==="Text"&&box.width<defaults.x+40);
+            }))throw Error("삽입할 페이지의 크기가 너무 작거나 확인되지 않아 문구를 배치할 수 없습니다.");
+            saveUndoSnapshot(doc, `${title}: ${text}`);
             let lastId = null;
             targetPages.forEach((pIdx) => {
               const id = `ov_${overlayIdCounter++}`;
@@ -8449,8 +9500,9 @@
         throw new Error("표의 각 행은 같은 개수의 셀(2~8열)을 가져야 합니다.");
       return cells.map(row => row.map(cell => {
         const text = String(cell ?? "").trim();
-        if (text.length > 80 || /[\r\n\t]/.test(text))
-          throw new Error("셀 내용은 줄바꿈 없이 80자 이내로 작성해 주세요.");
+        if (text.length > 80 || /[\u0000-\u001F\u007F\uFFFE\uFFFF]/.test(text) ||
+            /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(text))
+          throw new Error("셀 내용은 80자 이내의 유효한 텍스트여야 하며 제어 문자를 포함할 수 없습니다.");
         return text;
       }));
     }
@@ -9115,20 +10167,86 @@
       if (hit.kind==="page") showToast("이 결과는 페이지 위치만 표시됩니다.","fa-circle-info");
     }
 
+    function openAdvancedOfficeExport(doc,format) {
+      if(!doc||doc.operationBusy||doc.officeExportBusy)return;
+      const visual=format==='docx-visual',mixed=format==='docx-mixed',excel=format==='xlsx-grids';
+      const captured=captureSaveState(doc),current=()=>activeDoc()===doc&&saveStateIsCurrent(doc,captured);
+      openModal({title:visual?'Word 원본 모양 유지':mixed?'Word 글자·표·이미지 혼합 복원':excel?'Excel 표·병합 셀 복원':'Word 표·병합 셀 복원',icon:excel?'fa-file-excel':'fa-file-word',width:'620px',
+        bodyHtml:'<p>'+(mixed?'글자는 편집 가능한 텍스트 상자, 명확한 표는 셀, 내장 이미지는 개별 그림으로 저장합니다. 원본 글꼴과 문단 흐름은 근사치이며 도형·잘림·회전 이미지·세로쓰기는 지원 범위가 제한됩니다. 최대 30쪽·40개 이미지입니다.':visual?'페이지 전체를 이미지로 Word에 넣습니다. 그림·도형·글꼴 모양을 유지하며, Word에서 글자를 직접 편집하는 방식은 아닙니다. 최대 30쪽입니다.':'명확한 바깥 테두리와 가로·세로 선이 있는 표를 분석해 편집 가능한 병합 셀을 만듭니다. 표 밖 문구도 보관합니다. 분리된 여러 표를 각각 복원하며 표가 없는 페이지의 원문도 유지합니다. 셀 경계가 모호하면 변환을 중단합니다. 최대 50쪽·50개 표/시트입니다.')+'</p><p>현재 문서의 편집 내용을 포함합니다. OCR은 사용하지 않습니다.</p><p id="advancedOfficeStatus" role="status" aria-live="polite">변환 준비</p><div id="advancedOfficeOutput"></div>',
+        footerHtml:'<button id="advancedOfficeStart" class="dialog-btn primary" type="button">변환 시작</button><button id="advancedOfficeClose" class="dialog-btn" type="button">닫기</button>',
+        onMount:()=>{
+          const get=id=>document.getElementById(id),start=get('advancedOfficeStart'),close=get('advancedOfficeClose'),status=get('advancedOfficeStatus');
+          let running=false,stopped=false,renderTask=null;
+          const valid=()=>!stopped&&status.isConnected&&get('modalBackdrop').classList.contains('open')&&current();
+          const abort=()=>{if(!valid())throw new DOMException('변환 취소 또는 문서 변경','AbortError');};
+          close.addEventListener('click',()=>{stopped=true;renderTask?.cancel();if(!running)closeModal();else status.textContent='변환을 취소하고 있습니다.';});
+          start.addEventListener('click',async()=>{
+            if(running||!valid())return;
+            running=true;doc.officeExportBusy=true;start.disabled=true;close.textContent='작업 취소';
+            let info=null;const pages=[];let totalImageBytes=0;
+            try{
+              if(doc.pageCount>(visual||mixed?30:50))throw Error('지원 페이지 수를 초과했습니다. PDF를 나누어 변환하세요.');
+              status.textContent='현재 편집 내용을 준비하고 있습니다.';
+              const compiled=await compileDocumentWithOverlays(captured.snapshot);abort();
+              info=await parsePageCountAndMeta(compiled);abort();
+              for(let i=0;i<info.pdfJsDoc.numPages;i++){
+                abort();status.textContent=(i+1)+'/'+info.pdfJsDoc.numPages+'쪽을 변환합니다.';
+                const page=await info.pdfJsDoc.getPage(i+1),viewport=page.getViewport({scale:1});
+                if(visual){
+                  const scaled=page.getViewport({scale:1.5}),canvas=document.createElement('canvas');
+                  canvas.width=Math.ceil(scaled.width);canvas.height=Math.ceil(scaled.height);
+                  if(canvas.width*canvas.height>14000000)throw Error('페이지 이미지가 너무 큽니다.');
+                  try{
+                    const ctx=canvas.getContext('2d',{alpha:false});if(!ctx)throw Error('페이지 이미지를 만들지 못했습니다.');
+                    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+                    renderTask=page.render({canvasContext:ctx,canvas,viewport:scaled});await renderTask.promise;renderTask=null;abort();
+                    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob?.size)throw Error('페이지 이미지 저장에 실패했습니다.');
+                    totalImageBytes+=blob.size;if(totalImageBytes>60*1024*1024)throw Error('페이지 이미지 합계가 60MiB를 초과했습니다.');
+                    pages.push({width:viewport.width,height:viewport.height,png:new Uint8Array(await blob.arrayBuffer())});
+                  }finally{canvas.width=0;canvas.height=0;}
+                }else{
+                  const text=await page.getTextContent();abort();
+                  const images=mixed?await window.SunriseEmbeddedImages.placements(page,{OPS:window.pdfjsLib.OPS,ImageKind:window.pdfjsLib.ImageKind,cancelled:()=>!valid()}):[];abort();
+                  totalImageBytes+=images.reduce((sum,image)=>sum+image.png.length,0);if(totalImageBytes>60*1024*1024)throw Error('내장 이미지가 60MiB를 초과했습니다.');
+                  pages.push({width:viewport.width,height:viewport.height,rotation:viewport.rotation,items:text.items,styles:text.styles,images});
+                }
+                await new Promise(resolve=>setTimeout(resolve,0));
+              }
+              abort();
+              let result;
+              if(visual)result=window.SunriseOfficeExport.docxVisual(pages);
+              else{
+                status.textContent='원본 표 선과 병합 셀을 분석합니다.';
+                const rules=await window.SunriseContentEditor.tableRules({bytes:compiled,PDFLib:window.PDFLib,pageNumbers:pages.map((_,i)=>i+1),cancelled:()=>!valid()});abort();
+                result=mixed?window.SunriseOfficeExport.docxMixed(pages,rules):excel?window.SunriseOfficeExport.xlsxGrids(pages,rules):window.SunriseOfficeExport.docxGrids(pages,rules);
+              }
+              abort();
+              const name=(doc.name.replace(/\.pdf$/i,'').replace(/[\\/:*?"<>|]/g,'_').slice(0,100)||'document')+(visual?'_page_images.docx':mixed?'_editable_mixed.docx':excel?'_merged_cells.xlsx':'_merged_cells.docx');
+              const button=document.createElement('button');button.type='button';button.className='dialog-btn primary';button.textContent='변환 파일 다운로드';
+              button.addEventListener('click',()=>downloadBytes(result,name,excel?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'));
+              get('advancedOfficeOutput').replaceChildren(button);status.textContent='변환 파일을 준비했습니다. 다운로드 후 내용을 확인하세요.';
+            }catch(error){if(status.isConnected)status.textContent=error.name==='AbortError'?'변환을 취소했습니다.':error.message;}
+            finally{renderTask?.cancel();if(info)await info.pdfJsDoc.destroy();pages.length=0;running=false;doc.officeExportBusy=false;if(start.isConnected){start.disabled=stopped;close.textContent='닫기';}}
+          });
+        }});
+    }
+
     async function exportOfficeText(doc,format) {
-      if(!["docx","xlsx"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
+      if(!["docx","docx-layout","docx-two-columns","docx-three-columns","docx-auto-columns","xlsx","xlsx-columns","xlsx-pages"].includes(format))throw Error("지원하지 않는 Office 변환 형식입니다.");
       if(!window.SunriseOfficeExport?.pageTextFromItems) {
         showToast("Office 텍스트 변환 모듈을 불러오지 못했습니다.","fa-triangle-exclamation");return;
       }
       if(doc.officeExportBusy)return;
       const reader=doc.pdfJsDoc,original=doc.bytes;
-      const unchanged=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===original;
+      const captured=captureSaveState(doc,false);
+      const unchanged=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===original&&
+        saveStateIsCurrent(doc,captured);
       const finish=beginOperationMetric("extract_text");let outcome="failed";
       doc.officeExportBusy=true;
       try {
         if(doc.pageCount>120)throw Error("Office 텍스트 변환은 최대 120쪽까지 지원합니다.");
         showToast("페이지별 줄바꿈을 판독합니다. 스캔 이미지 OCR은 지원하지 않습니다.","fa-file-lines");
-        const pages=[];
+        const pages=[],columnPages=[],layoutPages=[];
         for(let i=0;i<doc.pageCount;i++){
           if(!unchanged()){outcome="cancelled";return;}
           let content;
@@ -9141,18 +10259,48 @@
           }
           if(!unchanged()){outcome="cancelled";return;}
           pages.push(window.SunriseOfficeExport.pageTextFromItems(content?.items));
+          if(format==="xlsx-columns")columnPages.push(content?.items);
+          if(format==="docx-layout"||format==="docx-two-columns"||format==="docx-three-columns"||format==="docx-auto-columns"){
+            const viewport=(await reader.getPage(i+1)).getViewport({scale:1});
+            layoutPages.push({items:content?.items,styles:content?.styles,
+              width:viewport.width,height:viewport.height,rotation:viewport.rotation});
+          }
         }
         if(!pages.some(text=>text.trim()))throw Error("PDF 텍스트 레이어가 없습니다. 이미지 기반 문서의 OCR은 지원하지 않습니다.");
-        const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):window.SunriseOfficeExport.xlsx(pages);
+        const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):
+          format==="docx-layout"?window.SunriseOfficeExport.docxLayout(layoutPages):
+          format==="docx-two-columns"?window.SunriseOfficeExport.docxTwoColumn(layoutPages):
+          format==="docx-three-columns"?window.SunriseOfficeExport.docxThreeColumn(layoutPages):
+          format==="docx-auto-columns"?window.SunriseOfficeExport.docxAutoColumns(layoutPages):
+          format==="xlsx-pages"?window.SunriseOfficeExport.xlsxPerPage(pages):
+          format==="xlsx-columns"?window.SunriseOfficeExport.xlsxColumns(columnPages):
+          window.SunriseOfficeExport.xlsx(pages);
         if(!unchanged()){outcome="cancelled";return;}
         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
-        downloadBytes(bytes,stem+"_text_only."+format,
-          format==="docx"?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        downloadBytes(bytes,stem+(format==="xlsx-columns"?"_columns.xlsx":
+          format==="xlsx-pages"?"_page_sheets.xlsx":
+          format==="docx-layout"?"_layout_estimate.docx":
+          format==="docx-two-columns"?"_two_columns_estimate.docx":
+          format==="docx-three-columns"?"_three_columns_estimate.docx":
+          format==="docx-auto-columns"?"_auto_columns_estimate.docx":"_text_only."+format),
+          (format==="docx"||format==="docx-layout"||format==="docx-two-columns"||format==="docx-three-columns"||format==="docx-auto-columns")?"application/vnd.openxmlformats-officedocument.wordprocessingml.document":
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         showToast(format==="docx"?
           "줄 구분을 유지한 텍스트 Word를 저장합니다. 원래 PDF의 서식·이미지는 변환되지 않습니다.":
+          format==="docx-layout"?
+          "글자 크기·제목·정렬·일부 규칙적인 표를 추정한 Word입니다. 원본 이미지·도형·병합 셀·완전한 배치는 복원되지 않습니다.":
+          format==="docx-two-columns"?
+          "좌·우 두 단의 텍스트를 편집 가능한 Word 2열 표로 추정했습니다. 원본 그림·표·머리글은 복원되지 않습니다.":
+          format==="docx-three-columns"?
+          "가로 세 단의 텍스트를 편집 가능한 Word 3열 표로 추정했습니다. 다른 열과 겹치는 문구는 지원하지 않습니다.":
+          format==="docx-auto-columns"?
+          "페이지별로 1·2·3단을 추정합니다. 구조가 모호하면 저장하지 않으며 이미지는 변환하지 않습니다.":
+          format==="xlsx-pages"?
+          "원본 PDF 페이지마다 편집 가능한 Excel 시트를 만들었습니다. 최대 50쪽이며 표 셀은 복원하지 않습니다.":
+          format==="xlsx-columns"?
+          "정렬된 PDF 텍스트의 열 좌표를 기준으로 Excel을 저장합니다. 원래 표의 선·병합 셀은 복원하지 않습니다.":
           "줄 구분을 유지한 Excel을 저장합니다. 원래 PDF의 표 구조는 복원하지 않습니다.",
-          format==="docx"?"fa-file-word":"fa-file-excel");
+          (format==="docx"||format==="docx-layout"||format==="docx-two-columns"||format==="docx-three-columns"||format==="docx-auto-columns")?"fa-file-word":"fa-file-excel");
         outcome="succeeded";
       }catch(error){
         showToast("Office 텍스트 변환 실패: "+String(error?.message||error),"fa-triangle-exclamation");
@@ -9429,6 +10577,7 @@
       if (pdf.catalog.has(n("Perms")) || pdf.catalog.has(n("AcroForm")) ||
           nativeAnnotationHasMarker(originalBytes, "/ByteRange"))
         throw new Error("전자서명 또는 양식이 포함될 수 있는 PDF의 원본 주석 변경은 지원하지 않습니다.");
+      for(const [,object] of pdf.context.enumerateIndirectObjects())if(object?.get?.(n('ByteRange'))||object?.get?.(n('Type'))?.toString()==='/Sig')throw Error('전자서명 객체가 있는 PDF의 주석은 변경하지 않습니다.');
     }
 
     function listNativeAnnotations(pdf, pageIndex) {
@@ -9445,9 +10594,12 @@
         const dict = pdf.context.lookup(ref);
         if (!(dict instanceof PDFDict)) continue;
         const subtype = dict.get(n("Subtype"))?.toString();
-        if (subtype !== "/Text" && subtype !== "/Highlight") continue;
-        // Unsupported threads, popup relationships or special semantics remain untouched.
-        if (["Popup","IRT","Parent","RC","A","AA","StructParent","OC"].some(key => dict.has(n(key)))) continue;
+        if (!["/Text","/FreeText","/Highlight","/Underline","/StrikeOut","/Squiggly","/Square","/Circle"].includes(subtype)) continue;
+        // Automatic actions and structural/optional-content semantics remain untouched.
+        if (["Parent","A","AA","StructParent","OC"].some(key => dict.has(n(key))) || (subtype!=="/FreeText"&&dict.has(n("RC")))) continue;
+        const popup=dict.get(n('Popup')),reply=dict.get(n('IRT'));
+        if(popup&&(!(popup instanceof PDFRef)||!(pdf.context.lookup(popup) instanceof PDFDict)||pdf.context.lookup(popup).get(n('Subtype'))?.toString()!=='/Popup'))continue;
+        if(reply&&(!(reply instanceof PDFRef)||!(pdf.context.lookup(reply) instanceof PDFDict)))continue;
         const flags = dict.get(n("F"));
         if (flags && (!(flags instanceof PDFNumber) || (flags.asNumber() & (64|128|512)))) continue;
         const contents = dict.get(n("Contents"));
@@ -9468,9 +10620,9 @@
       const annots = pdf.getPage(pageIndex).node.Annots();
       const ref = annots.get(annotationIndex);
       if (ref.toString() !== candidate.ref) throw new Error("주석 참조가 변경되었습니다.");
-      // Refuse changes when another annotation depends on the target through
-      // a popup, reply or parent relationship, including on other pages.
+      // Inspect the complete relationship graph before any annotation mutation.
       let visited = 0, targetReferences = 0;
+      const related=new Map();
       for (const page of pdf.getPages()) {
         const others = page.node.Annots();
         if (!others) continue;
@@ -9479,26 +10631,84 @@
         for (let i = 0; i < others.size(); i++) {
           const otherRef = others.get(i), other = pdf.context.lookup(otherRef);
           if (!(other instanceof PDFDict)) continue;
+          if(related.has(otherRef.toString()))throw Error("여러 페이지가 공유하는 주석은 변경하지 않습니다.");
+          related.set(otherRef.toString(),other);
           if (otherRef.toString() === candidate.ref) {
             if (++targetReferences > 1) throw new Error("여러 위치에서 공유하는 원본 주석은 변경할 수 없습니다.");
             continue;
           }
-          if (["IRT","Parent","Popup"].some(key => other.get(n(key))?.toString() === candidate.ref))
-            throw new Error("다른 주석과 연결된 원본 주석은 변경할 수 없습니다.");
+
         }
       }
       if (targetReferences !== 1) throw new Error("원본 주석 참조를 확인할 수 없습니다.");
       if (action === "edit") {
-        if (typeof newText !== "string" || !newText.trim() || newText.length > 2000 || /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(newText))
-          throw new Error("주석 내용은 1~2000자이며 제어문자를 포함할 수 없습니다.");
+        if (typeof newText !== "string" || !newText.trim() || newText.length > 2000 ||
+            /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFE\uFFFF]/.test(newText) ||
+            /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(newText))
+          throw new Error("주석 내용은 1~2000자의 올바른 Unicode 문자열이어야 합니다.");
+        if (newText===candidate.text)
+          throw new Error("변경된 주석 내용이 없습니다.");
         const dict = pdf.context.lookup(ref);
         dict.set(n("Contents"), PDFHexString.fromText(newText));
       } else {
-        // Remove the page reference. This is not cryptographic sanitization.
-        annots.remove(annotationIndex);
-        if (!annots.size()) pdf.getPage(pageIndex).node.delete(n("Annots"));
+        // Delete the selected conversation's descendants and popup windows;
+        // deleting a reply never deletes its parent or sibling replies.
+        const removing=new Set([candidate.ref]);
+        for(let changed=true;changed;){
+          changed=false;
+          for(const [key,dict] of related){
+            if(removing.has(key)){
+              const popup=dict.get(n('Popup'));
+              if(popup){const child=related.get(popup.toString());if(!child||child.get(n('Subtype'))?.toString()!=='/Popup')throw Error('주석 팝업 연결을 확인할 수 없습니다.');if(!removing.has(popup.toString())){removing.add(popup.toString());changed=true;}}
+            }else if(['IRT','Parent'].some(name=>removing.has(dict.get(n(name))?.toString()))){removing.add(key);changed=true;}
+          }
+        }
+        for(const key of removing){
+          const dict=related.get(key),flags=pdf.context.lookup(dict.get(n('F')));
+          if(flags&&(!(flags instanceof window.PDFLib.PDFNumber)||(flags.asNumber()&(64|128|512))))throw Error('연결된 답글 또는 팝업이 잠겨 있어 삭제하지 않았습니다.');
+          if(['A','AA','StructParent','OC'].some(name=>dict.has(n(name)))||!['/Text','/FreeText','/Highlight','/Underline','/StrikeOut','/Squiggly','/Square','/Circle','/Popup'].includes(dict.get(n('Subtype'))?.toString()))throw Error('연결된 주석의 특수 구조를 안전하게 삭제할 수 없습니다.');
+        }
+        for(const page of pdf.getPages()){
+          const list=page.node.Annots();if(!list)continue;
+          for(let i=list.size()-1;i>=0;i--)if(removing.has(list.get(i).toString()))list.remove(i);
+          if(!list.size())page.node.delete(n('Annots'));
+        }
+        return {subtype:candidate.subtype,action,removedCount:removing.size};
       }
       return {subtype:candidate.subtype,action};
+    }
+
+    async function updateNativeAnnotationWithAppearance(pdf,bytes,pageIndex,index,action,text) {
+      const candidate=listNativeAnnotations(pdf,pageIndex).find(item=>item.index===index);
+      if(candidate?.subtype!=='FreeText'||action!=='edit')return updateNativeAnnotation(pdf,bytes,pageIndex,index,action,text);
+      nativeAnnotationGuard(pdf,bytes);
+      const lib=window.PDFLib,n=lib.PDFName.of,ctx=pdf.context,ref=pdf.getPage(pageIndex).node.Annots().get(index),dict=ctx.lookup(ref);
+      if(dict.has(n('CL'))||dict.has(n('Rotate'))||dict.has(n('RD')))throw Error('설명선·회전·안쪽 여백이 있는 FreeText는 외관 재생성을 지원하지 않습니다.');
+      const rect=ctx.lookup(dict.get(n('Rect')));
+      if(!(rect instanceof lib.PDFArray)||rect.size()!==4)throw Error('FreeText 표시 영역이 올바르지 않습니다.');
+      const box=Array.from({length:4},(_,i)=>ctx.lookup(rect.get(i))?.asNumber?.()),width=box[2]-box[0],height=box[3]-box[1];
+      if(!box.every(Number.isFinite)||width<=4||height<=4||width>14400||height>14400)throw Error('FreeText 표시 영역이 너무 작거나 큽니다.');
+      if(typeof text!=='string'||!text.trim()||text.length>2000)throw Error('주석 내용은 1~2000자로 입력하세요.');
+      const font=await window.SunriseKoreanFont.embed(pdf,[text]);
+      const da=ctx.lookup(dict.get(n('DA')))?.decodeText?.()||'',sizeMatch=/([0-9]+(?:\.[0-9]+)?)\s+Tf\b/.exec(da);
+      const size=sizeMatch?Number(sizeMatch[1]):12;
+      if(!Number.isFinite(size)||size<4||size>144)throw Error('FreeText 글자 크기를 처리할 수 없습니다.');
+      const lines=layoutOverlayText(text,font,size,width-4),leading=size*1.2;
+      if(lines.length*leading>height-4)throw Error('새 주석 내용이 기존 FreeText 상자 높이를 초과했습니다. 문구를 줄이세요.');
+      const q=ctx.lookup(dict.get(n('Q')))?.asNumber?.()||0;
+      if(![0,1,2].includes(q))throw Error('FreeText 정렬값이 올바르지 않습니다.');
+      const format=value=>String(Number(value.toFixed(5)));
+      const commands=['q','BT','/SunriseComment '+format(size)+' Tf','0 g'];
+      lines.forEach((line,i)=>{
+        const w=font.widthOfTextAtSize(line,size),x=q===1?(width-w)/2:q===2?width-w-2:2;
+        commands.push('1 0 0 1 '+format(x)+' '+format(height-2-size-i*leading)+' Tm '+font.encodeText(line).toString()+' Tj');
+      });
+      commands.push('ET','Q');
+      const appearance=ctx.register(ctx.flateStream(commands.join('\n'),{Type:'XObject',Subtype:'Form',BBox:[0,0,width,height],Resources:{Font:{SunriseComment:font.ref}}}));
+      const result=updateNativeAnnotation(pdf,bytes,pageIndex,index,action,text);
+      dict.set(n('AP'),ctx.obj({N:appearance}));dict.set(n('DA'),lib.PDFString.of('/SunriseComment '+format(size)+' Tf 0 g'));
+      dict.delete(n('RC'));dict.delete(n('DS'));
+      return result;
     }
 
     // Index the supported original annotations once for both management and CSV.
@@ -9538,17 +10748,17 @@
       const total=annotations.length;
       openModal({
         title:"원본 PDF 주석 관리 (전체 문서)", icon:"fa-comments", width:"620px",
-        bodyHtml:'<p style="font-size:12px">PDF 전체 페이지의 표준 메모(Text)·형광펜(Highlight) 주석을 찾아 문구를 수정하거나 페이지 참조를 삭제합니다. 원본 파일은 유지되며 PDF를 별도 저장해야 합니다.</p>' +
+        bodyHtml:'<p style="font-size:12px">PDF 전체 페이지의 표준 메모·형광펜·밑줄·취소선·물결선·사각형·원형 주석을 찾아 문구를 수정하거나 페이지 참조를 삭제합니다. 원본 파일은 유지되며 PDF를 별도 저장해야 합니다.</p>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">' +
           '<input type="search" id="nativeAnnotationSearch" class="dialog-input" placeholder="내용 또는 페이지 번호 검색" maxlength="120" style="flex:1;min-width:150px" aria-label="원본 주석 검색">' +
           '<select id="nativeAnnotationType" class="dialog-select" aria-label="원본 주석 종류">' +
-          '<option value="all">전체 유형</option><option value="Text">메모</option><option value="Highlight">형광펜</option></select></div>' +
+          '<option value="all">전체 유형</option><option value="Text">메모</option><option value="Highlight">형광펜</option><option value="Underline">밑줄</option><option value="StrikeOut">취소선</option><option value="Squiggly">물결선</option><option value="Square">사각형</option><option value="Circle">원형</option></select></div>' +
           '<div id="nativeAnnotationCount" role="status" aria-live="polite" style="font-size:12px;margin-bottom:6px"></div>' +
           '<label for="nativeAnnotationSelect">원본 PDF 주석 선택</label>' +
           '<select id="nativeAnnotationSelect" class="dialog-select" size="7" style="width:100%;max-height:190px;margin-top:5px" aria-label="원본 PDF 주석 목록"></select>' +
-          '<label for="nativeAnnotationText" style="display:block;margin-top:10px">선택 주석의 문구 (형광펜 영역·색상은 변경하지 않음)</label>' +
+          '<label for="nativeAnnotationText" style="display:block;margin-top:10px">선택 주석의 문구 (FreeText는 보이는 문구도 다시 생성)</label>' +
           '<textarea id="nativeAnnotationText" class="dialog-input" rows="4" maxlength="2000" style="width:100%"></textarea>' +
-          '<p id="nativeAnnotationStatus" role="status" aria-live="polite" style="font-size:12px">총 '+total+'건 조회. 서명·양식·연결 주석은 안전상 제외하며, 주석 삭제는 민감정보 완전 삭제가 아닙니다.</p>',
+          '<p id="nativeAnnotationStatus" role="status" aria-live="polite" style="font-size:12px">총 '+total+'건 조회. 서명·양식은 제외합니다. 문구 수정은 답글·팝업 연결을 유지합니다. 삭제하면 선택 주석의 하위 답글·팝업도 함께 제거합니다.</p>',
         footerHtml:'<div></div><div class="modal-footer-right">' +
           '<button type="button" class="dialog-btn" id="nativeAnnotationJump">선택 쪽으로 이동</button>' +
           '<button type="button" class="dialog-btn primary" id="nativeAnnotationEdit">문구 수정</button>' +
@@ -9582,7 +10792,7 @@
               (!query || item.text.toLocaleLowerCase("ko-KR").includes(query) ||
                 String(item.pageIndex+1).includes(query)));
             select.innerHTML=matching.map(item=>'<option value="'+item.pageIndex+':'+item.index+'">' +
-              (item.pageIndex+1)+'쪽 · '+(item.subtype==="Text"?"메모":"형광펜")+
+              (item.pageIndex+1)+'쪽 · '+({Text:"메모",Highlight:"형광펜",Underline:"밑줄",StrikeOut:"취소선",Squiggly:"물결선",Square:"사각형",Circle:"원형"}[item.subtype]||item.subtype)+
               ' · '+escapeHtml(item.text.slice(0,100)||"(내용 없음)")+'</option>').join("");
             const stillVisible=matching.some(item=>item.pageIndex+":"+item.index===previous);
             if(stillVisible)select.value=previous;
@@ -9611,7 +10821,7 @@
               status.textContent="문서 또는 주석이 변경되어 다시 열어야 합니다.";return;
             }
             if(action==="delete"&&!window.confirm(
-              (item.pageIndex+1)+"쪽 원본 주석을 화면에서 삭제할까요? 개인정보의 완전 삭제는 아닙니다."))return;
+              (item.pageIndex+1)+"쪽 선택 주석과 연결된 답글·팝업을 삭제할까요? 개인정보의 완전 삭제는 아닙니다."))return;
             doc.operationBusy=true;
             edit.disabled=true;remove.disabled=true;jump.disabled=true;
             search.disabled=true;type.disabled=true;select.disabled=true;closeButton.disabled=true;
@@ -9621,9 +10831,16 @@
               const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
               const fresh=listNativeAnnotations(pdf,item.pageIndex).find(a=>a.index===item.index && a.ref===item.ref);
               if(!fresh)throw new Error("주석 참조가 변경되어 작업을 중단했습니다.");
-              updateNativeAnnotation(pdf,originalBytes,item.pageIndex,item.index,action,textInput.value);
+              await updateNativeAnnotationWithAppearance(pdf,originalBytes,item.pageIndex,item.index,action,textInput.value);
               const next=await pdf.save({updateFieldAppearances:false});
               await verifySavedPdfBytes(originalBytes,next,{allowAnnotationChanges:true});
+              // Inspect the serialized annotation object, not just the editor state.
+              const saved=await window.PDFLib.PDFDocument.load(next,{updateMetadata:false});
+              const matches=listNativeAnnotations(saved,item.pageIndex).filter(a=>a.ref===item.ref);
+              if(action==="edit" && (matches.length!==1||matches[0].text!==textInput.value))
+                throw new Error("저장된 원본 주석 내용이 요청한 값과 일치하지 않습니다.");
+              if(action==="delete" && matches.length)
+                throw new Error("삭제한 원본 주석 참조가 출력 PDF에 남아 있습니다.");
               info=await parsePageCountAndMeta(next);
               if(!modalIsCurrent()){
                 outcome="cancelled";

@@ -1,0 +1,121 @@
+{
+  "release": "R35-DEV1",
+  "base": "R34-DEV1",
+  "dateKST": "2026-11-06",
+  "inputArchiveSha256": "256ac33aa6c712527b2bf218c2421787d501c5c4986d3273ac2625e17cc35782",
+  "historicalR34ValidationSha256": "1ea84f00fe8b33fe2f115f74be9269f373f355113c9f10b8575ea809de37c0ae",
+  "changed": [
+    {
+      "path": "README.md",
+      "change": "MODIFIED",
+      "sha256": "036659e3efe375cad19ee71d2f2da04232b7606d20612a7ad19d9e000af383ad",
+      "size": 2791
+    },
+    {
+      "path": "README_R35.md",
+      "change": "ADDED",
+      "sha256": "8011a5ea871021d1dac77029d8807d64b0bb4f8778bd567ac3b1a9bd5bec4f0e",
+      "size": 1831
+    },
+    {
+      "path": "docs/R35_CHANGESET.patch",
+      "change": "ADDED",
+      "sha256": "e9603728bb425078a4bac3337d85cfaf82006d08098ccf2956cc0a723e5e5fb3",
+      "size": 81592
+    },
+    {
+      "path": "docs/R35_IMPLEMENTATION.md",
+      "change": "ADDED",
+      "sha256": "9b4ac14067d083989d76496e8e65429af70fef2f45ded858dfabe6ff7772f534",
+      "size": 3814
+    },
+    {
+      "path": "docs/R35_VALIDATION.json",
+      "change": "ADDED",
+      "sha256": "79473d6396eade92e5c68af81e78f6005b753cf8d4eca880c8b7f0a254d4942e",
+      "size": 34324
+    },
+    {
+      "path": "package.json",
+      "change": "MODIFIED",
+      "sha256": "3d9c78b330cd211ff3e91aba6a61e8256bc671e71eacdd9c8c3106b7403d9fc0",
+      "size": 5678
+    },
+    {
+      "path": "scripts/verify-r34.cjs",
+      "change": "MODIFIED",
+      "sha256": "3f1e5e8b1cf549a6f0b2fb17d534f181267e2010585d1bd2de665e4620d1a0aa",
+      "size": 3173
+    },
+    {
+      "path": "src/assets/sunrise-content-editor.js",
+      "change": "MODIFIED",
+      "sha256": "50705f75d76ca1875e181e9a4f55bd92b0ab082f640790a5e46c7ba83516cd34",
+      "size": 38539
+    },
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "change": "MODIFIED",
+      "sha256": "ed29fcc7b3060161c633aa5c911b5f74d32521c9a57bcb2ccc8a5671e7476105",
+      "size": 41867
+    },
+    {
+      "path": "tests/bookmark-action-chain-contract.cjs",
+      "change": "MODIFIED",
+      "sha256": "d07ebe55e2aab80f6abab0b8c5119c31fdffba82dbcbb9427976262bd0314331",
+      "size": 4534
+    },
+    {
+      "path": "tests/bookmark-contract.cjs",
+      "change": "MODIFIED",
+      "sha256": "2c97c3c438549f7213bb47aa0aa7f60d5807004637970d3f27f8e0a34ce99239",
+      "size": 1876
+    },
+    {
+      "path": "tests/bookmark-page-guard-contract.cjs",
+      "change": "MODIFIED",
+      "sha256": "d69959a320753855fd39929ed959a7537430ea67b6fd7da98d7d2bd40bc7bbda",
+      "size": 3729
+    },
+    {
+      "path": "tests/bookmark-page-preservation-contract.cjs",
+      "change": "MODIFIED",
+      "sha256": "5f5769769e014eee15de0b4f8e08152113bf51b8ff0dfca03d2bec394784d4d7",
+      "size": 4430
+    },
+    {
+      "path": "tests/form-page-safety-contract.cjs",
+      "change": "MODIFIED",
+      "sha256": "1cbaa681c7df183e4b59ad274e1439871cd16f0208415b7c5719374d1f7b895e",
+      "size": 5798
+    },
+    {
+      "path": "tests/page-atomic-publish.cjs",
+      "change": "MODIFIED",
+      "sha256": "f8f5e51907e9e1d4f7749aac17e3f1c784090521deaa0864f4d729f77e573834",
+      "size": 3420
+    },
+    {
+      "path": "tests/r35-variable-cmap.cjs",
+      "change": "ADDED",
+      "sha256": "4bee6c99d3ca464ce3388d150957933c1a83856018154f7e1a9c6d1285395e1e",
+      "size": 3668
+    },
+    {
+      "path": "tests/synthetic-contract.cjs",
+      "change": "MODIFIED",
+      "sha256": "aba64f22ab52a9c10d1d026e5c00ba84ff41e0254089d86f883be08b5f4494ee",
+      "size": 5197
+    }
+  ],
+  "removed": [],
+  "excluded": [
+    "node_modules/",
+    ".git/"
+  ],
+  "limitations": [
+    "dist/ remains previous release until pinned terser successfully builds from src/",
+    "GitHub/Cloudflare/D1 not updated",
+    "Real browser and mobile acceptance not run"
+  ]
+}

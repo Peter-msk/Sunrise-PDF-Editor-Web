@@ -33,13 +33,20 @@
     const pages=pdf.getPages();
     if(!pages.length)throw Error('페이지가 없는 PDF입니다.');
     const N=PDFLib.PDFName.of,issues=[],orientation={portrait:0,landscape:0,square:0};
+    let countedErrors=0,countedReviews=0,omittedIssues=0;
     const emit=(severity,code,message,page)=>{
-      if(issues.length<MAX_ISSUES)issues.push({severity,code,message,...(page===undefined?{}:{page})});
+      if(severity==='error')countedErrors++;
+      else if(severity==='review')countedReviews++;
+      else throw Error('지원하지 않는 제출 품질 검사 결과입니다.');
+      if(issues.length<MAX_ISSUES-1)
+        issues.push({severity,code,message,...(page===undefined?{}:{page})});
+      else omittedIssues++;
     };
     const checkCancelled=()=>{if(opts?.cancelled?.())throw Error('검사가 취소되었습니다.');};
     const ctx=pdf.context;
     const resolve=value=>value?ctx.lookup(value):null;
-    let fontResources=0,formFields=0,emptyRequired=0,blankCandidates=0;
+    let fontResources=0,formFields=0,emptyRequired=0,blankCandidates=0,unembeddedFonts=0;
+    const inspectedFonts=new Set();
     for(let index=0;index<pages.length;index++){
       checkCancelled();
       const page=pages[index],box=page.getCropBox(),angle=((page.getRotation().angle%360)+360)%360;
@@ -69,6 +76,21 @@
                 const descriptor=resolve(ref);
                 if(!(descriptor instanceof PDFLib.PDFDict) || !descriptor.get(N('Subtype')))
                   emit('review','font-unresolved','글꼴 리소스 '+String(key)+'가 불완전하거나 판독할 수 없습니다.',index+1);
+                else if(!inspectedFonts.has(descriptor)){
+                  inspectedFonts.add(descriptor);
+                  let actual=descriptor;
+                  if(descriptor.get(N('Subtype'))?.toString()==='/Type0'){
+                    const descendants=resolve(descriptor.get(N('DescendantFonts')));
+                    actual=descendants instanceof PDFLib.PDFArray?resolve(descendants.get(0)):null;
+                  }
+                  if(descriptor.get(N('Subtype'))?.toString()==='/Type3'){
+                    if(!(resolve(descriptor.get(N('CharProcs'))) instanceof PDFLib.PDFDict))emit('review','font-type3-unresolved','Type3 글꼴의 글리프 프로그램을 확인하지 못했습니다.',index+1);
+                  }else{
+                    const metadata=resolve(actual?.get?.(N('FontDescriptor')));
+                    const embedded=['FontFile','FontFile2','FontFile3'].some(name=>resolve(metadata?.get?.(N(name))) instanceof PDFLib.PDFRawStream);
+                    if(!embedded){unembeddedFonts++;emit('review','font-not-embedded','내장 글꼴 파일이 없는 글꼴입니다. 다른 PC의 표시와 제출 요구를 확인하세요.',index+1);}
+                  }
+                }
               }catch{
                 emit('review','font-unresolved','글꼴 참조 '+String(key)+'를 읽지 못했습니다.',index+1);
               }
@@ -158,11 +180,14 @@
     }
     if(pages.length>scanPages)
       emit('review','partial-scan','앞쪽 '+scanPages+'쪽만 내용 표시를 검사했습니다. 나머지 '+(pages.length-scanPages)+'쪽은 수동 검토하세요.');
-    const errors=issues.filter(x=>x.severity==='error').length;
-    const reviews=issues.filter(x=>x.severity==='review').length;
+    if(omittedIssues)
+      issues.push({severity:'review',code:'issue-limit',
+        message:'검사 결과가 많아 '+omittedIssues+'건을 목록에서 생략했습니다. 건수에는 포함되며 원본을 직접 검토하세요.'});
+    const errors=countedErrors,reviews=countedReviews;
     return {
       bytes:bytes.byteLength,pageCount:pages.length,orientation,fontResources,formFields,emptyRequired,
-      scannedPages,blankCandidates,renderUnknown,errors,reviews,issues,
+      scannedPages,blankCandidates,renderUnknown,errors,reviews,issues,unembeddedFonts,
+      omittedIssues,totalDetectedIssues:countedErrors+countedReviews,
       status:errors?'error':reviews?'review':'checked',
       limitations:'OCR·내용 정확성·글꼴 실제 표시·전자서명 유효성·PDF/A 준수 여부는 검증하지 않습니다.'
     };

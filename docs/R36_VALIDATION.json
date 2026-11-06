@@ -1,0 +1,69 @@
+{
+  "release": "R36-DEV1",
+  "date": "2026-11-06",
+  "sourceBaseline": "R35-DEV1",
+  "sourceContractRun": {
+    "command": "npm test",
+    "commandCount": 94,
+    "passedCommands": 94,
+    "failedCommands": 0,
+    "exitCode": 0,
+    "log": "R36_NPM_TEST.log",
+    "note": "실제 PDF 고객 문서나 브라우저 실기 검증 횟수가 아니라 독립 Node 호출 94개"
+  },
+  "r34PreviouslyVerified": {
+    "syntaxChecks": 8,
+    "targetedFunctionalGroups": 13,
+    "note": "npm test 후반 --new-only에서 R34 변경 검사만 실행, 기존 원본 기록 보존"
+  },
+  "previewBuild": {
+    "command": "node scripts/build-release.cjs --preview-unminified",
+    "result": "PASS",
+    "distributionAssets": 41,
+    "buildLineEndingCases": 3,
+    "productionDeployAllowed": false,
+    "marker": "dist/SUNRISE_PREVIEW_ONLY.json",
+    "note": "terser가 없는 환경에서만 소스 통합/정적 자산 검사에 사용하는 비공식 빌드"
+  },
+  "productionBuild": {
+    "command": "npm run build",
+    "result": "BLOCKED",
+    "reason": "Cannot find module terser; npm ci cannot reach registry.npmjs.org (EAI_AGAIN)",
+    "deployable": false
+  },
+  "integrity": {
+    "result": "PASS",
+    "localEditorAssetReferences": 41,
+    "pinnedVendorFileHashes": "PASS",
+    "previewReleaseGate": "PASS",
+    "scriptSyntax": "PASS",
+    "progressIntegrity": "PASS"
+  },
+  "browserAcceptance": {
+    "result": "BLOCKED_BY_ENVIRONMENT",
+    "attemptedPaths": [
+      "/",
+      "/editor/",
+      "/tools/",
+      "/admin/"
+    ],
+    "reason": "Chromium ERR_BLOCKED_BY_ADMINISTRATOR for localhost, file:// and intercepted navigation",
+    "countedAsPass": false
+  },
+  "notPerformed": [
+    "Windows Chrome/Edge practical",
+    "Android/iOS device",
+    "Adobe Acrobat/Office app practical",
+    "external customer PDF acceptance",
+    "GitHub CI on R36 source",
+    "Cloudflare production deployment",
+    "D1 isolated backup recovery"
+  ],
+  "scopeLimitations": [
+    "inherited/named CMap and generic layout reflow",
+    "XFA interactive calculation scripts",
+    "PAdES LT/LTA and certified signing",
+    "high-fidelity arbitrary PDF to Office conversion"
+  ],
+  "ocrExcluded": true
+}

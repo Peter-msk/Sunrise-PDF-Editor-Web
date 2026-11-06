@@ -1,0 +1,21 @@
+/* FUTURE source integration smoke checks — NOT executed in DEV4. */
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),read=p=>fs.readFileSync(path.join(root,p),'utf8');
+const editor=read('src/editor/index.html');
+const hub=read('src/assets/sunrise-tool-hub.js');
+const release=read('scripts/build-release.cjs');
+const engine=read('src/assets/sunrise-pdf-protect.js');
+const worker=read('src/assets/sunrise-pdf-protect-worker.js');
+assert(editor.includes('case "protectPdfAes256":'));
+assert(editor.includes('openPdfPasswordProtectionModal(doc)'));
+assert(editor.includes('saveStateIsCurrent(doc, captured)'));
+assert(editor.includes('PDF 열기 비밀번호'));
+assert(hub.includes("action:'protectPdfAes256'"));
+assert(release.includes("fs.cpSync(pdfStudioDist"));
+assert(release.includes("'sunrise-pdf-protect-worker.js'"));
+assert(engine.includes('new Worker(WORKER_URL'));
+assert(worker.includes('keyLength: 256'));
+assert(worker.includes('await pdf.requiresPassword(locked)'));
+assert(!worker.includes('localStorage'));
+console.log('USR-14 source contract checks passed');
