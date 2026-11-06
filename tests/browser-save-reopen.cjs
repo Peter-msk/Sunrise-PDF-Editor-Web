@@ -131,7 +131,7 @@ async function main(){
      null,{timeout:20000});
    await directTab.locator('#directTextReplacement').fill('TOO LONG TO SUBSTITUTE');
    await directTab.locator('#directTextApply').click();
-   assert.match(await directTab.locator('#directTextStatus').textContent(),/길이가 같은/);
+   assert.match(await directTab.locator('#directTextStatus').textContent(),/같은 바이트 길이|길이가 같은/);
    await directTab.locator('#directTextReplacement').fill('INVOICE 2027');
    await directTab.locator('#directTextApply').click();
    await directTab.locator('#modalBackdrop').waitFor({state:'hidden',timeout:25000});
