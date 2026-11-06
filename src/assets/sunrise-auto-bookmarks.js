@@ -6,7 +6,9 @@
  if(root)root.SunriseAutoBookmarks=api;
 })(typeof globalThis!=='undefined'?globalThis:undefined,function(){
  'use strict';
- const numbered=/^(?:(?:제\s*\d+\s*[장절항편])|(?:\d+(?:\.\d+){0,3}[.)]?))\s*\S/;
+ // /Outlines writer supports 32 levels (0..31); display indentation is capped separately.
+ const MAX_OUTLINE_LEVEL=31;
+ const numbered=/^(?:(?:제\s*\d+\s*[장절항편])|(?:\d+(?:\.\d+){0,31}[.)]?))\s*\S/;
  const nonTitle=/^(?:\d+|page\s*\d+|쪽\s*\d+|\d+\s*\/\s*\d+)$/i;
  const tidy=value=>String(value||'').replace(/\s+/g,' ').trim();
  function getLines(items){
@@ -53,18 +55,18 @@
   if(/^제\s*\d+\s*절(?:\s|$)/.test(text))return 1;
   if(/^제\s*\d+\s*항(?:\s|$)/.test(text))return 2;
   if(/^제\s*\d+\s*목(?:\s|$)/.test(text))return 3;
-  const numberedPath=text.match(/^(\d+(?:\.\d+){0,3})(?:\.\s+|\s+|\)\s*)\S/);
-  if(numberedPath)return Math.min(3,numberedPath[1].split('.').length-1);
+  const numberedPath=text.match(/^(\d+(?:\.\d+){0,31})(?:\.\s+|\s+|\)\s*)\S/);
+  if(numberedPath)return Math.min(MAX_OUTLINE_LEVEL,numberedPath[1].split('.').length-1);
   return 0;
  }
- // An outline cannot start with a child, skip a parent level, or exceed level 3.
+ // An outline cannot start with a child, skip a parent level, or exceed 32 levels.
  // Normalize copied/reordered/deleted pending items deterministically.
  function normalizeLevels(bookmarks){
   if(!Array.isArray(bookmarks))throw Error('북마크 목록 형식이 올바르지 않습니다.');
   let previous=0;
   return bookmarks.map((item,index)=>{
    const requested=Number.isInteger(item?.level)?item.level:0;
-   const level=Math.min(3,Math.max(0,Math.min(requested,index?previous+1:0)));
+   const level=Math.min(MAX_OUTLINE_LEVEL,Math.max(0,Math.min(requested,index?previous+1:0)));
    previous=level;
    return {...item,level};
   });
@@ -84,7 +86,7 @@
    throw Error('북마크 들여쓰기 대상이 올바르지 않습니다.');
   const next=normalizeLevels(bookmarks);
   const old=next[index].level;
-  const max=index?Math.min(3,next[index-1].level+1):0;
+  const max=index?Math.min(MAX_OUTLINE_LEVEL,next[index-1].level+1):0;
   const desired=old+direction;
   if(desired<0||desired>max)return null;
   next[index].level=desired;
@@ -105,5 +107,5 @@
   return normalizeLevels(candidates.map(x=>({title:x.titles.find(t=>frequency.get(t.toLocaleLowerCase())===1),page:x.page}))
    .filter(x=>x.title).map(x=>({...x,level:inferLevel(x.title)})).slice(0,limit));
  }
- return {chooseHeading,suggestBookmarks,getLines,inferLevel,normalizeLevels,changeLevel,removeSubtree};
+ return {chooseHeading,suggestBookmarks,getLines,inferLevel,normalizeLevels,changeLevel,removeSubtree,MAX_OUTLINE_LEVEL};
 });

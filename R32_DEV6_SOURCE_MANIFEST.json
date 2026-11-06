@@ -1,0 +1,50 @@
+{
+  "release": "R32-DEV6",
+  "base_release": "R32-DEV5",
+  "development_areas": [
+    "USR-13",
+    "USR-16",
+    "USR-18"
+  ],
+  "source_changes": [
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "old_sha256": "97bec52440d47afdbf83bec1e262f67f55be06b596d184b1f89a0db7170e7b0f",
+      "new_sha256": "6ad5a3984a9021c3c79b88f81c795878c6bbf30ab7fe37e0ac6f3d5a6476dceb",
+      "old_chars": 23180,
+      "new_chars": 25664
+    },
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "old_sha256": "e77d216beefbcd6464ec150e4a45b5e92caa48a0909e1d324b1a6ceeed7e38c9",
+      "new_sha256": "1761769d957049b47e35387ba357242cbb3bc2f69a4af9eca5578704be379405",
+      "old_chars": 27739,
+      "new_chars": 30580
+    },
+    {
+      "path": "src/editor/index.html",
+      "old_sha256": "67d0067a11c75419296e90f6103b763cbb9ebc65c1837c3069794e09d75f3529",
+      "new_sha256": "02abc1a47bfa07e6d0357dc2372bba642e117d50a558ea3453a3cf8f16820196",
+      "old_chars": 557654,
+      "new_chars": 562113
+    }
+  ],
+  "build": "NOT_RUN",
+  "automated_tests": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "github_modified": false,
+  "cloudflare_deployed": false,
+  "note": "R32 DEV6 is source-only and retains stale R26 dist. Progress figures are provisional, not test results.",
+  "additional_files": [
+    "docs/USR01-19_PROGRESS_CURRENT.json",
+    "docs/USR01-19_PROGRESS_CURRENT.md",
+    "docs/R32_DEV6_IMPLEMENTATION.md",
+    "tests/dev6-sensitive-review.cjs",
+    "tests/dev6-word-two-columns.cjs"
+  ],
+  "progress_summary": {
+    "r26_baseline_usr_mean": 68.1,
+    "dev6_provisional_usr_mean": 72.7,
+    "provisional_not_tested": true
+  }
+}

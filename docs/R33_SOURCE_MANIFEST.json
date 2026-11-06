@@ -1,0 +1,410 @@
+{
+  "release": "R33-DEV1",
+  "base": "R32-DEV8",
+  "all_requested_functionality_complete": false,
+  "code_authoring_only": true,
+  "syntax_checks": 22,
+  "syntax_passed": 22,
+  "functional_tests": "NOT_RUN",
+  "build": "NOT_RUN",
+  "ci": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "github_written": false,
+  "cloudflare_deployed": false,
+  "prior_dist_unchanged": true,
+  "scope_count": 35,
+  "files": [
+    {
+      "path": "README.md",
+      "kind": "modified",
+      "before_sha256": "62bce28c21b1382fe717d1e12115893d5b90da7b54c83d5efe0b5b2c9adb4ab7",
+      "after_sha256": "1a5a69f9605a43ac1302c0bf406361e9996277f4ef55fc57f0506402d794269e",
+      "bytes": 9622
+    },
+    {
+      "path": "README_R33.md",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "fe1c16dd2df78af4ec1a8488466ecf3d4cda0523b0ed397463211fa082f18481",
+      "bytes": 686
+    },
+    {
+      "path": "docs/R33_IMPLEMENTATION.md",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "d346800cbf73e3d5a8c699549c2fee5cb5540e4d3f2af49c298e92f8b5f09d66",
+      "bytes": 6907
+    },
+    {
+      "path": "docs/R33_STATIC_SYNTAX.json",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "227775fc1aaf23105fc605fd456dcacf54d9f6db065d87b074c18ad83f4f14ec",
+      "bytes": 4791
+    },
+    {
+      "path": "docs/USR01-19_PROGRESS_CURRENT.json",
+      "kind": "modified",
+      "before_sha256": "1abb130a84a4ccfa6fe16fff884b7eb4c23d32f45197fa2636c36c5bf707cb97",
+      "after_sha256": "cb087028b88d266ec82eac312f3d6e7158ae83a18fa7dc0cecdb5429b2a899b0",
+      "bytes": 32823
+    },
+    {
+      "path": "docs/USR01-19_PROGRESS_CURRENT.md",
+      "kind": "modified",
+      "before_sha256": "086feec95fc43e28071b9b088ab94fed60817330428d72941ab5234e0bf8bff6",
+      "after_sha256": "a559baa8945dfc63e69b2289adec6b3137684ffd59c28a72ae4264fbc249d51f",
+      "bytes": 6352
+    },
+    {
+      "path": "package-lock.json",
+      "kind": "modified",
+      "before_sha256": "14295da11a85c17421fed63590399dbc4cd8a5c3e94b260eae50442d30872554",
+      "after_sha256": "39d58c2dc2c3ea7ddfa53674381bdc57ff89503d0c33d63af73d6a29f9fb0c43",
+      "bytes": 5634
+    },
+    {
+      "path": "package.json",
+      "kind": "modified",
+      "before_sha256": "512b99bfbcf5a282ab0adf3f839da4e24dba2d96705f6f25dbb0623ee492f7e9",
+      "after_sha256": "311f43ff8aceb6d9173b815c8162a7fdf19cb19e9a256f3feff0e7f3f2cc1686",
+      "bytes": 5501
+    },
+    {
+      "path": "scripts/build-release.cjs",
+      "kind": "modified",
+      "before_sha256": "1ae9b05502e5c7d3675563afa1f5b83113b45338add2eced50598a14734af649",
+      "after_sha256": "4f6ddf3f01f2b87773b84476ae608333b7458f0da6d087950f1a017b70b860bf",
+      "bytes": 5034
+    },
+    {
+      "path": "src/assets/sunrise-comment-report.js",
+      "kind": "modified",
+      "before_sha256": "f094cab372f64efe7187eb9683398949d8e22baf607e090f7fb32d2bd0652e10",
+      "after_sha256": "af7d960d236d61e8372f800e9cafe49d01e542f9d4e16afff042d6232e0e6758",
+      "bytes": 2008
+    },
+    {
+      "path": "src/assets/sunrise-content-editor.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "c0aafc68e42655f47549bbd1226a83f33f8c8f32ccc8d1de27f29817f8bf3d81",
+      "bytes": 27605
+    },
+    {
+      "path": "src/assets/sunrise-edit-state.js",
+      "kind": "modified",
+      "before_sha256": "9c460542ee5eec77840392f214b1e1b52a2b7363912be51a142be309ca708563",
+      "after_sha256": "df2ca0e9ad53bb269b31ab16f1667946b68ccb8223119a8d6331dc8708359f1a",
+      "bytes": 6320
+    },
+    {
+      "path": "src/assets/sunrise-embedded-images.js",
+      "kind": "modified",
+      "before_sha256": "a0f42192e642fe815401d75050c070a2dd9b5e0daae3927cb5c1db09ebf4f0a5",
+      "after_sha256": "3e9a3ed37cf1b839fc171a607bb183ce070acc0e817ac921f672771f956849a6",
+      "bytes": 10981
+    },
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "kind": "modified",
+      "before_sha256": "c47679fc243b7da4ab3a0c560238399e9d71fbb2facfb7d7a229c31f55450f94",
+      "after_sha256": "66cee26ed1f6f4a46a4fdffd433e9af84aa88a2e79ef324557fa2b3099a6016d",
+      "bytes": 43236
+    },
+    {
+      "path": "src/assets/sunrise-outline-transfer.js",
+      "kind": "modified",
+      "before_sha256": "0ba31f273662a679c3d0f09d49a7efa5393f7cceae4f8fe364ac889e0e45547f",
+      "after_sha256": "ab7fe74b753e45d9011f09604e830b13c900688db842af02e3ea7366aa386838",
+      "bytes": 7229
+    },
+    {
+      "path": "src/assets/sunrise-pdf-cms.js",
+      "kind": "modified",
+      "before_sha256": "5bce242a0052e76885802899392a98d7cb2ec788010b5f5c110ba9d8c93c448a",
+      "after_sha256": "994e83d4b767cd73dfd75c1cccae7c7d411c8c392c102e37126d32e25ef4a3c9",
+      "bytes": 30258
+    },
+    {
+      "path": "src/assets/sunrise-pdf-finishing-ui.js",
+      "kind": "modified",
+      "before_sha256": "84e712c97c85f6e905badc4408671dd65e91438716ce87e497fa0472c0777aa3",
+      "after_sha256": "25461d8e5ab5fafeabdae7446e6c68bb16766eaaa62ce9b59bcbfc20f5d21501",
+      "bytes": 23497
+    },
+    {
+      "path": "src/assets/sunrise-pdf-form-tools.js",
+      "kind": "modified",
+      "before_sha256": "511a9449d15d0a4c87747fd515f4a1c7ee5e75c936b0665d570543af610b80f3",
+      "after_sha256": "0340cd6c9747dace257deff485537c622c198c4787e30392c54eb4c4e6bbedbe",
+      "bytes": 19227
+    },
+    {
+      "path": "src/assets/sunrise-pdf-protect-worker.js",
+      "kind": "modified",
+      "before_sha256": "ec5443f2a6ac7545fb98f64665007d224db6160f70d5ea4ce2d9c2e431c841f2",
+      "after_sha256": "98fcfd2c6c6f9e56b3db26c3a55a191c4d65271f0cccde7f6b4da54d5549b84e",
+      "bytes": 5968
+    },
+    {
+      "path": "src/assets/sunrise-pdf-protect.js",
+      "kind": "modified",
+      "before_sha256": "cc223fdafa42f17784e87424ab66e0deedc0248219318cb49fceaf43336c2e75",
+      "after_sha256": "dd0eb0ffe0328f4148325482f1da8dd37d02ee6f4d20da8482ec20f7f352dc55",
+      "bytes": 5990
+    },
+    {
+      "path": "src/assets/sunrise-pdf-quality.js",
+      "kind": "modified",
+      "before_sha256": "1f0e69054032becb020577adf047327c474770ef7ceaf029cf75e9ba497efa62",
+      "after_sha256": "60ec6dcc926e2659e83ab8c4d35dd2acf47658d3cb4569bd6b8bc92772017d04",
+      "bytes": 11727
+    },
+    {
+      "path": "src/assets/sunrise-pki-worker.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "85022f43e140c214164a046a1a3635148544a813fa270bc51b317ffb9f093df9",
+      "bytes": 3634
+    },
+    {
+      "path": "src/assets/sunrise-pki.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "b7152c31369457c852b321b7b374fe3a3feb66998ebe57ba18001c99f699da69",
+      "bytes": 3215
+    },
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "kind": "modified",
+      "before_sha256": "cdec4ec07d9a9fbada54517c94d7f94fc50111f511c5bf823afdeb2067646f56",
+      "after_sha256": "dc16c5dd02035454d80989baf911993cf41f7e725a11ffec8e5ff60380e0ff04",
+      "bytes": 41860
+    },
+    {
+      "path": "src/assets/sunrise-tool-hub.js",
+      "kind": "modified",
+      "before_sha256": "2e8820921007832a5f5c621a71b3153ef12411d35b41489079bf6beee1128485",
+      "after_sha256": "23df11f3ca1f5f0f67b417e261b4c621782ed336b7815aad60d0c960eae6f34a",
+      "bytes": 19489
+    },
+    {
+      "path": "src/editor/index.html",
+      "kind": "modified",
+      "before_sha256": "cf9f28f822df58458206531d9d5aca3773bf4f2132af300d3005f48a69f689f8",
+      "after_sha256": "d3e360ae2c2338f9670f8fea09b8ca3ab5507084c95ceef8b0f519b8b46e9f1b",
+      "bytes": 634413
+    },
+    {
+      "path": "tests/r33-content-editing.cjs",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "a52daeba0d190897aeecd9c806f7fbab3b3e56a64f8593fa2cdf23be19f44978",
+      "bytes": 4018
+    },
+    {
+      "path": "tests/r33-office-grids.cjs",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "da32ef8993e88248b50cfc4899499bf99e9b69e702d2663774e2eede1b777463",
+      "bytes": 1816
+    },
+    {
+      "path": "tests/r33-signature-integrity.cjs",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "3cae80fb5eb57024ce987b18cb91352c8158ccaa4d4e6003e4d0b55134002bf0",
+      "bytes": 2562
+    },
+    {
+      "path": "vendor/node-forge/LICENSE",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "f63ff0e4e239244aa79280da2dd4811a0469e5e201caf5cbc0d97c3a1dff8e82",
+      "bytes": 17972
+    },
+    {
+      "path": "vendor/node-forge/README.md",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "548e7cd9b92703b46bd34a6c73c1be5df9901a2012a029f87e073b776e53314c",
+      "bytes": 59648
+    },
+    {
+      "path": "vendor/node-forge/SUNRISE_PROVENANCE.json",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "9568085abc2df199952cd0041a3b0b680383cccc5f797ade91f0400b5ae42686",
+      "bytes": 1209
+    },
+    {
+      "path": "vendor/node-forge/dist/forge.all.min.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "be0c3650106ac981eb2203993856e079f806f0699729c64565bcb1d1cc61bb3d",
+      "bytes": 307736
+    },
+    {
+      "path": "vendor/node-forge/dist/forge.all.min.js.map",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "0b21eb8fb1c124e963d564b6462177331027f6e739f48e73184e0f6a81cac3f1",
+      "bytes": 121
+    },
+    {
+      "path": "vendor/node-forge/dist/forge.min.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "fb7a624ee30faad07e3e665d66cef05b6d79d29e5ddb5b497f8f99abb83736bd",
+      "bytes": 286077
+    },
+    {
+      "path": "vendor/node-forge/dist/forge.min.js.map",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "5f11be794b0ad083ce9b2bcee1079e7ee1f0771d37beb90d6f13b2b9a8a0eba3",
+      "bytes": 113
+    },
+    {
+      "path": "vendor/node-forge/dist/prime.worker.min.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "81e28ccf0c0108d4e664d9a7a44b1087f03f61ff10986f0ced3522c5dc400479",
+      "bytes": 21476
+    },
+    {
+      "path": "vendor/node-forge/dist/prime.worker.min.js.map",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "73f786b89ef54b00e0cfb6969b2881e7cffa77b4be3f03e998f70993290716a8",
+      "bytes": 121
+    },
+    {
+      "path": "vendor/node-forge/package.json",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "6d5f46f222e0b7e2d2986694018cc9fcd86f8300d1b80fb446b659d8fd16a06a",
+      "bytes": 3256
+    },
+    {
+      "path": "vendor/pdfstudio/LICENSE",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358
+    },
+    {
+      "path": "vendor/pdfstudio/README.md",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "67459be1838674f5c66588427aeb80a119e69c6ea9a433e69b317af929ddfa01",
+      "bytes": 12038
+    },
+    {
+      "path": "vendor/pdfstudio/SUNRISE_PROVENANCE.json",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "336b252d05e15d83aa4e972867dd012df51fc1185929b773ab40019985ee4e1f",
+      "bytes": 1803
+    },
+    {
+      "path": "vendor/pdfstudio/dist/errors.d.ts",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "ecbb9f74423c378e351d57a12b4d9666a47e981a75f5798ac903f18ff7eb113a",
+      "bytes": 517
+    },
+    {
+      "path": "vendor/pdfstudio/dist/errors.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "2e34b66ad9b645f488cf89c6b49b5c8b64a8f567f9c7a4d61f327aadce146383",
+      "bytes": 635
+    },
+    {
+      "path": "vendor/pdfstudio/dist/images.d.ts",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "04a9a2f49fc32dfbccd3813e48a6aadcd80d0eb6c59391e9df6ec099b58803e6",
+      "bytes": 498
+    },
+    {
+      "path": "vendor/pdfstudio/dist/images.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "03d5afd36e1049c6bed3fe2db01b4f4fa05c5ad4b5149b50b85fe2622cbd5141",
+      "bytes": 4999
+    },
+    {
+      "path": "vendor/pdfstudio/dist/index.d.ts",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "e766f92d6fd17c7da7ce6b4c6b530638e0be78a5bff8b11a902f88a755db7b44",
+      "bytes": 6389
+    },
+    {
+      "path": "vendor/pdfstudio/dist/index.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "c0cd1c3b3a63b580a3d60fa2a3b858b7c49ba7afc897ea2795273bdd16095195",
+      "bytes": 21004
+    },
+    {
+      "path": "vendor/pdfstudio/dist/runner.d.ts",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "c387c5f0a541d8f41baa4eb5abd6d3943cfa48aada26fe73224aadff476c1015",
+      "bytes": 1656
+    },
+    {
+      "path": "vendor/pdfstudio/dist/runner.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "8563a6419093beaddb579bf41fc213d87874a180a7cc1aeea8c879ed7859ed66",
+      "bytes": 6654
+    },
+    {
+      "path": "vendor/pdfstudio/dist/types.d.ts",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "4e50dece060b8c971b3a44a21132848b3185b8d5664193a26933ecbc78f66c73",
+      "bytes": 8442
+    },
+    {
+      "path": "vendor/pdfstudio/dist/types.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+      "bytes": 11
+    },
+    {
+      "path": "vendor/pdfstudio/dist/wasm/qpdf.d.ts",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "d4110a11d0bcf3bbd2d6160c01e33c54add84b3cd1b39ae63f41ed04bd7a7b4e",
+      "bytes": 1090
+    },
+    {
+      "path": "vendor/pdfstudio/dist/wasm/qpdf.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "30f0a3407e6f6058def17d6080f94a797a53c03afd6b93f2e9ebf29881dce037",
+      "bytes": 62770
+    },
+    {
+      "path": "vendor/pdfstudio/dist/wasm/qpdf.wasm",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "48a6044e2b5abb32295fa1682e26f20338181bb2423b2ab6e8456b7c4a8c9756",
+      "bytes": 2244725
+    },
+    {
+      "path": "vendor/pdfstudio/package.json",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "9a4e26acf634fb8f97b638c1fb510ea4822b8c098289a2fbb46f66246e202ab4",
+      "bytes": 1528
+    }
+  ]
+}

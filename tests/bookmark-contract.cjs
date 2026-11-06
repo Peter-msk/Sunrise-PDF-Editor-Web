@@ -3,7 +3,7 @@ const lib = require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const src = fs.readFileSync('src/editor/index.html','utf8');
 const a = src.indexOf('    function appendPdfBookmarks('), b = src.indexOf('    async function compileDocumentWithOverlays(',a);
 assert(a>=0 && b>a);
-const ctx=vm.createContext({window:{PDFLib:lib}}); vm.runInContext(src.slice(a,b),ctx);
+const ctx=vm.createContext({window:{PDFLib:lib,SunriseOutlineTransfer:require('../src/assets/sunrise-outline-transfer.js')}}); vm.runInContext(src.slice(a,b),ctx);
 (async()=>{
  const pdf=await lib.PDFDocument.create();pdf.addPage([300,400]);pdf.addPage([300,400]);ctx.pdf=pdf;
  vm.runInContext(`appendPdfBookmarks(pdf,[{title:'첫 장',page:0},{title:'두 번째',page:1}])`,ctx);

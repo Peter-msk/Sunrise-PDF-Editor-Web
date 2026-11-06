@@ -5,7 +5,7 @@ const fs=require('node:fs'),vm=require('node:vm');
 const lib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
 const source=fs.readFileSync('src/editor/index.html','utf8');
 function slice(a,b){const i=source.indexOf(a),j=source.indexOf(b,i);assert(i>=0&&j>i,a);return source.slice(i,j);}
-let snapshot=0;
+let snapshot=0;const notices=[];
 const originalPdf=async()=>{
  const pdf=await lib.PDFDocument.create();
  pdf.addPage([300,450]);pdf.addPage([300,450]);
@@ -29,7 +29,7 @@ const injectedLib={...lib,PDFDocument:{
 const ctx=vm.createContext({
  window:{PDFLib:injectedLib},state,Set,Array,console,
  beginOperationMetric:()=>()=>{},activeDoc:()=>ctx.doc,
- showToast:()=>{},saveUndoSnapshot:()=>{snapshot++;},
+ showToast:message=>notices.push(message),saveUndoSnapshot:()=>{snapshot++;},
  allowPageStructureChange:()=>true,allowPageFormStructure:()=>true,
  reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},
  remapPageItems:()=>{throw Error('must not publish edits before save');},
@@ -47,7 +47,10 @@ vm.runInContext(
   selectedPages:new Set([0]),overlays:[],bookmarks:[]};}
  for(const name of ['duplicateSelectedPages','deleteSelectedPagesFromDoc']){
   const doc=fresh();ctx.doc=doc;snapshot=0;
-  await assert.rejects(ctx[name](doc),/synthetic serialization failure/);
+  if(name==='deleteSelectedPagesFromDoc') {
+   await ctx[name](doc);
+   assert(notices.some(message=>/페이지 삭제 중단.*synthetic serialization failure/.test(message)));
+  } else await assert.rejects(ctx[name](doc),/synthetic serialization failure/);
   assert.equal(doc.bytes,bytes);assert.equal(snapshot,0);
   assert.equal(doc.overlays.length,0);
  }
@@ -60,7 +63,8 @@ vm.runInContext(
  {
   const doc=fresh();ctx.doc=doc;snapshot=0;
   ctx.openReorderPagesModal(doc);
-  await assert.rejects(inputElements.reorderConfirmBtn.click(),/synthetic serialization failure/);
+  await inputElements.reorderConfirmBtn.click();
+  assert(notices.some(message=>/페이지 순서 변경 중단.*synthetic serialization failure/.test(message)));
   assert.equal(doc.bytes,bytes);assert.equal(snapshot,0);
  }
  console.log('PASS: failed page duplication, deletion, cut and reorder do not publish state');

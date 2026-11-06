@@ -23,10 +23,16 @@ const marks=[];
 const ctx={
  fillStyle:'',
  fillRect(...coords){marks.push({color:this.fillStyle,coords})},
- getImageData(x,y){
-  const covered=marks.some(m=>m.color==='#000000'&&x>=m.coords[0]&&y>=m.coords[1]&&
-    x<m.coords[0]+m.coords[2]&&y<m.coords[1]+m.coords[3]);
-  return {data:Uint8ClampedArray.from(covered?[0,0,0,255]:[255,255,255,255])};
+ getImageData(x,y,width=1,height=1){
+  const data=new Uint8ClampedArray(width*height*4);
+  for(let row=0;row<height;row++)for(let col=0;col<width;col++){
+   const px=x+col,py=y+row,offset=(row*width+col)*4;
+   const covered=marks.some(m=>m.color==='#000000'&&px>=m.coords[0]&&py>=m.coords[1]&&
+     px<m.coords[0]+m.coords[2]&&py<m.coords[1]+m.coords[3]);
+   data[offset]=covered?0:255;data[offset+1]=covered?0:255;
+   data[offset+2]=covered?0:255;data[offset+3]=255;
+  }
+  return {data};
  }
 };
 const makeCanvas=()=>({
@@ -42,6 +48,7 @@ const reader={numPages:1,getPage:async number=>{assert.equal(number,1);return pa
  assert.equal(marks.length,2);
  assert.equal(marks[1].color,'#000000');
  assert.deepEqual(marks[1].coords,[20,40,100,80]);
+ assert.equal(special.verifyFullMaskCoverage(ctx,[{x:10,y:20,width:50,height:40}],600,800),8000);
  const pdf=await lib.PDFDocument.load(out.bytes);
  assert.equal(pdf.getPageCount(),1);
  assert.equal(pdf.getPage(0).getWidth(),300);

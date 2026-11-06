@@ -1,0 +1,63 @@
+{
+  "release": "R32-DEV8",
+  "base": "R32-DEV7",
+  "type": "full project source, unbuilt, untested",
+  "code_authoring_only": true,
+  "build": "NOT_RUN",
+  "tests": "NOT_RUN",
+  "ci": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "github_written": false,
+  "cloudflare_deployed": false,
+  "file_changes": [
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "cdec4ec07d9a9fbada54517c94d7f94fc50111f511c5bf823afdeb2067646f56",
+      "bytes": 39382
+    },
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "c47679fc243b7da4ab3a0c560238399e9d71fbb2facfb7d7a229c31f55450f94",
+      "bytes": 30928
+    },
+    {
+      "path": "src/editor/index.html",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "cf9f28f822df58458206531d9d5aca3773bf4f2132af300d3005f48a69f689f8",
+      "bytes": 601236
+    },
+    {
+      "path": "tests/r32-dev8-source-expansion.cjs",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "32563ff02e1bc5cb2f37e72ce2799c75e0a1f5ed4565828a80fa95eebbe1e2c8",
+      "bytes": 3692
+    },
+    {
+      "path": "docs/USR01-19_PROGRESS_CURRENT.json",
+      "kind": "modified",
+      "before_sha256": "275a33715936529ffec2338fbbf1dc56cca4ebfec092c51785d063c58903c156",
+      "after_sha256": "1abb130a84a4ccfa6fe16fff884b7eb4c23d32f45197fa2636c36c5bf707cb97",
+      "bytes": 16321
+    },
+    {
+      "path": "docs/USR01-19_PROGRESS_CURRENT.md",
+      "kind": "modified",
+      "before_sha256": "2a676209a1c1bc9046e733643a618ccb2258f708cff838a139193c163d66261e",
+      "after_sha256": "086feec95fc43e28071b9b088ab94fed60817330428d72941ab5234e0bf8bff6",
+      "bytes": 4492
+    },
+    {
+      "path": "docs/R32_DEV8_IMPLEMENTATION.md",
+      "kind": "new",
+      "before_sha256": null,
+      "after_sha256": "cbc2d4016c821722965e99134fb1c42694e7a08d348836665cafe1c9957059de",
+      "bytes": 2519
+    }
+  ]
+}

@@ -131,7 +131,7 @@ async function main(){
      null,{timeout:20000});
    await directTab.locator('#directTextReplacement').fill('TOO LONG TO SUBSTITUTE');
    await directTab.locator('#directTextApply').click();
-   assert.match(await directTab.locator('#directTextStatus').textContent(),/길이가 같은/);
+   assert.match(await directTab.locator('#directTextStatus').textContent(),/같은 바이트 길이|길이가 같은/);
    await directTab.locator('#directTextReplacement').fill('INVOICE 2027');
    await directTab.locator('#directTextApply').click();
    await directTab.locator('#modalBackdrop').waitFor({state:'hidden',timeout:25000});
@@ -141,7 +141,12 @@ async function main(){
    });
    assert(firstText.includes('INVOICE 2027')&&!firstText.includes('INVOICE 2026'),
      'real PDF.js text extraction must show changed source text, not a visual-only overlay');
+   // Modal close precedes the asynchronous view refresh; Edge can still see
+   // operationBusy=true and legitimately ignore a premature Save As command.
+   await directTab.waitForFunction(()=>Boolean(activeDoc())&&!activeDoc().operationBusy,
+     null,{timeout:45000});
    await directTab.evaluate(()=>executeCommand('saveAs'));
+   await directTab.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:15000});
    await directTab.locator('#saveAsConfirmBtn').click();
    await directTab.locator('#saveAsDownloadLink').waitFor({state:'visible',timeout:45000});
    const directDownload=directTab.waitForEvent('download',{timeout:30000});
@@ -560,6 +565,12 @@ async function main(){
    await page.locator('#maskPlanLines').fill('1,70,100,180,40\n1,260,200,50,30\n2,105,100,200,40');
    await page.locator('#maskPlanCheck').click();
    assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 출력 / 3개 영역 적용 예정'));
+   // The editor intentionally blocks redaction until the user has reviewed remaining
+   // text-layer privacy candidates and acknowledged that unmasked data may remain.
+   await page.locator('#maskSensitiveReview').click();
+   await page.waitForFunction(()=>document.querySelector('#maskSensitiveStatus')?.textContent.includes('형식 후보'),
+     null,{timeout:30000});
+   await page.locator('#maskSensitiveAcknowledged').check();
    await page.locator('#maskConfirmed').check();
    const maskingDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#maskExportBtn').click();

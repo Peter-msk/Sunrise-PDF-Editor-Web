@@ -1,0 +1,160 @@
+{
+  "release": "R33-DEV1",
+  "date": "2026-11-06",
+  "scope": "syntax parsing and file integrity only; no product code, build or regression execution",
+  "checks": [
+    {
+      "path": "tests/r33-signature-integrity.cjs",
+      "sha256": "3cae80fb5eb57024ce987b18cb91352c8158ccaa4d4e6003e4d0b55134002bf0",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "tests/r33-office-grids.cjs",
+      "sha256": "da32ef8993e88248b50cfc4899499bf99e9b69e702d2663774e2eede1b777463",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "tests/r33-content-editing.cjs",
+      "sha256": "a52daeba0d190897aeecd9c806f7fbab3b3e56a64f8593fa2cdf23be19f44978",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "scripts/build-release.cjs",
+      "sha256": "4f6ddf3f01f2b87773b84476ae608333b7458f0da6d087950f1a017b70b860bf",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pdf-form-tools.js",
+      "sha256": "0340cd6c9747dace257deff485537c622c198c4787e30392c54eb4c4e6bbedbe",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-embedded-images.js",
+      "sha256": "3e9a3ed37cf1b839fc171a607bb183ce070acc0e817ac921f672771f956849a6",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pdf-quality.js",
+      "sha256": "60ec6dcc926e2659e83ab8c4d35dd2acf47658d3cb4569bd6b8bc92772017d04",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pdf-finishing-ui.js",
+      "sha256": "25461d8e5ab5fafeabdae7446e6c68bb16766eaaa62ce9b59bcbfc20f5d21501",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-office-export.js",
+      "sha256": "66cee26ed1f6f4a46a4fdffd433e9af84aa88a2e79ef324557fa2b3099a6016d",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-comment-report.js",
+      "sha256": "af7d960d236d61e8372f800e9cafe49d01e542f9d4e16afff042d6232e0e6758",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-tool-hub.js",
+      "sha256": "23df11f3ca1f5f0f67b417e261b4c621782ed336b7815aad60d0c960eae6f34a",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pdf-cms.js",
+      "sha256": "994e83d4b767cd73dfd75c1cccae7c7d411c8c392c102e37126d32e25ef4a3c9",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-edit-state.js",
+      "sha256": "df2ca0e9ad53bb269b31ab16f1667946b68ccb8223119a8d6331dc8708359f1a",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pki-worker.js",
+      "sha256": "85022f43e140c214164a046a1a3635148544a813fa270bc51b317ffb9f093df9",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pki.js",
+      "sha256": "b7152c31369457c852b321b7b374fe3a3feb66998ebe57ba18001c99f699da69",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-special-pdf.js",
+      "sha256": "dc16c5dd02035454d80989baf911993cf41f7e725a11ffec8e5ff60380e0ff04",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pdf-protect-worker.js",
+      "sha256": "98fcfd2c6c6f9e56b3db26c3a55a191c4d65271f0cccde7f6b4da54d5549b84e",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-pdf-protect.js",
+      "sha256": "dd0eb0ffe0328f4148325482f1da8dd37d02ee6f4d20da8482ec20f7f352dc55",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-outline-transfer.js",
+      "sha256": "ab7fe74b753e45d9011f09604e830b13c900688db842af02e3ea7366aa386838",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/assets/sunrise-content-editor.js",
+      "sha256": "c0aafc68e42655f47549bbd1226a83f33f8c8f32ccc8d1de27f29817f8bf3d81",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/editor/index.html:inline40",
+      "sha256": "755337749aec13d83041673e2cb34da3295c5c9b802f31816b9ee07737ffd2d0",
+      "result": "PASS",
+      "stderr": ""
+    },
+    {
+      "path": "src/editor/index.html:inline41",
+      "sha256": "3c4cc60c8475767f79aeeafd66e4f34946877b33f242a9d2fb21e0a02f8c9369",
+      "result": "PASS",
+      "stderr": ""
+    }
+  ],
+  "passed": 22,
+  "total": 22,
+  "vendor_assets": [
+    {
+      "name": "pdfstudio",
+      "version": "0.4.0",
+      "files": 16,
+      "file_integrity": "PASS",
+      "executed": false
+    },
+    {
+      "name": "node-forge",
+      "version": "1.4.1",
+      "files": 9,
+      "file_integrity": "PASS",
+      "executed": false
+    }
+  ],
+  "functional_tests": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "build": "NOT_RUN"
+}

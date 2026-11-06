@@ -1,0 +1,72 @@
+{
+  "version": "R32-DEV5",
+  "base": "R32-DEV4 full-source ZIP",
+  "component_changes": [
+    "USR-14: distinct owner password or randomized owner secret",
+    "USR-14: encrypted PDF password unlock via local QPDF WASM worker",
+    "USR-15: PBES2 + PBKDF2 + AES256-CBC encrypted PKCS8 PEM signing input"
+  ],
+  "source_file_count": 520,
+  "changes": [
+    {
+      "file": "docs/R32_DEV5_IMPLEMENTATION.md",
+      "type": "new",
+      "before_sha256": null,
+      "after_sha256": "e1d77d59825306ae53e53e8ec13b4e8a47c4a8a6f0968005432cfc4ffabe305e"
+    },
+    {
+      "file": "src/assets/sunrise-pdf-cms.js",
+      "type": "modified",
+      "before_sha256": "bbeb54d7b5a446770fc047721d31d367a9a514d6dd537322347a05040c1e85a0",
+      "after_sha256": "5bce242a0052e76885802899392a98d7cb2ec788010b5f5c110ba9d8c93c448a"
+    },
+    {
+      "file": "src/assets/sunrise-pdf-protect-worker.js",
+      "type": "modified",
+      "before_sha256": "87c2a48106c26cf63cce583eaad16eb4588cc84de42272d71a7557fb4a789954",
+      "after_sha256": "ec5443f2a6ac7545fb98f64665007d224db6160f70d5ea4ce2d9c2e431c841f2"
+    },
+    {
+      "file": "src/assets/sunrise-pdf-protect.js",
+      "type": "modified",
+      "before_sha256": "14107d5e872e25b2b190b56886ce104e5a6cd1b32132a4ec260f4b628ef8bf6b",
+      "after_sha256": "cc223fdafa42f17784e87424ab66e0deedc0248219318cb49fceaf43336c2e75"
+    },
+    {
+      "file": "src/assets/sunrise-tool-hub.js",
+      "type": "modified",
+      "before_sha256": "ecbba9e53cc7faea92dc168687113b572a1d3cd8c760ecb272c8d3d01f1a7ee3",
+      "after_sha256": "2e8820921007832a5f5c621a71b3153ef12411d35b41489079bf6beee1128485"
+    },
+    {
+      "file": "src/editor/index.html",
+      "type": "modified",
+      "before_sha256": "06f678d476de5a1f71890cb6d19e5ce59b4fa1afc1ff2a891ef121ed0f90e2ce",
+      "after_sha256": "67d0067a11c75419296e90f6103b763cbb9ebc65c1837c3069794e09d75f3529"
+    },
+    {
+      "file": "tests/usr14-dev5-lock-unlock-contract.cjs",
+      "type": "new",
+      "before_sha256": null,
+      "after_sha256": "86ebb70781a82522515285322a5f572c9e7fdd9a142a61846dfb21367760f3bc"
+    },
+    {
+      "file": "tests/usr15-encrypted-pkcs8-practical.cjs",
+      "type": "new",
+      "before_sha256": null,
+      "after_sha256": "8d567b2ee7d5cf233ee9624db25da994e963d1a7215fa3a1ac6de7785b344b68"
+    }
+  ],
+  "tests_written_not_executed": [
+    "tests/usr14-dev5-lock-unlock-contract.cjs",
+    "tests/usr15-encrypted-pkcs8-practical.cjs"
+  ],
+  "build": "NOT_RUN",
+  "runtime_tests": "NOT_RUN",
+  "browser_acceptance": "NOT_RUN",
+  "github_changed": false,
+  "cloudflare_changed": false,
+  "dist_status": "STALE_PRE_DEV5",
+  "external_dependency": "pdfstudio@0.4.0 QPDF WASM, not installed or bundled",
+  "completion_claim": "SOURCE_ONLY_UNVERIFIED"
+}

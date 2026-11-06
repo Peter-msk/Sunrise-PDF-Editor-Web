@@ -21,10 +21,16 @@ const makeCanvas=()=>{
  const ctx={
   fillStyle:'',
   fillRect(x,y,w,h){marks.push({page:entry.page,fill:this.fillStyle,x,y,w,h})},
-  getImageData(x,y){
-   const covered=marks.some(m=>m.page===entry.page&&m.fill==='#000000'&&
-     x>=m.x&&y>=m.y&&x<m.x+m.w&&y<m.y+m.h);
-   return {data:Uint8ClampedArray.from(covered?[0,0,0,255]:[255,255,255,255])};
+  getImageData(x,y,width=1,height=1){
+   const data=new Uint8ClampedArray(width*height*4);
+   for(let row=0;row<height;row++)for(let col=0;col<width;col++){
+    const px=x+col,py=y+row,offset=(row*width+col)*4;
+    const covered=marks.some(m=>m.page===entry.page&&m.fill==='#000000'&&
+     px>=m.x&&py>=m.y&&px<m.x+m.w&&py<m.y+m.h);
+    data[offset]=covered?0:255;data[offset+1]=covered?0:255;
+    data[offset+2]=covered?0:255;data[offset+3]=255;
+   }
+   return {data};
   }
  };
  return {get width(){return entry.width||0},set width(v){entry.width=v},
@@ -74,6 +80,17 @@ const reader={numPages:3,getPage:async n=>{
   special.exportMaskedPages({reader,plan,PDFLib,makeCanvas:faultyCanvas}),
   /마스크가 불투명한 검은색/
  );
+ // A mask with black corners/center but a non-black interior pixel must fail.
+ const coverageBox={x:12,y:20,width:8,height:6};
+ const faultyPixel={getImageData(x,y,w,h){
+  const data=new Uint8ClampedArray(w*h*4);
+  for(let i=0;i<w*h;i++)data[i*4+3]=255;
+  const missedX=27,missedY=43;
+  if(missedX>=x&&missedX<x+w&&missedY>=y&&missedY<y+h)
+   data[((missedY-y)*w+(missedX-x))*4]=255;
+  return {data};
+ }};
+ assert.throws(()=>special.verifyFullMaskCoverage(faultyPixel,[coverageBox],40,70),/가려지지 않은 픽셀/);
  await assert.rejects(special.exportMaskedPages({reader,plan,PDFLib,makeCanvas,cancelled:()=>true}),/취소/);
  await assert.rejects(special.exportMaskedPages({reader,plan:[],PDFLib,makeCanvas}),/목록/);
  await assert.rejects(special.checkOutputStructure(output.bytes,PDFLib,3),/페이지 수/);

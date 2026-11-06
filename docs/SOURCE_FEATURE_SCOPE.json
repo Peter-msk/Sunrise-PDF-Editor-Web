@@ -1,0 +1,274 @@
+{
+  "schema": 1,
+  "sourceVersion": "SOURCE-CLOSEOUT",
+  "plan": "v1.2",
+  "excludes": [
+    "USR-20 OCR"
+  ],
+  "entries": [
+    {
+      "id": "ADM-01",
+      "name": "운영 홈·KPI",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-metrics-contract.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-02",
+      "name": "방문 통계",
+      "source": "src/admin-api.mjs",
+      "test": "tests/telemetry-day-boundary.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-03",
+      "name": "활성 사용시간",
+      "source": "src/admin-api.mjs",
+      "test": "tests/telemetry-foreground-idle.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-04",
+      "name": "기능 실패율",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-quality-sessions.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-05",
+      "name": "문의 처리",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-inquiry-atomic.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-06",
+      "name": "공지 운영",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-publications.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-07",
+      "name": "업데이트 운영",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-publication-csv-lifecycle.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-08",
+      "name": "서비스 상태",
+      "source": "src/worker.mjs",
+      "test": "tests/admin-operational-health.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-09",
+      "name": "버전·배포 보고",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-version-metadata.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-10",
+      "name": "보존·백업",
+      "source": "scripts/d1_backup.cjs",
+      "test": "tests/admin-retention-restore.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-11",
+      "name": "관리자 인증",
+      "source": "src/admin-password-auth.mjs",
+      "test": "tests/admin-password-auth-contract.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-12",
+      "name": "이용 품질",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-save-quality.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-13",
+      "name": "통계 CSV",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-statistics-export.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "ADM-14",
+      "name": "운영 알림",
+      "source": "src/admin-api.mjs",
+      "test": "tests/admin-operational-health.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-01",
+      "name": "병합",
+      "source": "src/assets/sunrise-pdf-form-tools.js",
+      "test": "tests/source-closeout-functionality.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-02",
+      "name": "분할·추출",
+      "source": "src/assets/sunrise-batch-pages.js",
+      "test": "tests/batch-split-merge.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-03",
+      "name": "페이지 관리",
+      "source": "src/assets/sunrise-page-composer.js",
+      "test": "tests/page-atomic-publish.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-04",
+      "name": "텍스트 삽입",
+      "source": "src/assets/sunrise-pdf-overlay.js",
+      "test": "tests/overlay-table-shape-annotation.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-05",
+      "name": "기존 PDF 원문 수정",
+      "source": "src/assets/sunrise-content-editor.js",
+      "test": "tests/source-closeout-inherited-cmap.cjs",
+      "scope": "verified-safe-scope",
+      "limits": "지원 글꼴·내장 CMap·상속 스트림 한정. 미등록 외부 이름 CMap 및 임의 문단 재흐름 불가."
+    },
+    {
+      "id": "USR-06",
+      "name": "표·도형 편집",
+      "source": "src/assets/sunrise-pdf-overlay.js",
+      "test": "tests/overlay-table-shape-annotation.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-07",
+      "name": "주석·형광펜",
+      "source": "src/editor/index.html",
+      "test": "tests/native-annotation-edit.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-08",
+      "name": "목차·북마크",
+      "source": "src/assets/sunrise-auto-bookmarks.js",
+      "test": "tests/source-closeout-functionality.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-09",
+      "name": "압축",
+      "source": "src/editor/index.html",
+      "test": "tests/pdf-compression-contract.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-10",
+      "name": "AcroForm 양식",
+      "source": "src/assets/sunrise-pdf-form-tools.js",
+      "test": "tests/source-closeout-functionality.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-11",
+      "name": "다중 일괄 작업",
+      "source": "src/assets/sunrise-batch-pages.js",
+      "test": "tests/batch-stress-cancel.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-12",
+      "name": "제출 전 품질 점검",
+      "source": "src/assets/sunrise-pdf-quality.js",
+      "test": "tests/pdf-submission-quality.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-13",
+      "name": "민감정보 마스킹",
+      "source": "src/assets/sunrise-special-pdf.js",
+      "test": "tests/multipage-mask-audit.cjs",
+      "scope": "verified-safe-scope",
+      "limits": "사용자 지정 영역의 래스터 재작성; 누락된 민감정보 자동 검출이나 인증된 완전 삭제를 주장하지 않음."
+    },
+    {
+      "id": "USR-14",
+      "name": "PDF 암호화",
+      "source": "src/assets/sunrise-pdf-protect.js",
+      "test": "tests/pdf-encrypt-local-contract.cjs",
+      "scope": "verified-safe-scope",
+      "limits": "지원 가능한 QPDF WASM AES 범위. 실제 브라우저·외부 뷰어 수용은 다음 단계."
+    },
+    {
+      "id": "USR-15",
+      "name": "인증서 CMS 서명",
+      "source": "src/assets/sunrise-pdf-cms.js",
+      "test": "tests/r33-signature-integrity.cjs",
+      "scope": "verified-safe-scope",
+      "limits": "기본 CMS 승인서명 지원, PAdES LT/LTA·외부 신뢰증명은 별도 검증 기능이며 완료 주장 금지."
+    },
+    {
+      "id": "USR-16",
+      "name": "Word·Excel 변환",
+      "source": "src/assets/sunrise-office-export.js",
+      "test": "tests/r34-mixed-word.cjs",
+      "scope": "verified-safe-scope",
+      "limits": "텍스트·표·이미지 및 제한된 레이아웃 변환. 모든 PDF의 원본 모양 완전 복원 불가."
+    },
+    {
+      "id": "USR-17",
+      "name": "텍스트·이미지 추출",
+      "source": "src/assets/sunrise-embedded-images.js",
+      "test": "tests/embedded-image-extraction.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-18",
+      "name": "안전한 저장·재열기",
+      "source": "src/assets/sunrise-edit-state.js",
+      "test": "tests/save-safety-contract.cjs",
+      "scope": "core",
+      "limits": ""
+    },
+    {
+      "id": "USR-19",
+      "name": "모바일 UI",
+      "source": "src/editor/index.html",
+      "test": "tests/page-jump-race-contract.cjs",
+      "scope": "core",
+      "limits": ""
+    }
+  ]
+}

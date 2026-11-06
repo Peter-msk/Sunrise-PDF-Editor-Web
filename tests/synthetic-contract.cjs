@@ -23,6 +23,7 @@ const paint = { measureText: () => ({ width: 50 }), scale() {}, fillRect() {},
   strokeRect() {}, fillText() {} };
 const context = vm.createContext({
   window: { PDFLib: require('../dist/assets/pdf-lib/pdf-lib.min.js'), SunriseEditState: editState,
+    SunriseOutlineTransfer: require('../src/assets/sunrise-outline-transfer.js'),
     SunriseKoreanFont: { embed: (doc, texts) => koreanFont.embed(doc, texts, fontAssets) } },
   document: { createElement: () => ({ getContext: () => paint, toDataURL: () => png }) },
   console, Uint8Array, Date,
