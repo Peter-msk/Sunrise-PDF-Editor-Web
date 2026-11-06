@@ -560,6 +560,12 @@ async function main(){
    await page.locator('#maskPlanLines').fill('1,70,100,180,40\n1,260,200,50,30\n2,105,100,200,40');
    await page.locator('#maskPlanCheck').click();
    assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 출력 / 3개 영역 적용 예정'));
+   // The editor intentionally blocks redaction until the user has reviewed remaining
+   // text-layer privacy candidates and acknowledged that unmasked data may remain.
+   await page.locator('#maskSensitiveReview').click();
+   await page.waitForFunction(()=>document.querySelector('#maskSensitiveStatus')?.textContent.includes('형식 후보'),
+     null,{timeout:30000});
+   await page.locator('#maskSensitiveAcknowledged').check();
    await page.locator('#maskConfirmed').check();
    const maskingDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#maskExportBtn').click();
