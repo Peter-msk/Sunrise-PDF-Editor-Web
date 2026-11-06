@@ -141,7 +141,12 @@ async function main(){
    });
    assert(firstText.includes('INVOICE 2027')&&!firstText.includes('INVOICE 2026'),
      'real PDF.js text extraction must show changed source text, not a visual-only overlay');
+   // Modal close precedes the asynchronous view refresh; Edge can still see
+   // operationBusy=true and legitimately ignore a premature Save As command.
+   await directTab.waitForFunction(()=>Boolean(activeDoc())&&!activeDoc().operationBusy,
+     null,{timeout:45000});
    await directTab.evaluate(()=>executeCommand('saveAs'));
+   await directTab.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:15000});
    await directTab.locator('#saveAsConfirmBtn').click();
    await directTab.locator('#saveAsDownloadLink').waitFor({state:'visible',timeout:45000});
    const directDownload=directTab.waitForEvent('download',{timeout:30000});
