@@ -12,7 +12,7 @@ assert.match(homepage,/id="contactDialog"/);
 assert.match(homepage,/id="inquiryForm"/);
 assert.match(homepage,/fetch\('\/api\/inquiries'/);
 assert.match(homepage,/fetch\('\/api\/site-updates'/);
-for(const name of ['PDF 병합','이미지 기반 PDF 압축','PDF 북마크 관리','문서 검색·형광펜','PC·모바일 지원'])assert(homepage.includes(name),name);
+for(const name of ['PDF 병합','이미지 기반 PDF 압축','PDF 북마크 관리','문서 검색·형광펜','PC·모바일 지원','기존 PDF 원문 수정','PDF 양식 편집','Word·Excel 변환','일괄 작업·품질 점검','암호 보호·인증서 서명','민감정보 마스킹'])assert(homepage.includes(name),name);
 for(const text of ['신규','보완','삭제','이미지 압축'])assert(homepage.includes(text),text);
 assert.match(worker,/env\.ASSETS\.fetch\(request\)/);
 assert.match(worker,/env\.INQUIRY_HASH_SALT/);
@@ -21,4 +21,6 @@ assert(!worker.includes('SELECT * FROM inquiries'),'Public GET must never expose
 assert.match(cfg,/run_worker_first\s*=\s*\[[^\]]*"\/api\/\*"[^\]]*\]/);
 assert.match(cfg,/binding = "DB"/);
 assert.match(cfg,/crons = \["0 3 \* \* \*"\]/);
+assert(!homepage.includes('PDF 암호화 및 민감정보 완전 삭제(보안 Redaction)는 현재 지원하지 않습니다.'));
+for(const text of ['실험 기능','20MiB·200쪽','PAdES LT/LTA','완전 복원을 보장하지 않습니다','OCR과 민감정보 자동 완전 검출'])assert(homepage.includes(text),text);
 console.log('PASS: homepage fixed notice/update rail, feature descriptions, public feed and private inquiry form contract');

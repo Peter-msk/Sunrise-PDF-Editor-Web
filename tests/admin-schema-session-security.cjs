@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 (async()=>{
  const fixture=require('./helpers/d1-sqlite.cjs').createD1Fixture();
  const {sqlite,db}=fixture;
+ const originalNow=Date.now;
  try{
   const worker=(await import('../src/worker.mjs')).default;
   const origin='https://fixture.example.test';
@@ -52,11 +53,17 @@ const assert=require('node:assert/strict');
   assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM admin_security_events WHERE kind=?').get('password_changed').n,1);
   // Controlled reset to a prior limiter window verifies the rotated proof.
   sqlite.prepare('UPDATE admin_login_limits SET window_start_ms=?,blocked_until_ms=0').run(Date.now()-16*60000);
+  // Session policy deliberately rejects created_ms <= the password-change cutoff.
+  // In-memory SQLite and direct Worker calls can finish within one millisecond;
+  // place this post-rotation login strictly after that boundary, without sleeps.
+  const rotatedAt=Date.parse(sqlite.prepare('SELECT updated_at FROM admin_accounts WHERE id=1').get().updated_at);
+  assert(Number.isFinite(rotatedAt));
+  Date.now=()=>Math.max(originalNow(),rotatedAt+1);
   const fourth=await login(newProof);
-  response=await call('/api/admin/retention',{cookie:fourth});assert.equal((await response.json()).execution,null);
+  response=await call('/api/admin/retention',{cookie:fourth});assert.equal(response.status,200);assert.equal((await response.json()).execution,null);
   await worker.scheduled({},{DB:db});
   response=await call('/api/admin/retention',{cookie:fourth});const retention=await response.json();
   assert.equal(retention.execution.state,'succeeded');assert(retention.lastCleanup);assert.equal(retention.backup,'operator-managed');
   console.log('PASS: current schema readiness, missing columns, real session expiry/revocation, security history privacy, password rotation and tracked scheduled execution');
- }finally{fixture.close()}
+ }finally{Date.now=originalNow;fixture.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});
