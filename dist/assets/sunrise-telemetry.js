@@ -27,7 +27,7 @@
  }
  ensureVisit();
  if(area!=='editor')return;
- let last=performance.now(),lastInteraction=last,sampleAt=last,activeSeconds=0,usageDay=kstDay(),lastFeature='기타',lastErrorAt=0;
+ let last=performance.now(),lastInteraction=last,sampleAt=last,activeSeconds=0,usageDay=kstDay(),lastErrorAt=0;
  let foreground=document.visibilityState==='visible'&&document.hasFocus();
  function sampleUsage(now){
   const day=kstDay(),elapsed=now-sampleAt;
@@ -52,33 +52,16 @@
    if(/open|upload|파일 열기|문서 열기|merge|병합/.test(s))return '문서 열기';
    return '기타';
  };
- document.addEventListener('click',e=>{
-   const el=e.target.closest('button,[data-command],a');
-   if(el){const v=el.dataset.command||el.dataset.action||el.id||el.title||el.textContent;lastFeature=classify(v)}
- },{capture:true,passive:true});
  const report=category=>{
    const now=Date.now();
    if(now-lastErrorAt<3100)return;
    lastErrorAt=now;
-   ensureVisit().then(ok=>{if(ok)send('failure',{feature:category||lastFeature});});
+   ensureVisit().then(ok=>{if(ok)send('failure',{feature:category||'기타'});});
  };
- window.addEventListener('error',()=>report(lastFeature));
- window.addEventListener('unhandledrejection',()=>report(lastFeature));
- // Count handled operation failures shown by the editor without transmitting their details.
- const toastRoot=document.getElementById('toastContainer');
- if(toastRoot){
-   const observer=new MutationObserver(changes=>{
-     for(const change of changes)for(const item of change.addedNodes){
-       if(item.nodeType!==1||!item.classList?.contains('sunrise-toast'))continue;
-       const visible=item.textContent||'';
-       if(item.querySelector('.fa-circle-exclamation')||/실패|오류|처리하지 못/.test(visible)){
-         const inferred=classify(visible);report(inferred==='기타'?lastFeature:inferred);
-       }
-     }
-   });
-   observer.observe(toastRoot,{childList:true});
- }
-
+ window.addEventListener('error',()=>report('기타'));
+ window.addEventListener('unhandledrejection',()=>report('기타'));
+ // Explicit operation failures are recorded with fixed diagnostic codes.
+ // Warning toasts and the most recently clicked button are not failure evidence.
  window.sunriseTelemetryFeatureError=feature=>report(classify(feature)); // future explicit integration
  // Save preparation only. No file details or error messages are transmitted.
  // A missing network event is never presented as a confirmed outcome.
@@ -96,13 +79,13 @@
  };
  let operationQueue=Promise.resolve();
  window.sunriseTelemetryOperationStart=feature=>{
-   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete','local_page_compose','local_form_edit','local_stamp','local_metadata','local_batch_preflight','local_images_to_pdf','local_pdf_to_images','local_page_crop','local_page_resize','local_nup','local_pdf_overlay','local_visual_compare'].includes(feature))return ()=>{};
+   if(!['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete','local_page_compose','local_form_edit','local_stamp','local_metadata','local_batch_preflight','local_images_to_pdf','local_pdf_to_images','local_page_crop','local_page_resize','local_nup','local_pdf_overlay','local_visual_compare','form_fill_bulk','source_text_replace','split_download','extract_images','native_annotation_edit'].includes(feature))return ()=>{};
    let id;try{id=crypto.randomUUID()}catch{return ()=>{}};
    let recorded=false,ended=false;
    operationQueue=operationQueue.then(async()=>{if(await ensureVisit())recorded=await send('operation',{operationId:id,feature,stage:'started'})}).catch(()=>{});
-   return stage=>{
+   return (stage,detail)=>{
      if(ended||!['succeeded','failed','cancelled'].includes(stage))return;
-     ended=true;operationQueue=operationQueue.then(()=>recorded?send('operation',{operationId:id,feature,stage}):false).catch(()=>{});
+     ended=true;operationQueue=operationQueue.then(()=>recorded?send('operation',{operationId:id,feature,stage,...(stage==='failed'&&window.SunriseDiagnostics?{diagnostic:window.SunriseDiagnostics.normalize(detail)||window.SunriseDiagnostics.capture(null,{code:'operation_failed',ua:window.navigator?.userAgent||''})}:{})}):false).catch(()=>{});
    };
  };
  let pulsePending=false;

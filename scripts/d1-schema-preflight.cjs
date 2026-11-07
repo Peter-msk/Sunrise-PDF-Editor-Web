@@ -4,6 +4,7 @@ const {spawnSync}=require('node:child_process');
 
 const DATABASE='sunrise-pdf-editor-web-contact';
 const REQUIRED={
+  analytics_diagnostics:['code','phase','worker_version','received_ms'],
   admin_accounts:[],admin_sessions:[],admin_security_events:[],
   admin_maintenance_status:[],inquiry_audit:[],
   analytics_operations:[],analytics_save_operations:[],
