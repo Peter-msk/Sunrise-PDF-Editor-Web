@@ -7,6 +7,7 @@ import {readRetentionExecution} from './admin-retention.mjs';
 import {adminReadiness} from './admin-readiness.mjs';
 import {toAdminCsv} from './admin-csv.mjs';
 import {handlePublicationRestore} from './admin-publication-restore.mjs';
+import {diagnosticSummary,diagnosticCsv} from './diagnostic-metrics.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
@@ -23,7 +24,7 @@ export async function telemetry(request,env,url){
   const now=Date.now(),today=day(),db=env.DB;
   try{
     if(data.type==='operation'){
-      if(!await recordOperation(db,data,today,workerVersion(env)))return response({error:'Invalid operation'},400);
+      if(!await recordOperation(db,data,today,workerVersion(env),now))return response({error:'Invalid operation'},400);
     }else if(data.type==='visit'){
       const previous=await db.prepare("SELECT 1 found FROM analytics_sessions WHERE session_id=? AND day BETWEEN date(?,'-13 days') AND date(?,'-1 day') LIMIT 1").bind(data.session,today,today).first();
       await db.batch([
@@ -67,6 +68,14 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/diagnostics'||path==='/api/admin/diagnostics.csv'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{
+      const data=await diagnosticSummary(db,today,url);
+      if(path.endsWith('.csv'))return new Response(diagnosticCsv(data),{headers:{'content-type':'text/csv; charset=utf-8','content-disposition':'attachment; filename="sunrise-diagnostics.csv"','cache-control':'no-store'}});
+      return response(data);
+    }catch(error){return response({error:error instanceof RangeError?'기간·버전·기능 선택을 확인하세요.':'진단 정보를 조회하지 못했습니다. 마이그레이션과 인증 상태를 확인하세요.'},error instanceof RangeError?400:503)}
+  }
   if(path.startsWith('/api/admin/publication-restore/'))return handlePublicationRestore(request,env,url);
   if(path==='/api/admin/security-events'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);

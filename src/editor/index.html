@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="/assets/sunrise-diagnostics.js"></script>
   <script src="/assets/pdf-lib/pdf-lib.min.js"></script>
   <script src="/assets/korean-font.js"></script>
   <script src="/assets/sunrise-edit-state.js"></script>
@@ -50,12 +51,16 @@
   <script src="/assets/sunrise-pdf-visual-compare-ui.js"></script>
   <script src="/assets/sunrise-tool-hub.js"></script>
   <script type="module">
-    try {
-      window.pdfjsLib = await import("/assets/pdfjs/pdf.min.mjs");
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = "/assets/pdfjs/pdf.worker.min.mjs";
-    } catch (error) {
-      console.error("PDF renderer failed to load", error);
-    }
+    window.sunrisePdfEngineReady = (async () => {
+      try {
+        window.pdfjsLib = await import("/assets/pdfjs/pdf.min.mjs");
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = "/assets/pdfjs/pdf.worker.min.mjs";
+        return true;
+      } catch (error) {
+        console.error("PDF renderer failed to load", error);
+        return false;
+      }
+    })();
   </script>
   <style>
     :root, html[data-theme="light"] {
@@ -2933,9 +2938,9 @@
         // Encrypted documents cannot safely be edited by pdf-lib.
         pdfDoc = await window.PDFLib.PDFDocument.load(bytes);
       } catch (error) {
-        throw new Error("PDF를 편집할 수 없습니다. 손상되었거나 암호로 보호된 파일인지 확인해 주세요.");
+        throw makeOpenError(isEncryptedPdfError(error)?'password_required':'pdf_parse_failed',isEncryptedPdfError(error)?'암호 보호 PDF입니다. 암호 해제 도구로 허가된 복사본을 만든 뒤 열어 주세요.':'PDF 구조를 편집용으로 해석하지 못했습니다. 원본 손상 또는 지원 형식을 확인해 주세요.',error);
       }
-      if (pdfDoc.getPageCount() < 1) throw new Error("페이지가 없는 PDF입니다.");
+      if (pdfDoc.getPageCount() < 1) throw makeOpenError("no_pages","페이지가 없는 PDF입니다.");
       const metadata = {
         title: pdfDoc.getTitle() || "", author: pdfDoc.getAuthor() || "",
         subject: pdfDoc.getSubject() || "", keywords: pdfDoc.getKeywords() || "",
@@ -2943,7 +2948,7 @@
       const loadingTask = window.pdfjsLib.getDocument(pdfJsLoadOptions(bytes));
       let pdfJsDoc;
       try { pdfJsDoc = await loadingTask.promise; }
-      catch (error) { throw new Error("PDF를 표시할 수 없습니다. 손상되었거나 지원하지 않는 파일입니다."); }
+      catch (error) { try{await loadingTask.destroy()}catch(_){} throw makeOpenError("display_parse_failed","PDF를 표시할 수 없습니다. 손상되었거나 지원하지 않는 파일입니다.",error); }
       const pageCount = pdfJsDoc.numPages;
       const pageSizes = [];
       const pageTexts = [];
@@ -2978,7 +2983,7 @@
       await Promise.all([readAttachments, ...Array.from({length:Math.min(4,pageCount)}, () => loadPageSizes())]);
       if (pageError) {
         try { await pdfJsDoc.destroy(); } catch (error) { console.warn("PDF cleanup failed",error); }
-        throw new Error(`PDF 페이지 정보를 읽지 못했습니다: ${pageError.message || pageError}`);
+        throw makeOpenError("page_metadata_failed","PDF 페이지 정보를 읽지 못했습니다. 페이지 구조와 크기를 확인해 주세요.",pageError);
       }
       return { pageCount, pageSizes, metadata, pdfJsDoc, pageTexts, attachments, attachmentsReadable };
     }
@@ -3278,46 +3283,71 @@
       // No arbitrary MB cap: actual limits are the browser's available memory
       // and its ability to allocate a typed array for this document.
       if (!Number.isSafeInteger(length) || length < 0)
-        throw new Error("PDF 파일 크기 정보를 확인할 수 없습니다.");
+        throw makeOpenError("invalid_size","PDF 파일 크기 정보를 확인할 수 없습니다.");
     }
 
+    function isEncryptedPdfError(error) {
+      const Type=window.PDFLib?.EncryptedPDFError;
+      // The bundled ES5 pdf-lib Error subclass does not retain instanceof.
+      // Compare only its exact library-defined message locally; never transmit it.
+      return typeof Type==='function'&&(error instanceof Type||error?.message===new Type().message);
+    }
+    function makeOpenError(code,message,cause) {
+      const error=new Error(message,{cause});error.sunriseDiagnosticCode=code;return error;
+    }
+    function captureOpenDiagnostic(error,context) {
+      return window.SunriseDiagnostics?.capture(error,{...context,ua:window.navigator?.userAgent||''});
+    }
+    async function openPdfFile(file,options={switchActive:true}) {
+      const context={finish:beginOperationMetric('open'),origin:'file',bytes:file?.size};let transferred=false;
+      try {
+        const bytes=await readPdfInputFile(file);transferred=true;
+        return await openPdfFromBytes(file.name,bytes,{...options,openingContext:context});
+      } catch(error) {
+        if(!transferred)context.finish(error?.name==='AbortError'?'cancelled':'failed',captureOpenDiagnostic(error,context));
+        throw error;
+      }
+    }
     async function readPdfInputFile(file) {
       validatePdfByteLength(file?.size);
-      if (file.size===0) throw new Error("비어 있는 PDF 파일은 읽을 수 없습니다.");
+      if (file.size===0) throw makeOpenError("empty_file","비어 있는 PDF 파일은 읽을 수 없습니다.");
       let buffer;
       try { buffer=await file.arrayBuffer(); }
-      catch(error) { throw new Error("PDF를 메모리로 읽지 못했습니다. 브라우저의 사용 가능한 메모리를 확인해 주세요: "+(error?.message||error)); }
+      catch(error) { if(error?.name==='AbortError')throw error;throw makeOpenError("read_failed","PDF를 메모리로 읽지 못했습니다. 파일 접근 권한과 브라우저 메모리를 확인해 주세요.",error); }
       const bytes=new Uint8Array(buffer);
       validatePdfByteLength(bytes.byteLength);
       if (!bytes.byteLength || bytes.byteLength!==file.size)
-        throw new Error("PDF 파일의 읽은 크기가 원본과 일치하지 않습니다.");
+        throw makeOpenError("partial_read","PDF 파일의 읽은 크기가 원본과 일치하지 않습니다.");
       return bytes;
     }
 
     function beginOperationMetric(feature) {
       try {
         const finish=window.sunriseTelemetryOperationStart?.(feature);
-        return stage=>{try{finish?.(stage)}catch(_){}};
+        return (stage,detail)=>{try{finish?.(stage,detail)}catch(_){}};
       } catch (_) { return ()=>{}; }
     }
 
     async function openPdfFromBytes(fileName, uint8Bytes, options = { switchActive: true }) {
-      const finish=beginOperationMetric('open');let outcome='failed';
+      const context=options.openingContext||{finish:beginOperationMetric('open'),origin:options.origin||'generated',bytes:uint8Bytes?.byteLength};
+      const finish=context.finish;let outcome='failed',failure,info,newDoc;const previous=activeDoc();
       try {
       const originalBytes = uint8Bytes instanceof Uint8Array ? uint8Bytes : new Uint8Array(uint8Bytes);
-      if (!window.PDFLib || !window.pdfjsLib) throw new Error("PDF 편집 엔진을 불러오지 못했습니다. 페이지를 새로고침해 주세요.");
-      if (originalBytes.byteLength < 8 || new TextDecoder("ascii").decode(originalBytes.slice(0, 8)).indexOf("%PDF-") !== 0) {
-        throw new Error("유효한 PDF 파일이 아닙니다.");
+      if(window.sunrisePdfEngineReady)await window.sunrisePdfEngineReady;
+      if (!window.PDFLib || !window.pdfjsLib || !window.SunriseDiagnostics) throw makeOpenError("engine_not_ready","PDF 편집 엔진을 불러오지 못했습니다. 페이지를 새로고침해 주세요.");
+      if (!window.SunriseDiagnostics.hasPdfHeader(originalBytes)) {
+        throw makeOpenError("invalid_header","유효한 PDF 파일이 아닙니다.");
       }
       validatePdfByteLength(originalBytes.byteLength);
       let restored;
       try { restored = await window.SunriseEditState.restore(originalBytes, window.PDFLib); }
-      catch (error) { throw new Error("PDF를 편집할 수 없습니다. 손상되었거나 암호로 보호된 파일인지 확인해 주세요."); }
+      catch (error) { throw makeOpenError(isEncryptedPdfError(error)?'password_required':'pdf_parse_failed',isEncryptedPdfError(error)?'암호 보호 PDF입니다. 암호 해제 도구로 허가된 복사본을 만든 뒤 열어 주세요.':'PDF 구조를 편집용으로 해석하지 못했습니다. 원본 손상 또는 지원 형식을 확인해 주세요.',error); }
       const bytes = restored.bytes;
-      const info = await parsePageCountAndMeta(bytes);
+      info = await parsePageCountAndMeta(bytes);context.pages=info.pageCount;
       if (!info.pdfJsDoc) throw new Error("PDF 문서를 읽지 못했습니다. 손상되거나 암호로 보호된 파일일 수 있습니다.");
 
-      const newDoc = {
+      newDoc = {
+        openingDiagnostic:true,
         id: `doc_${docIdCounter++}`,
         name: fileName,
         bytes: bytes,
@@ -3360,7 +3390,7 @@
       }
 
       state.docs.push(newDoc);
-      addRecentFile(fileName, info.pageCount, originalBytes);
+
 
       if(restored.signed)showToast("전자서명 또는 서명 관련 구조를 보존하기 위해 읽기 전용으로 열었습니다.","fa-file-signature");
       if (restored.warning) showToast("이 PDF의 저장된 편집 항목을 안전하게 복원하지 못했습니다. 원본 표시는 유지됩니다.", "fa-circle-exclamation");
@@ -3371,9 +3401,20 @@
         renderDocTabs();
         updateCommandStates();
       }
+      if(newDoc.openingFailure)throw newDoc.openingFailure;
+      newDoc.openingDiagnostic=false;
+      addRecentFile(fileName,info.pageCount,originalBytes);
       outcome='succeeded';
       return newDoc;
-      } finally { finish(outcome); }
+      } catch(error) {
+        failure=error;if(error?.name==='AbortError')outcome='cancelled';
+        if(newDoc&&state.docs.includes(newDoc)){
+          const wasActive=activeDoc()===newDoc;state.docs.splice(state.docs.indexOf(newDoc),1);
+          if(wasActive){state.activeDocIndex=previous?state.docs.indexOf(previous):-1;try{await refreshAllViews()}catch(_){}}
+        }
+        if(info?.pdfJsDoc)try{await info.pdfJsDoc.destroy()}catch(_){}
+        throw error;
+      } finally { finish(outcome,outcome==='failed'?captureOpenDiagnostic(failure,context):undefined); }
     }
 
     function addRecentFile(name, pageCount, bytes) {
@@ -3955,7 +3996,8 @@
         } catch (error) {
           if (error.name === "RenderingCancelledException" || generation !== renderGeneration) return;
           stage.dataset.loading = "false";
-          showToast(`PDF 페이지 표시 실패: ${error.message || error}`, "fa-circle-exclamation");
+          if(doc.openingDiagnostic)doc.openingFailure=makeOpenError('page_render_failed','PDF 첫 화면을 표시하지 못했습니다. 브라우저 메모리와 렌더러를 확인해 주세요.',error);
+          else {showToast(`PDF 페이지 표시 실패: ${error.message || error}`, "fa-circle-exclamation");window.sunriseTelemetryFeatureError?.('페이지');}
         }
       } else {
         stage.dataset.loading = "false";
@@ -4753,7 +4795,7 @@
             if (existingIdx >= 0) {
               await setActiveDocument(existingIdx);
             } else if (rf.bytes) {
-              await openPdfFromBytes(rf.name, rf.bytes);
+              await openPdfFromBytes(rf.name,rf.bytes,{switchActive:true,origin:'recent'});
             }
             if (isMobileViewport()) toggleLeftPane(true);
           });
@@ -11359,8 +11401,7 @@
         const files = Array.from(e.target.files || []);
         for (const f of files) {
           try {
-            const bytes = await readPdfInputFile(f);
-            await openPdfFromBytes(f.name, bytes, { switchActive: true });
+            await openPdfFile(f,{switchActive:true});
           } catch (error) {
             showToast(`${f.name}: ${error.message || error}`, "fa-circle-exclamation");
           }
@@ -11473,8 +11514,7 @@
         const imgFiles = allFiles.filter((f) => /\.(png|jpe?g)$/i.test(f.name));
         for (const f of pdfFiles) {
           try {
-            const bytes = await readPdfInputFile(f);
-            await openPdfFromBytes(f.name, bytes, { switchActive: true });
+            await openPdfFile(f,{switchActive:true});
           } catch (error) {
             showToast(`${f.name}: ${error.message || error}`, "fa-circle-exclamation");
           }

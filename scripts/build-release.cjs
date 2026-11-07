@@ -44,7 +44,7 @@ async function compact(code, module = false) {
   const before = html.slice(0, scriptStart).replace(/^[ \t]*<!--[\s\S]*?-->[ \t]*\n/gm, '');
   html = before + await compact(html.slice(scriptStart, end)) + '\n' + html.slice(end);
   fs.writeFileSync(path.join(root, 'dist/editor/index.html'), html);
-  for (const name of ['korean-font.js', 'sunrise-edit-state.js', 'sunrise-auto-bookmarks.js', 'sunrise-outline-transfer.js', 'sunrise-batch-pages.js', 'sunrise-pdf-quality.js', 'sunrise-pdf-quality-report.js', 'sunrise-comment-report.js', 'sunrise-embedded-images.js', 'sunrise-special-pdf.js', 'sunrise-content-editor.js', 'sunrise-office-export.js', 'sunrise-pdf-cms.js', 'sunrise-pki.js', 'sunrise-pki-worker.js', 'sunrise-pdf-protect.js', 'sunrise-pdf-protect-worker.js']) {
+  for (const name of ['sunrise-diagnostics.js', 'korean-font.js', 'sunrise-edit-state.js', 'sunrise-auto-bookmarks.js', 'sunrise-outline-transfer.js', 'sunrise-batch-pages.js', 'sunrise-pdf-quality.js', 'sunrise-pdf-quality-report.js', 'sunrise-comment-report.js', 'sunrise-embedded-images.js', 'sunrise-special-pdf.js', 'sunrise-content-editor.js', 'sunrise-office-export.js', 'sunrise-pdf-cms.js', 'sunrise-pki.js', 'sunrise-pki-worker.js', 'sunrise-pdf-protect.js', 'sunrise-pdf-protect-worker.js']) {
     const source = fs.readFileSync(path.join(root, 'src/assets', name), 'utf8');
     fs.writeFileSync(path.join(root, 'dist/assets', name), await compact(source) + '\n');
   }
