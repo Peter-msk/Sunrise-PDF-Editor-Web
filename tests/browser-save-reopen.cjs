@@ -505,6 +505,8 @@ async function main(){
      await touch.locator('#mobileBottomNav').waitFor({state:'visible',timeout:15000});
      // Real tap -> mobile file menu -> browser file chooser, not a hidden
      // input assignment that could mask a broken touch action.
+     assert.equal(await touch.locator('#mobPageIndicator').isDisabled(),true,
+       'Mobile direct page-jump must be unavailable without an open PDF');
      await touch.locator('#mobFileBtn').tap();
      await touch.locator('#mobileFileOpen').waitFor({state:'visible'});
      assert.equal(await touch.locator('#mobileFileSave').isDisabled(),true,
@@ -524,6 +526,34 @@ async function main(){
      await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='2 / 2',
        null,{timeout:30000});
      await touch.locator('#mobPrevPageBtn').tap();
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
+       null,{timeout:30000});
+     // USR-19 R21: page counter is an accessible direct-jump button. Invalid
+     // input must not navigate or close the dialog; valid Enter and tap work.
+     await touch.locator('#mobPageIndicator').tap();
+     await touch.locator('#mobilePageJumpTarget').waitFor({state:'visible'});
+     const jumpModal=await touch.locator('#modalBox').boundingBox();
+     assert(jumpModal&&jumpModal.x>=-1&&jumpModal.x+jumpModal.width<=391,
+       'mobile page jump modal must fit a 390px touch viewport');
+     await touch.locator('#mobilePageJumpTarget').fill('9');
+     await touch.locator('#mobilePageJumpGo').tap();
+     assert.match(await touch.locator('#mobilePageJumpFeedback').textContent(),/1~2/);
+     assert.equal(await touch.locator('#mobPageIndicator').textContent(),'1 / 2');
+     await touch.locator('#mobilePageJumpTarget').fill('2');
+     await touch.locator('#mobilePageJumpTarget').press('Enter');
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
+     await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='2 / 2',
+       null,{timeout:30000});
+     await touch.locator('#mobPageIndicator').tap();
+     await touch.locator('#mobilePageJumpTarget').fill('1');
+     await touch.locator('#mobilePageJumpCancel').tap();
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
+     assert.equal(await touch.locator('#mobPageIndicator').textContent(),'2 / 2',
+       'cancel must not change the current page');
+     await touch.locator('#mobPageIndicator').tap();
+     await touch.locator('#mobilePageJumpTarget').fill('1');
+     await touch.locator('#mobilePageJumpGo').tap();
+     await touch.locator('#modalBackdrop').waitFor({state:'hidden'});
      await touch.waitForFunction(()=>document.querySelector('#mobPageIndicator')?.textContent.trim()==='1 / 2',
        null,{timeout:30000});
      await touch.locator('#mobLeftPaneBtn').tap();
