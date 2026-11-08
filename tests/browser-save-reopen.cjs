@@ -109,6 +109,98 @@ async function main(){
    await page.locator('#openPdfInput').setInputFiles({name:filename,mimeType:'application/pdf',buffer:await fixture()});
    await page.waitForFunction(name=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes(name),
      filename,{timeout:40000});
+   // R22 USR-09: use the actual browser JPEG encoder + PDF compressor (no
+   // simulated canvas codec). Verify sizes, text retention, page geometry,
+   // bitmap decode and real sampled visual difference for three presets.
+   const compression=await page.evaluate(async()=>{
+     const {PDFDocument,PDFName}=window.PDFLib, n=PDFName.of;
+     const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;
+     const context=canvas.getContext('2d'),pixels=context.createImageData(640,480);
+     let seed=24681357;
+     for(let i=0;i<pixels.data.length;i+=4){
+       seed=(Math.imul(seed,1664525)+1013904223)>>>0;
+       pixels.data[i]=seed>>>24;
+       pixels.data[i+1]=50+((seed>>>16)&127);
+       pixels.data[i+2]=60+((seed>>>8)&127);
+       pixels.data[i+3]=255;
+     }
+     context.putImageData(pixels,0,0);
+     const originalBlob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',1));
+     if(!originalBlob?.size)throw Error('Cannot create original JPEG');
+     const sourceJpeg=new Uint8Array(await originalBlob.arrayBuffer());
+     const originalBitmap=await createImageBitmap(originalBlob);
+     const pdf=await PDFDocument.create();
+     pdf.setTitle('USR09 browser JPEG compression');
+     const page=pdf.addPage([480,630]),embed=await pdf.embedJpg(sourceJpeg);
+     page.drawImage(embed,{x:40,y:110,width:400,height:300});
+     page.drawText('SEARCHABLE COMPRESSION TEXT',{x:40,y:560,size:15});
+     const before=await pdf.save();
+     const sample=bitmap=>{
+       const view=document.createElement('canvas');view.width=80;view.height=60;
+       const g=view.getContext('2d');g.drawImage(bitmap,0,0,80,60);
+       return g.getImageData(0,0,80,60).data;
+     };
+     const baseline=sample(originalBitmap),stats=[];
+     for(const strength of [20,60,90]){
+       const settings=pdfCompressionSettings(strength);
+       if(strength===90)settings.maxEdge=320; // exercise actual downsampling
+       const result=await compressPdfImages(before,settings);
+       if(result.images!==1)throw Error('Expected one actual JPEG image recompression');
+       if(result.bytes.length>=before.length)throw Error('JPEG compressor did not reduce this synthetic file');
+       const reopened=await PDFDocument.load(result.bytes);
+       if(reopened.getPageCount()!==1||reopened.getTitle()!=='USR09 browser JPEG compression')
+         throw Error('Compression changed document metadata/pages');
+       const resources=reopened.context.lookup(reopened.getPage(0).node.Resources().get(n('XObject')));
+       const images=resources.entries().map(([,ref])=>reopened.context.lookup(ref))
+         .filter(x=>x.dict?.get(n('Subtype'))?.toString()==='/Image');
+       if(images.length!==1)throw Error('Compressed JPEG XObject missing');
+       const img=images[0],width=img.dict.lookup(n('Width')).asNumber(),
+         height=img.dict.lookup(n('Height')).asNumber();
+       if(width!==(strength===90?320:640)||height!==(strength===90?240:480))
+         throw Error('Unexpected output image pixel dimensions');
+       const outputBlob=new Blob([img.getContents()],{type:'image/jpeg'});
+       const bitmap=await createImageBitmap(outputBlob);
+       if(bitmap.width!==width||bitmap.height!==height)throw Error('Compressed JPEG fails to decode at PDF XObject dimensions');
+       const actual=sample(bitmap);bitmap.close();
+       let mse=0;
+       for(let i=0;i<baseline.length;i+=4){
+         for(let component=0;component<3;component++){
+           const delta=baseline[i+component]-actual[i+component];mse+=delta*delta;
+         }
+       }
+       mse/=80*60*3;
+       const psnr=mse===0?99:10*Math.log10(255*255/mse);
+       if(!Number.isFinite(psnr)||psnr<10)throw Error('Compressed JPEG is visually inconsistent');
+       stats.push({strength,input:before.byteLength,output:result.bytes.byteLength,
+         width,height,psnr:Math.round(psnr*10)/10});
+       const decoded=await window.pdfjsLib.getDocument({data:new Uint8Array(result.bytes)}).promise;
+       try {
+         const text=(await (await decoded.getPage(1)).getTextContent()).items.map(x=>x.str).join(' ');
+         if(!text.includes('SEARCHABLE COMPRESSION TEXT'))throw Error('Compression removed searchable PDF text');
+       } finally {await decoded.destroy();}
+     }
+     originalBitmap.close();
+     if(stats[0].output<=stats[1].output||stats[1].output<=stats[2].output)
+       throw Error('Quality presets did not produce descending synthetic output sizes');
+     // Fail-closed validation must reject a malformed JPEG header even though
+     // its containing PDF would have a structurally valid page tree.
+     const originalFor=window.PDFLib.JpegEmbedder.for;
+     let decodedCalls=0,blocked=false;
+     try {
+       window.PDFLib.JpegEmbedder.for=async (...args)=>{
+         const header=await originalFor(...args);
+         if(++decodedCalls===2)header.width+=1;
+         return header;
+       };
+       try {await compressPdfImages(before,pdfCompressionSettings(20));}
+       catch(error){blocked=/JPEG 이미지의 크기/.test(String(error?.message||''));}
+     } finally {window.PDFLib.JpegEmbedder.for=originalFor;}
+     if(!blocked||decodedCalls!==2)throw Error('Mismatched browser-encoded JPEG was not rejected');
+     return stats;
+   });
+   assert.equal(compression.length,3,'three actual browser JPEG compression presets required');
+   assert.equal(compression[2].width,320,'high compression must downsample the raster');
+   console.log('PASS R22: actual browser JPEG sizes, sampled PSNR, image decode, searchable text, pixel dimensions, invalid JPEG fail-closed',compression);
    // USR-16: actual binary DOCX/XLSX download for the PDF text layer.
    const docxDownload=page.waitForEvent('download',{timeout:30000});
    await page.evaluate(()=>executeCommand('exportWordText'));
