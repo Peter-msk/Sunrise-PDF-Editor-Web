@@ -6,6 +6,7 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const http=require('node:http');
 const {chromium}=require('playwright');
 const PDFLib=require('../dist/assets/pdf-lib/pdf-lib.min.js');
+const editState=require('../src/assets/sunrise-edit-state.js');
 const baseDir=path.resolve(__dirname,'../dist');
 const telemetryEvents=[];
 const mime={
@@ -68,6 +69,37 @@ async function main(){
    await page.locator('#openPdfInput').setInputFiles({name:filename,mimeType:'application/pdf',buffer:await fixture()});
    await page.waitForFunction(name=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes(name),
      filename,{timeout:40000});
+   // Three end-user editing paths must be exercised in an actual Chromium/Chrome/Edge page.
+   await page.evaluate(()=>executeCommand('insertShape'));
+   await page.locator('#shapeConfirmBtn').waitFor({state:'visible'});
+   await page.locator('#shapeKindInput').selectOption('ellipse');
+   await page.locator('#shapeConfirmBtn').click();
+   await page.locator('#annotationOverlay [data-overlay-id] svg ellipse').waitFor();
+   await page.evaluate(()=>executeCommand('editInsertItem'));
+   await page.locator('#editStrokeWidthInput').fill('4');
+   await page.locator('#editItemConfirmBtn').click();
+
+   await page.evaluate(()=>executeCommand('insertTable'));
+   await page.locator('#tblConfirmBtn').waitFor({state:'visible'});
+   await page.locator('#tblHeaderInput').fill('항목, 내용');
+   await page.locator('#tblRowInput').fill('수질, 적합');
+   await page.locator('#tblConfirmBtn').click();
+   await page.evaluate(()=>executeCommand('editInsertItem'));
+   await page.locator('#editTableCellsInput').waitFor({state:'visible'});
+   await page.locator('#editTableCellsInput').fill('항목\t내용\n수질\t충족\n대기\t적합');
+   await page.locator('#editItemWidthInput').fill('275');
+   await page.locator('#editItemConfirmBtn').click();
+
+   await page.evaluate(()=>executeCommand('insertNote'));
+   await page.locator('#insConfirmBtn').waitFor({state:'visible'});
+   await page.locator('#insTextInput').fill('검토 의견');
+   await page.locator('#insConfirmBtn').click();
+   await page.evaluate(()=>executeCommand('editInsertItem'));
+   await page.locator('#editItemOpacityInput').waitFor({state:'visible'});
+   await page.locator('#editItemOpacityInput').fill('0.55');
+   await page.locator('#editItemBgInput').fill('#ffeecc');
+   await page.locator('#editItemConfirmBtn').click();
+
    await page.locator('#quickSaveBtn').click();
    await page.locator('#saveAsConfirmBtn').waitFor({state:'visible',timeout:20000});
    // Force one preparation error, then retry in the same dialog.
@@ -98,6 +130,18 @@ async function main(){
    assert(actual.byteLength>100);
    const reopened=await PDFLib.PDFDocument.load(actual);
    assert.equal(reopened.getPageCount(),2);
+   const restored=await editState.restore(new Uint8Array(actual),PDFLib);
+   assert.equal(restored.warning,false,'saved PDF must preserve editable overlay state');
+   assert.deepEqual(restored.overlays.map(x=>x.type),['Shape','Table','Note']);
+   assert.equal(restored.overlays[0].shapeKind,'ellipse');
+   assert.equal(restored.overlays[0].strokeWidth,4);
+   assert.equal(restored.overlays[1].cells.length,3);
+   assert.equal(restored.overlays[1].cells[2][0],'대기');
+   assert.equal(restored.overlays[1].width,275);
+   assert.equal(restored.overlays[2].text,'검토 의견');
+   assert.equal(restored.overlays[2].opacity,0.55);
+   assert.equal(restored.overlays[2].bgColor,'#ffeecc');
+
    assert.equal(reopened.getPage(1).getRotation().angle,90);
    assert.equal(reopened.getForm().getTextField('employee').getText(),'Sample Person');
    assert.equal(reopened.getForm().getCheckBox('approved').isChecked(),true);
@@ -108,7 +152,7 @@ async function main(){
    const uploaded=await page.evaluate(()=>document.querySelector('#workspaceDocumentTitle')?.textContent);
    assert(uploaded.includes('reloaded-output.pdf'));
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: real headless Chromium PDF open, Save As, actual Blob download to disk, reopen form/rotation, browser reload');
+   console.log('PASS: real browser shape, table, and note edits; PDF download, editable overlays restored, form/rotation preserved, browser reopen');
    await context.close();
  }finally{
    if(browser)await browser.close();
