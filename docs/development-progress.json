@@ -318,11 +318,11 @@
       "id": "USR-14",
       "name": "PDF 암호 보호",
       "phase": 4,
-      "implementation": 5,
-      "automated": 0,
-      "practical": 0,
+      "implementation": 22,
+      "automated": 85,
+      "practical": 30,
       "deployment": 0,
-      "note": "암호 및 권한 호환 검증 미완"
+      "note": "QPDF 11.7+가 설치된 로컬 PC용 AES-256 암호화 도구 구현. 비밀번호를 qpdf 명령줄이 아닌 @- 표준입력으로 전송, 원본 불변·기존 출력 덮어쓰기 거부·임시 출력 삭제, 전자서명/미판독 PDF 차단, 정상·오류 암호 검증 후 결과 공개. Linux qpdf 실파일 CI 및 Node 계약검증 통과. 사용자 웹 편집기 암호화/브라우저 WASM 미구현, Windows·외부 뷰어 호환 수용 미완. OCR 제외."
     },
     {
       "id": "USR-15",
