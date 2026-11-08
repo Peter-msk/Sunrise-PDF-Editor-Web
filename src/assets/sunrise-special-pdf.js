@@ -37,6 +37,30 @@
    throw Error('마스킹 사각형은 페이지 안에 있어야 합니다.');
   return v;
  }
+ // Pixel rectangles must cover the complete requested floating-point box.
+ // Floor the top-left and ceil the far edge independently: floor(left) +
+ // ceil(width) can leave an unmasked column at fractional coordinates.
+ function paintVerifiedMask(ctx,box,scale=RENDER_SCALE){
+  const left=Math.floor(box.x*scale),top=Math.floor(box.y*scale);
+  const right=Math.ceil((box.x+box.width)*scale),bottom=Math.ceil((box.y+box.height)*scale);
+  const width=right-left,height=bottom-top;
+  if(width<1||height<1||typeof ctx?.getImageData!=='function')
+   throw Error('마스크 픽셀 검증을 지원하지 않는 렌더러입니다.');
+  ctx.fillStyle='#000000';
+  ctx.fillRect(left,top,width,height);
+  // Verify actual composited pixels at five independent locations before
+  // serializing. This catches a no-op/transparent draw or renderer mismatch;
+  // it is not a complete semantic redaction certification.
+  const samples=[[left,top],[right-1,top],[left,bottom-1],
+    [right-1,bottom-1],[left+Math.floor(width/2),top+Math.floor(height/2)]];
+  for(const [x,y] of samples){
+   let rgba;
+   try{rgba=ctx.getImageData(x,y,1,1)?.data;}
+   catch{throw Error('마스킹 적용 결과를 픽셀로 확인할 수 없습니다.');}
+   if(!rgba||rgba.length<4||rgba[0]>2||rgba[1]>2||rgba[2]>2||rgba[3]<253)
+    throw Error('민감정보 마스크가 불투명한 검은색으로 적용되지 않았습니다. PDF 출력을 중단합니다.');
+  }
+ }
  function checkRasterSize(width,height,scale=RENDER_SCALE){
   if(!Number.isFinite(scale)||scale<1||scale>3||
     !Number.isFinite(width)||!Number.isFinite(height)||
@@ -62,9 +86,7 @@
   if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
   // Mutate the raster AFTER the source PDF has rendered. The fresh PDF gets
   // only the masked pixels; not the original content streams or annotations.
-  ctx.fillStyle='#000000';
-  ctx.fillRect(Math.floor(box.x*RENDER_SCALE),Math.floor(box.y*RENDER_SCALE),
-   Math.ceil(box.width*RENDER_SCALE),Math.ceil(box.height*RENDER_SCALE));
+  paintVerifiedMask(ctx,box);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!blob?.size)throw Error('마스킹 이미지 생성에 실패했습니다.');
   const bytes=new Uint8Array(await blob.arrayBuffer());
@@ -168,11 +190,7 @@
     ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,canvas.width,canvas.height);
     await page.render({canvasContext:ctx,canvas,viewport}).promise;
     if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
-    ctx.fillStyle='#000000';
-    for(const box of boxes){
-     ctx.fillRect(Math.floor(box.x*RENDER_SCALE),Math.floor(box.y*RENDER_SCALE),
-       Math.ceil(box.width*RENDER_SCALE),Math.ceil(box.height*RENDER_SCALE));
-    }
+    for(const box of boxes)paintVerifiedMask(ctx,box);
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
     if(!blob?.size)throw Error('마스킹 이미지 생성에 실패했습니다.');
     const data=new Uint8Array(await blob.arrayBuffer());
