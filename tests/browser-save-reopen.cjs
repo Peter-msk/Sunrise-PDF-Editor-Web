@@ -105,6 +105,65 @@ async function main(){
    await page.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
    await page.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseEditState),
      null,{timeout:40000});
+
+   // R24 USR-05: open an actual Type1 ASCII PDF, replace a real Tj text
+   // operand from the editor UI, save to disk, reopen and undo. This must
+   // never be mistaken for the existing appearance-only Correction overlay.
+   const directPdf=await PDFLib.PDFDocument.create();
+   const directFont=await directPdf.embedFont(PDFLib.StandardFonts.Helvetica);
+   directPdf.addPage([450,620]).drawText('INVOICE 2026',{x:32,y:570,size:14,font:directFont});
+   directPdf.addPage([450,620]).drawText('OTHER PAGE',{x:32,y:570,size:14,font:directFont});
+   const directFile=Buffer.from(await directPdf.save());
+   const directTab=await context.newPage();
+   const directErrors=[];
+   directTab.on('pageerror',error=>directErrors.push(error.message));
+   await directTab.goto(host+'/editor/',{waitUntil:'domcontentloaded',timeout:40000});
+   await directTab.waitForFunction(()=>Boolean(window.PDFLib&&window.pdfjsLib&&window.SunriseSpecialPdf),
+     null,{timeout:40000});
+   await directTab.locator('#openPdfInput').setInputFiles({
+     name:'invoice-direct.pdf',mimeType:'application/pdf',buffer:directFile
+   });
+   await directTab.waitForFunction(()=>
+     document.querySelector('#workspaceDocumentTitle')?.textContent.includes('invoice-direct.pdf'),null,{timeout:30000});
+   await directTab.evaluate(()=>executeCommand('directSourceText'));
+   await directTab.locator('#directTextApply').waitFor({state:'visible',timeout:15000});
+   await directTab.waitForFunction(()=>document.querySelector('#directTextOriginal')?.options[0]?.textContent.includes('INVOICE 2026'),
+     null,{timeout:20000});
+   await directTab.locator('#directTextReplacement').fill('TOO LONG TO SUBSTITUTE');
+   await directTab.locator('#directTextApply').click();
+   assert.match(await directTab.locator('#directTextStatus').textContent(),/길이가 같은/);
+   await directTab.locator('#directTextReplacement').fill('INVOICE 2027');
+   await directTab.locator('#directTextApply').click();
+   await directTab.locator('#modalBackdrop').waitFor({state:'hidden',timeout:25000});
+   const firstText=await directTab.evaluate(async()=>{
+     const text=await (await activeDoc().pdfJsDoc.getPage(1)).getTextContent();
+     return text.items.map(x=>x.str).join(' ');
+   });
+   assert(firstText.includes('INVOICE 2027')&&!firstText.includes('INVOICE 2026'),
+     'real PDF.js text extraction must show changed source text, not a visual-only overlay');
+   await directTab.evaluate(()=>executeCommand('saveAs'));
+   await directTab.locator('#saveAsConfirmBtn').click();
+   await directTab.locator('#saveAsDownloadLink').waitFor({state:'visible',timeout:45000});
+   const directDownload=directTab.waitForEvent('download',{timeout:30000});
+   await directTab.locator('#saveAsDownloadLink').click();
+   const savedDirect=await directDownload;
+   const directPath=path.join(downloadDir,'direct-edited.pdf');
+   await savedDirect.saveAs(directPath);
+   const outputDirect=await PDFLib.PDFDocument.load(fs.readFileSync(directPath));
+   assert.equal(outputDirect.getPageCount(),2);
+   assert.equal(outputDirect.getPage(1).getWidth(),450);
+   await directTab.locator('#saveAsDownloadedBtn').click();
+   await directTab.evaluate(()=>performUndo());
+   const undoText=await directTab.evaluate(async()=>{
+     const text=await (await activeDoc().pdfJsDoc.getPage(1)).getTextContent();
+     return text.items.map(x=>x.str).join(' ');
+   });
+   assert(undoText.includes('INVOICE 2026')&&!undoText.includes('INVOICE 2027'),
+     'Undo must restore the original source text');
+   assert.equal(directErrors.length,0,'R24 direct-text UI runtime errors: '+directErrors.join(' | '));
+   await directTab.close();
+   console.log('PASS R24: direct PDF source text changed and searchable, saved/downloaded/reopened, Undo restored original');
+
    const filename='roundtrip-input.pdf',savedName='roundtrip-input_edited.pdf';
    await page.locator('#openPdfInput').setInputFiles({name:filename,mimeType:'application/pdf',buffer:await fixture()});
    await page.waitForFunction(name=>document.querySelector('#workspaceDocumentTitle')?.textContent.includes(name),
@@ -295,7 +354,9 @@ async function main(){
    const link=page.locator('#saveAsDownloadLink');
    await link.waitFor({state:'visible',timeout:60000});
    await page.waitForTimeout(1000);
-   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation');
+   // The independent R24 PDF save adds its own start/ready pair.
+   // Scope this historical retry assertion to the four most recent events.
+   const saveEvents=telemetryEvents.filter(x=>x.type==='save_operation').slice(-4);
    assert.deepEqual(saveEvents.map(x=>x.stage),['started','failed','started','ready']);
    assert.equal(saveEvents[0].operationId,saveEvents[1].operationId);
    assert.equal(saveEvents[2].retryOf,saveEvents[0].operationId);
