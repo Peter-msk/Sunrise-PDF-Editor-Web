@@ -37,6 +37,14 @@ const reader={numPages:1,getPage:async number=>{assert.equal(number,1);return pa
  assert.equal(marks.length,2);
  assert.equal(marks[1].color,'#000000');
  assert.deepEqual(marks[1].coords,[20,40,100,80]);
+ // R23: fractional coordinates must cover the right/bottom pixel as well,
+ // not floor(start) + ceil(width), which can leave a sensitive pixel exposed.
+ const fraction=await special.exportMaskedPage({
+  reader,pageNumber:1,rectangle:{x:11.35,y:20.45,width:50.85,height:40.65},
+  PDFLib:lib,makeCanvas
+ });
+ assert.equal(fraction.pages,1);
+ assert.deepEqual(marks.at(-1).coords,[22,40,103,83]);
  const pdf=await lib.PDFDocument.load(out.bytes);
  assert.equal(pdf.getPageCount(),1);
  assert.equal(pdf.getPage(0).getWidth(),300);

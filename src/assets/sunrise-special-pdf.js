@@ -37,6 +37,14 @@
    throw Error('마스킹 사각형은 페이지 안에 있어야 합니다.');
   return v;
  }
+ // Cover both fractional rectangle edges on the raster pixel grid.
+ // floor(x)+ceil(width) can leave the far edge exposed by one pixel.
+ function rasterMaskBox(box,scale=RENDER_SCALE){
+  const x=Math.floor(box.x*scale),y=Math.floor(box.y*scale);
+  const right=Math.ceil((box.x+box.width)*scale);
+  const bottom=Math.ceil((box.y+box.height)*scale);
+  return {x,y,width:right-x,height:bottom-y};
+ }
  function checkRasterSize(width,height,scale=RENDER_SCALE){
   if(!Number.isFinite(scale)||scale<1||scale>3||
     !Number.isFinite(width)||!Number.isFinite(height)||
@@ -63,8 +71,8 @@
   // Mutate the raster AFTER the source PDF has rendered. The fresh PDF gets
   // only the masked pixels; not the original content streams or annotations.
   ctx.fillStyle='#000000';
-  ctx.fillRect(Math.floor(box.x*RENDER_SCALE),Math.floor(box.y*RENDER_SCALE),
-   Math.ceil(box.width*RENDER_SCALE),Math.ceil(box.height*RENDER_SCALE));
+  const pixels=rasterMaskBox(box);
+  ctx.fillRect(pixels.x,pixels.y,pixels.width,pixels.height);
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!blob?.size)throw Error('마스킹 이미지 생성에 실패했습니다.');
   const bytes=new Uint8Array(await blob.arrayBuffer());
@@ -170,8 +178,8 @@
     if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
     ctx.fillStyle='#000000';
     for(const box of boxes){
-     ctx.fillRect(Math.floor(box.x*RENDER_SCALE),Math.floor(box.y*RENDER_SCALE),
-       Math.ceil(box.width*RENDER_SCALE),Math.ceil(box.height*RENDER_SCALE));
+     const pixels=rasterMaskBox(box);
+     ctx.fillRect(pixels.x,pixels.y,pixels.width,pixels.height);
     }
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
     if(!blob?.size)throw Error('마스킹 이미지 생성에 실패했습니다.');

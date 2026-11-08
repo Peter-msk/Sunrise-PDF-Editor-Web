@@ -308,11 +308,11 @@
       "id": "USR-13",
       "name": "민감정보 완전 삭제",
       "phase": 4,
-      "implementation": 43,
-      "automated": 85,
+      "implementation": 45,
+      "automated": 90,
       "practical": 20,
       "deployment": 0,
-      "note": "페이지별 쉼표 구분 마스크 계획으로 최대 10쪽·40영역(쪽당 12개), 입력 경계/사전 미리 검증, 진행·취소, 선택 쪽만 신규 래스터 PDF 작성, 원본 텍스트·양식·첨부·북마크·편집 메타데이터 비이식 및 출력 PDF 구조 검사. Node·Linux Chromium·Windows Chrome/Edge에서 2쪽·3영역 실다운로드·픽셀/텍스트 확인 PASS. 지정 외 이미지/문구 노출 가능, 문서 전체 완전 삭제/인증 불가. OCR 제외"
+      "note": "페이지별 쉼표 구분 마스크 계획으로 최대 10쪽·40영역(쪽당 12개), 입력 경계/사전 미리 검증, 진행·취소, 선택 쪽만 신규 래스터 PDF 작성, 원본 텍스트·양식·첨부·북마크·편집 메타데이터 비이식 및 출력 PDF 구조 검사. Node·Linux Chromium·Windows Chrome/Edge에서 2쪽·3영역 실다운로드·픽셀/텍스트 확인 PASS. 지정 외 이미지/문구 노출 가능, 문서 전체 완전 삭제/인증 불가. OCR 제외 R23: 단일·다중 마스킹에서 소수점 오른쪽·아래쪽 1픽셀 노출 가능성을 막도록 양 끝점을 floor/ceil. 좌표(11.35,20.45,50.85,40.65)에서 2배 렌더의 픽셀 커버(22,40,103,83) 회귀 확인. 문서 전체 민감정보 탐지·완전 삭제 인증은 아님."
     },
     {
       "id": "USR-14",
@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 55,
-      "automated": 87,
+      "implementation": 62,
+      "automated": 92,
       "practical": 20,
       "deployment": 0,
-      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외."
+      "note": "PDF.js 텍스트 조각의 hasEOL 및 기준선 변화를 이용한 Word·Excel 줄 구분 개선, DOCX 페이지 구분·XLSX 페이지/텍스트 열 유지. Excel 32,767자 셀 초과 시 무단 잘림 대신 오류, XML 제어문자·손상 Unicode는 변환 거절, 모든 페이지 텍스트 판독 완료 전 Office 다운로드 차단. Node 계약검사·Linux Chromium 다운로드 확인. Windows Chrome/Edge·Office 데스크톱 앱 수용 및 원본 표·서식·이미지 복원 미완, OCR 제외. R23: 기존 Excel 페이지/텍스트 내보내기 유지, PDF.js 가로 열 좌표 기반 Excel 다열 표 추정 별도 명령 추가. 2행 이상 반복 정렬 좌표만 인식, PDF.js 넓은 공백 항목은 열 구분자로 처리, 불규칙/회전/충돌 셀 거부. 합성 PDF 브라우저 파일 다운로드 회귀. 테두리·병합 셀·실무 문서 전체 복원은 미완."
     },
     {
       "id": "TECH-01",
