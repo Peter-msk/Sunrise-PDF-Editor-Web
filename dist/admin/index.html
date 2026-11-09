@@ -46,9 +46,59 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 
 /* R07C: guarded publication backup/restore controls */
 .sun-restore-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}.sun-restore-row input[type=file]{flex:1 1 230px;min-width:0}#sunRestoreSummary{font-weight:650;margin:8px 0;color:var(--navy)}#sunRestoreStatus[data-state=error]{color:#a52323}.sun-restore-note{color:var(--muted);font-size:12px;line-height:1.6}.sun-restore-confirm{width:min(100%,460px)}
+
+/* Administrator workspace: navigable views, one shared set of authenticated controls. */
+:root{--sidebar:#102f46;--sidebar-accent:#71b8e1}
+.admin-shell{display:grid;grid-template-columns:232px minmax(0,1fr);max-width:1660px;margin:0 auto;min-height:calc(100vh - 62px)}
+.admin-sidebar{background:var(--sidebar);color:#e9f4fd;border-right:1px solid #244e68;padding:19px 12px;position:sticky;top:61px;height:calc(100vh - 61px);overflow-y:auto;overscroll-behavior:contain;align-self:start}
+.admin-sidebar h2{color:#fff;font-size:15px;margin:0 9px 16px;letter-spacing:.01em}
+.admin-nav-group{font-size:11px;font-weight:750;color:#9fc2da;margin:17px 12px 6px;letter-spacing:.07em}
+.admin-nav-link{display:flex;align-items:center;gap:11px;color:#e2eef6;text-decoration:none;border-radius:9px;padding:11px 12px;font-size:13px;font-weight:550;min-height:42px;border:1px solid transparent}
+.admin-nav-link:hover,.admin-nav-link:focus-visible{background:#214b67;color:#fff;outline:none}
+.admin-nav-link[aria-current="page"]{background:#eef7fd;color:#154a6c;font-weight:760;border-color:#cbe3f2}
+.admin-nav-mark{font-size:14px;line-height:1;width:20px;text-align:center;font-weight:700}
+.admin-content{max-width:none;min-width:0;width:100%;padding:22px 27px 45px}
+.admin-page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px}
+.admin-page-header h2{font-size:23px;letter-spacing:-.025em;margin:0 0 4px}
+.admin-page-header p{color:var(--muted);font-size:12px;margin:0;line-height:1.65}
+.admin-page-header .page-caption{color:#466980;font-size:12px;white-space:nowrap;padding-top:8px}
+.admin-content > [data-admin-page]{margin-top:12px}
+.admin-content > [data-admin-page][hidden]{display:none!important}
+.admin-content > .grid[data-admin-page]{margin-top:12px}
+.admin-content > .panel[data-admin-page]{margin-top:12px}
+.admin-menu-toggle{display:none}
+.admin-sidebar-backdrop{display:none}
+.admin-content .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1200px){.admin-content .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1050px){.admin-shell{grid-template-columns:205px minmax(0,1fr)}.admin-content{padding:18px}.admin-content .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+ .admin-shell{display:block}.admin-content{padding:14px 12px 35px}
+ .admin-sidebar{position:fixed;top:0;bottom:0;left:0;z-index:11;height:100vh;width:min(82vw,290px);transform:translateX(-105%);transition:transform .18s ease;box-shadow:5px 0 30px #102d4333}
+ .admin-sidebar.is-open{transform:translateX(0)}.admin-sidebar-backdrop.is-open{display:block;position:fixed;inset:0;background:#0a233b83;z-index:10}
+ .admin-menu-toggle{display:inline-flex;align-items:center;justify-content:center;min-width:42px;min-height:38px;font-weight:700}
+ header .wrap{gap:9px;flex-wrap:wrap}header .admin-header-actions{gap:7px;flex-wrap:wrap;justify-content:flex-end}
+ .admin-page-header h2{font-size:20px}.admin-page-header .page-caption{display:none}
+}
+@media(max-width:550px){.admin-content .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-content .metric{padding:11px}.admin-content .metric strong{font-size:22px}}
+@media(prefers-reduced-motion:reduce){.admin-sidebar{transition:none}}
 </style><script src="/assets/sunrise-diagnostics.js"></script></head><body>
-<header><div class="wrap"><div><h1>SUNRISE PDF EDITOR <span class="muted">/ 관리자</span></h1><small class="muted">방문·사용시간·기능 오류·문의 관리</small></div><div style="display:flex;align-items:center;gap:8px"><a class="home" href="/">홈으로</a><a class="home" href="/admin/password/">비밀번호 변경</a><button id="adminLogout" type="button" title="관리자 로그아웃">로그아웃</button></div></div></header>
-<main class="wrap">
+<header><div class="wrap"><button class="admin-menu-toggle" type="button" id="adminMenuToggle" aria-controls="adminSidebar" aria-expanded="false" aria-label="관리 메뉴 열기">☰ 메뉴</button><div><h1>SUNRISE PDF EDITOR <span class="muted">/ 관리자</span></h1><small class="muted">운영 현황 · 오류 분석 · 고객 문의</small></div><div class="admin-header-actions" style="display:flex;align-items:center;gap:8px"><a class="home" href="/">홈으로</a><a class="home" href="/admin/password/">비밀번호 변경</a><button id="adminLogout" type="button" title="관리자 로그아웃">로그아웃</button></div></div></header>
+<div class="admin-sidebar-backdrop" id="adminSidebarBackdrop" aria-hidden="true"></div>
+<div class="admin-shell">
+<aside class="admin-sidebar" id="adminSidebar" aria-label="관리자 좌측 메뉴"><nav aria-label="관리자 기능별 페이지"><h2>관리자 워크스페이스</h2>
+<p class="admin-nav-group">운영 분석</p>
+<a class="admin-nav-link" data-admin-link="overview" href="/admin/overview/"><span class="admin-nav-mark" aria-hidden="true">▦</span>운영 대시보드</a>
+<a class="admin-nav-link" data-admin-link="usage" href="/admin/usage/"><span class="admin-nav-mark" aria-hidden="true">▥</span>방문·사용 현황</a>
+<a class="admin-nav-link" data-admin-link="errors" href="/admin/errors/"><span class="admin-nav-mark" aria-hidden="true">!</span>오류·작업 진단</a>
+<p class="admin-nav-group">서비스 관리</p>
+<a class="admin-nav-link" data-admin-link="inquiries" href="/admin/inquiries/"><span class="admin-nav-mark" aria-hidden="true">✉</span>고객 문의</a>
+<a class="admin-nav-link" data-admin-link="publications" href="/admin/publications/"><span class="admin-nav-mark" aria-hidden="true">≡</span>공지·업데이트</a>
+<p class="admin-nav-group">운영 설정</p>
+<a class="admin-nav-link" data-admin-link="system" href="/admin/system/"><span class="admin-nav-mark" aria-hidden="true">⚙</span>시스템·배포</a>
+<a class="admin-nav-link" data-admin-link="security" href="/admin/security/"><span class="admin-nav-mark" aria-hidden="true">♜</span>보안·세션</a>
+</nav></aside>
+<main class="wrap admin-content" id="adminContent">
+<div class="admin-page-header"><div><h2 id="adminPageTitle" tabindex="-1">운영 대시보드</h2><p id="adminPageDescription">운영 상태와 확인이 필요한 항목을 요약합니다.</p></div><span class="page-caption">SUNRISE ADMIN</span></div>
 <p class="sub">한국시간(KST) 기준 · 방문자는 실제 사람 수가 아닌 익명 브라우저 탭 세션 수입니다. 집계 시작 이전 기록은 포함되지 않습니다.</p>
 <p id="state" role="status" class="notice">관리자 인증과 통계 데이터를 확인하고 있습니다.</p>
 <section class="panel"><div class="toolbar"><h2>운영 연결 준비 항목</h2><button type="button" id="readinessReload">설정 조회</button></div><p id="readinessStatus" role="status">준비 항목을 불러오는 중입니다.</p><p class="muted">스키마 기본 구조와 설정 유무만 조회합니다. 기능 검증·백업·공개 준비 완료를 뜻하지 않습니다.</p></section>
@@ -173,7 +223,90 @@ tr[data-id]{cursor:pointer}tr[data-id]:hover{background:#f5fafe}.clip{max-width:
 <div class="table-scroll"><table><thead><tr><th>최근 시각(KST)</th><th>기능·원인/조사 안내</th><th>횟수</th><th>단계·환경</th><th>버전</th></tr></thead><tbody id="diagnosticRows"></tbody></table></div>
 </section>
 <p class="muted" style="margin-top:12px">방문·사용시간은 추정치입니다. PDF 내용, 파일명, 검색어, IP 주소 및 오류 전문은 통계 서버에 저장하지 않습니다.</p>
-</main>
+</main></div>
+<script>
+/* Client navigation: stable deep links, preserving the original authenticated API forms. */
+(() => {
+ 'use strict';
+ const root=document.getElementById('adminContent');
+ const sidebar=document.getElementById('adminSidebar');
+ const menu=document.getElementById('adminMenuToggle');
+ const backdrop=document.getElementById('adminSidebarBackdrop');
+ const views={
+  overview:['운영 대시보드','핵심 지표, 미확인 문의와 현재 운영 확인 사항'],
+  usage:['방문·사용 현황','방문 세션, 편집기 사용시간과 기간별 추이'],
+  errors:['오류·작업 진단','작업 실패 원인, 오류 세션 및 PDF 저장 품질'],
+  inquiries:['고객 문의','문의 검색, 처리 상태와 관리자 메모·이력'],
+  publications:['공지·업데이트','게시물 관리와 백업·복원'],
+  system:['시스템·배포','Worker·D1 상태, 배포 이력과 데이터 보존'],
+  security:['보안·세션','보안 이벤트, 관리자 로그인 세션 관리']
+ };
+ const $=id=>document.getElementById(id);
+ function movePanel(id){
+  const element=$(id),panel=element?.closest('.panel');
+  if(!panel||!panel.parentElement?.classList.contains('grid'))throw Error('Missing chart panel: '+id);
+  panel.parentElement.after(panel);
+ }
+ // Keep the alert panel on the overview; the other service panel belongs to System.
+ const alerts=$('operationAlerts').closest('.panel');
+ alerts.parentElement.after(alerts);
+ // Separate error and inquiry charts from the usage graph without cloning API bindings.
+ movePanel('inquiryChart');movePanel('errorChart');
+ // Original sections stay mounted so all legacy form handlers and cross-panel filters work.
+ const groups={
+  overview:['operationAlerts','visitsToday'],
+  usage:['statisticsDownload','dashboardDays','periodVisits','visitChart'],
+  errors:['qualityTitle','errorChart','diagnosticTitle'],
+  inquiries:['inquiryChart','statusFilter'],
+  publications:['publicationsTitle','sunPublicationRestorePanel'],
+  system:['readinessReload','healthWorker','deploymentsStatus','retentionExecution'],
+  security:['securityEventsStatus','sessionTitle']
+ };
+ for(const [view,ids] of Object.entries(groups)){
+  for(const id of ids){
+   let element=$(id);
+   if(!element)throw Error('Missing admin section: '+id);
+   while(element.parentElement!==root){element=element.parentElement;if(!element)throw Error('Invalid admin section: '+id)}
+   if(element.dataset.adminPage&&element.dataset.adminPage!==view)throw Error('Conflicting admin section: '+id);
+   element.dataset.adminPage=view;
+  }
+ }
+ const all=[...root.querySelectorAll(':scope > [data-admin-page]')];
+ function closeMenu(){sidebar.classList.remove('is-open');backdrop.classList.remove('is-open');menu.setAttribute('aria-expanded','false')}
+ function currentView(){const m=location.pathname.match(/^\/admin\/(overview|usage|errors|inquiries|publications|system|security)\/$/);return m?m[1]:'overview'}
+ function show({focus=false,scroll=false}={}){
+  const view=currentView();
+  for(const element of all)element.hidden=element.dataset.adminPage!==view;
+  for(const link of sidebar.querySelectorAll('[data-admin-link]')){
+   if(link.dataset.adminLink===view)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');
+  }
+  $('adminPageTitle').textContent=views[view][0];
+  $('adminPageDescription').textContent=views[view][1];
+  document.title=views[view][0]+' · Sunrise PDF Editor 관리자';
+  closeMenu();
+  if(scroll)window.scrollTo(0,0);
+  if(focus)$('adminPageTitle').focus({preventScroll:true});
+ }
+ sidebar.addEventListener('click',event=>{
+  const link=event.target.closest('a[data-admin-link]');
+  if(!link||event.defaultPrevented||event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+  event.preventDefault();
+  const url=new URL(link.href);
+  if(location.pathname!==url.pathname)history.pushState({adminView:link.dataset.adminLink},'',url.pathname);
+  show({focus:true,scroll:true});
+ });
+ menu.addEventListener('click',()=>{
+  const opened=!sidebar.classList.contains('is-open');
+  sidebar.classList.toggle('is-open',opened);backdrop.classList.toggle('is-open',opened);
+  menu.setAttribute('aria-expanded',String(opened));
+  if(opened)sidebar.querySelector('a[aria-current="page"]')?.focus();
+ });
+ backdrop.addEventListener('click',()=>{closeMenu();menu.focus()});
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&sidebar.classList.contains('is-open')){closeMenu();menu.focus()}});
+ window.addEventListener('popstate',()=>show({focus:true}));
+ show();
+})();
+</script>
 <script type="module">
 const $=id=>document.getElementById(id),fmt=n=>Number(n||0).toLocaleString('ko-KR');
 let records=[],selected=null,publications={announcements:[],releases:[],today:''},selectedPublication=null;

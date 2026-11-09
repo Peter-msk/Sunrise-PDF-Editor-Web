@@ -59,6 +59,7 @@ async function main(){
   assert.equal(await page.locator('#qualityOverdue').innerText(),'1');
   assert.equal(await page.locator('#healthRelease').innerText(),'미설정');
   assert.equal(await page.locator('#visitChart .barwrap').count(),14);
+  await page.locator('a[data-admin-link="usage"]').click();
   await page.locator('#dashboardDays').selectOption('30');
   await page.waitForFunction(()=>document.querySelectorAll('#visitChart .barwrap').length===30,null,{timeout:15000});
   assert.equal(await page.locator('#periodVisits').innerText(),'6');
@@ -72,6 +73,7 @@ async function main(){
   // An HTTP 503 with well-formed health JSON must display a D1-specific
   // warning; the dashboard must not interpret the Worker as unreachable.
   await page.request.get(new URL('/__test/health-degraded',page.url()).toString());
+  await page.locator('a[data-admin-link="overview"]').click();
   await page.locator('#operationsReload').click();
   await page.waitForFunction(()=>document.querySelector('#healthDatabase')?.textContent==='연결 오류',null,{timeout:15000});
   assert.equal(await page.locator('#healthWorker').innerText(),'응답 정상');
