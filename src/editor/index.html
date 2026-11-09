@@ -6621,8 +6621,12 @@
             catch(error){status.textContent=error.message;return;}
             running=true;cancelled=false;start.disabled=true;
             files.disabled=mode.disabled=true;sync();cancel.textContent='작업 취소';results.replaceChildren();
-            let successes=0,failures=0;
+            let successes=0,failures=0,firstFailure=null;
             const finish=beginOperationMetric(settings.mode==='merge'?'batch_merge':'batch_split');let outcome='cancelled';
+            const captureBatchFailure=(code,index,pageCount)=>window.SunriseDiagnostics?.capture(
+              {sunriseDiagnosticCode:code||'batch_unexpected'},
+              {origin:'file',bytes:selected[index]?.size,pages:pageCount,ua:navigator.userAgent}
+            );
             try{
               await window.SunriseBatchPages.process(selected,settings,{
                 cancelled:()=>cancelled||!open(),
@@ -6638,10 +6642,11 @@
                   button.addEventListener('click',()=>downloadBytes(bytes,filename));
                   row.append(button);results.append(row);successes++;
                 },
-                error:({name,message})=>{
+                error:({index,name,message,code,pages})=>{
                   if(!open())return;
                   const row=document.createElement('p');row.textContent=name+': '+message;
                   results.append(row);failures++;
+                  if(!firstFailure)firstFailure=captureBatchFailure(code,index,pages);
                 }
               },{
                 PDFLib:window.PDFLib,
@@ -6649,9 +6654,12 @@
               });
               outcome=cancelled||!open()?'cancelled':failures?'failed':'succeeded';
               if(open())status.textContent=cancelled?'작업이 취소되었습니다.':'완료 '+successes+'개 / 실패 '+failures+'개. 결과를 개별 확인해 주세요.';
-            }catch(error){outcome=cancelled||!open()?'cancelled':'failed';if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';}
+            }catch(error){outcome=cancelled||!open()?'cancelled':'failed';
+              if(outcome==='failed'&&!firstFailure)firstFailure=captureBatchFailure(error?.sunriseDiagnosticCode||'batch_unexpected',-1,null);
+              if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';
+            }
             finally{
-              finish(outcome);
+              finish(outcome,outcome==='failed'?firstFailure:null);
               running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
               files.disabled=false;mode.disabled=false;sync();
             }

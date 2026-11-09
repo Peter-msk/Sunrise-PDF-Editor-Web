@@ -309,7 +309,7 @@ header button{padding:7px 12px;min-height:35px}
 <p id="sunRestoreStatus" class="sun-restore-note" role="status" aria-live="polite">백업을 내려받거나 JSON 파일을 선택해 주세요.</p>
 </section>
 <section class="panel" style="margin-top:12px" aria-labelledby="diagnosticTitle">
-<div class="toolbar"><h2 id="diagnosticTitle">기능 실패 원인 · 작업 진단</h2><button id="diagnosticsReload" type="button">진단 새로고침</button><label>기능 <select id="diagnosticFeature"><option value="all">전체 작업</option><option value="open">문서 열기</option></select></label><a id="diagnosticsDownload" href="/api/admin/diagnostics.csv?days=14">진단 CSV</a></div>
+<div class="toolbar"><h2 id="diagnosticTitle">기능 실패 원인 · 작업 진단</h2><button id="diagnosticsReload" type="button">진단 새로고침</button><label>기능 <select id="diagnosticFeature"><option value="all">전체 작업</option><option value="open">문서 열기</option><option value="batch_split">일괄 분할</option><option value="batch_merge">일괄 병합</option></select></label><a id="diagnosticsDownload" href="/api/admin/diagnostics.csv?days=14">진단 CSV</a></div>
 <p class="muted">위 처리 결과의 기간·수집 Worker 버전 필터를 사용합니다. 오류 코드·발생 단계·분 단위 시각·입력 경로·크기/페이지 구간·브라우저·화면 진단 빌드를 기록합니다. PDF 내용·파일명·오류 전문·스택은 보내지 않습니다. 경고·취소는 실패로 집계하지 않습니다.</p>
 <p id="diagnosticsLegacy" class="muted"></p><p id="diagnosticsStatus" role="status">진단을 불러오는 중입니다.</p>
 <div class="table-scroll"><table><thead><tr><th>최근 시각(KST)</th><th>기능·원인/조사 안내</th><th>횟수</th><th>단계·환경</th><th>버전</th></tr></thead><tbody id="diagnosticRows"></tbody></table></div>

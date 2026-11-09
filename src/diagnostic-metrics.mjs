@@ -3,12 +3,14 @@ import {operationScope} from './operation-metrics.mjs';
 import {toAdminCsv} from './admin-csv.mjs';
 export async function diagnosticSummary(db,today,url){
  const scope=operationScope(url),feature=url.searchParams.get('feature')||'all';
- if(!['all','open'].includes(feature))throw new RangeError('Invalid diagnostic feature');
- const args=[today,'-'+(scope.days-1)+' days',today,...(scope.version?[scope.version]:[]),...(feature==='open'?['open']:[])];
- const where="day BETWEEN date(?,?) AND ?"+(scope.version?' AND worker_version=?':'')+(feature==='open'?' AND feature=?':'');
+ if(!['all','open','batch_split','batch_merge'].includes(feature))throw new RangeError('Invalid diagnostic feature');
+ const args=[today,'-'+(scope.days-1)+' days',today,...(scope.version?[scope.version]:[]),...(feature==='all'?[]:[feature])];
+ const where="day BETWEEN date(?,?) AND ?"+(scope.version?' AND worker_version=?':'')+(feature==='all'?'':' AND feature=?');
  const rows=await db.prepare('SELECT feature,code,phase,origin,size_bucket,page_bucket,browser,client_build,worker_version,COUNT(*) count,MIN(received_ms) first_ms,MAX(received_ms) last_ms FROM analytics_diagnostics WHERE '+where+' GROUP BY feature,code,phase,origin,size_bucket,page_bucket,browser,client_build,worker_version ORDER BY last_ms DESC,feature,code LIMIT 201').bind(...args).all();
  const items=(rows.results||[]).slice(0,200).map(row=>({...row,...rules.describe(row.code)}));
- const coarse=await db.prepare("SELECT day,feature,count FROM analytics_errors WHERE day BETWEEN date(?,?) AND ? AND feature='문서 열기' ORDER BY day DESC").bind(today,'-'+(scope.days-1)+' days',today).all();
+ const coarse=(feature==='all'||feature==='open')
+  ?await db.prepare("SELECT day,feature,count FROM analytics_errors WHERE day BETWEEN date(?,?) AND ? AND feature='문서 열기' ORDER BY day DESC").bind(today,'-'+(scope.days-1)+' days',today).all()
+  :{results:[]};
  return {windowDays:scope.days,version:scope.version,feature,retentionDays:14,timeResolution:'minute',items,truncated:(rows.results||[]).length>200,legacyOpen:coarse.results||[],legacyDefinition:'unlinked-unversioned-signals-not-confirmed-open-failures'};
 }
 export function diagnosticCsv(data){
