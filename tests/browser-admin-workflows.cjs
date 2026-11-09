@@ -88,6 +88,7 @@ async function main(){
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port+'/admin/',{waitUntil:'load'});
   await page.waitForFunction(()=>document.querySelector('#publicationList')?.textContent.includes('오래된 안내'),null,{timeout:15000});
+  await page.locator('a[data-admin-link="inquiries"]').click();
   // Search and inspect a selected inquiry, then keep detail visible after saving.
   await page.locator('#query').fill('저장할 때');
   await page.locator('#query').press('Enter');
@@ -112,6 +113,7 @@ async function main(){
   await page.waitForFunction(()=>document.querySelector('#inquiryPage')?.textContent==='1쪽',null,{timeout:15000});
   assert.equal(await page.locator('#inquiryRows tr[data-id]').count(),50);
 
+  await page.locator('a[data-admin-link="publications"]').click();
   // Old publications remain editable in admin but cannot regain a fresh date.
   const oldFirst=announcements[0].first_published_at;
   await page.locator('#publicationList button').filter({hasText:'오래된 안내'}).click();
@@ -149,6 +151,7 @@ async function main(){
   assert.equal(releases.find(x=>x.version==='신규 업데이트')?.first_published_at,today);
   assert((await page.locator('#publicationList').innerText()).includes('표시기간 만료'));
 
+  await page.locator('a[data-admin-link="usage"]').click();
   const pending=page.waitForEvent('download',{timeout:15000});
   await page.locator('#statisticsDownload').click();
   const download=await pending;

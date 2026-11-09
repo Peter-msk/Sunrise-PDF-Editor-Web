@@ -80,6 +80,13 @@ export default {
         try{return await adminApi(request,env,url,username)}
         catch(error){console.error('Admin API failed',error?.name||'unknown');return respond({error:'관리자 데이터를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'},503);}
       }
+      // Serve all seven authenticated admin views from one maintained shell.
+      // A new URL is used only after the existing session check above.
+      if (/^\/admin\/(?:overview|usage|errors|inquiries|publications|system|security)\/$/.test(url.pathname)) {
+        if(request.method!=='GET' && request.method!=='HEAD')return new Response('Method Not Allowed',{status:405});
+        const assetUrl=new URL('/admin/',url.origin);
+        return env.ASSETS.fetch(new Request(assetUrl,request));
+      }
       return env.ASSETS.fetch(request);
     }
     if(url.pathname==='/api/telemetry')return telemetry(request,env,url);
