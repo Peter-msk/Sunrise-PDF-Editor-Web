@@ -16,6 +16,14 @@
   page_metadata_failed:['metadata','페이지 정보 읽기 실패','해당 문서의 페이지 구조·크기와 독립 뷰어 표시를 확인하세요.'],
   page_render_failed:['render','첫 화면 표시 실패','PDF.js·캔버스 메모리·브라우저 렌더링을 확인하세요.'],
   open_failed_unknown:['unknown','미분류 문서 열기 실패','단계·브라우저·파일 크기 구간으로 재현 범위를 좁히세요.'],
+  batch_read_failed:['read','일괄 PDF 입력 읽기 실패','파일 읽기 권한·크기 불일치·브라우저 메모리를 확인하세요.'],
+  batch_parse_failed:['parse','일괄 PDF 해석 실패','암호 보호·손상·지원 PDF 구조 여부를 확인하세요.'],
+  batch_unsupported_structure:['structure','안전 보존 불가 구조','양식·서명·북마크·주석·페이지 라벨 등 보존할 수 없는 구조를 확인하세요. 원본을 유지합니다.'],
+  batch_limit_exceeded:['limit','일괄 작업 제한 초과','파일당 150쪽·출력 최대 50개·출력당 1~100쪽 제한을 확인하세요.'],
+  batch_copy_failed:['copy','일괄 PDF 페이지 복사 실패','페이지 리소스·참조 관계·브라우저 메모리와 독립 뷰어 결과를 확인하세요.'],
+  batch_save_failed:['save','일괄 PDF 결과 저장 실패','브라우저 메모리·PDF 직렬화 동작을 확인하세요. 원본은 보존됩니다.'],
+  batch_verify_failed:['verify','일괄 PDF 저장본 검증 실패','결과 페이지 수·회전·크기·내용 스트림 무결성을 확인하세요.'],
+  batch_unexpected:['operation','일괄 PDF 미분류 작업 실패','선택 파일의 지원 구조와 동작을 재현해 세부 오류 단계를 확인하세요.'],
   operation_failed:['operation','작업 실패·추가 분류 필요','해당 기능의 입력 조건과 재현 순서를 확인하세요.']
  });
  const ENUMS={origin:['file','recent','generated','unknown'],size:['empty','lt1m','1to10m','10to50m','50to200m','ge200m','unknown'],pages:['one','2to10','11to100','101to500','gt500','unknown'],browser:['edge','chrome','firefox','safari','other']};
