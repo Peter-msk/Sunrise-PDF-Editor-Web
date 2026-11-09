@@ -1,6 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs');
-const filename='.github/workflows/manual-production-release.yml';
+const active='.github/workflows/manual-production-release.yml';
+const paused=active+'.paused';
+// Production automation can be intentionally paused to protect Actions quota.
+// Verify the preserved workflow's entire release safety contract without enabling it.
+assert.notEqual(fs.existsSync(active),fs.existsSync(paused),
+ 'Exactly one active or paused manual production workflow must be present');
+const filename=fs.existsSync(active)?active:paused;
 const workflow=fs.readFileSync(filename,'utf8');
 assert(!fs.existsSync('.github/workflows/production-release.yml'),
  'There must be exactly one manually approved production release workflow');
