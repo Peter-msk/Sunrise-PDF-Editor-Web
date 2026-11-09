@@ -7,6 +7,10 @@ module.exports=function installEditorMetrics(context){
  const start=source.indexOf('    function beginOperationMetric('),end=source.indexOf('\n    async function openPdfFromBytes(',start);
  if(start<0||end<=start)throw Error('Editor metrics boundary not found');
  if(!vm.isContext(context))vm.createContext(context);
+ // The real editor defines its safe diagnostic bridge immediately above the
+ // metrics wrapper. Include it for isolated page-operation function tests.
+ const diagnosticStart=source.indexOf('    function tracedOperationFailure('),diagnosticEnd=source.indexOf('    async function openPdfFile(',diagnosticStart);
+ if(diagnosticStart>=0&&diagnosticEnd>diagnosticStart)vm.runInContext(source.slice(diagnosticStart,diagnosticEnd),context);
  vm.runInContext(source.slice(start,end),context);
  return context;
 };

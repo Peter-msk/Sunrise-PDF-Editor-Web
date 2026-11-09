@@ -6,6 +6,7 @@ const {DatabaseSync}=require('node:sqlite');
  const sqlite=new DatabaseSync(':memory:');
  for(const name of ['0001_inquiries_and_site_updates.sql','0002_admin_analytics.sql','0003_password_admin.sql'])
   sqlite.exec(fs.readFileSync(path.join('migrations',name),'utf8'));
+ sqlite.exec('CREATE TABLE admin_trace_incidents(fingerprint TEXT PRIMARY KEY,updated_ms INTEGER NOT NULL)');
  sqlite.exec("INSERT INTO admin_accounts(id,username,password_salt,password_hash,iterations) VALUES(1,'admin','test','test',600000)");
  const kst=days=>new Date(Date.now()-days*86400000).toISOString().slice(0,10);
  const stamp=days=>new Date(Date.now()-days*86400000).toISOString().replace('Z','Z');

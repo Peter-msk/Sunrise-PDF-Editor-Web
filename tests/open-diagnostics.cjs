@@ -19,12 +19,13 @@ const section=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b,source.inde
  const file=(size,arrayBuffer)=>({name:'PRIVATE-FILENAME.pdf',size,arrayBuffer});
  for(const [input,code] of [[file(0,async()=>new ArrayBuffer(0)),'empty_file'],[file(100,async()=>{throw Error('PRIVATE') }),'read_failed'],[file(100,async()=>raw),'partial_read']]){
   await assert.rejects(context.openPdfFile(input));assert.equal(metrics.at(-1).detail.code,code);assert(!JSON.stringify(metrics.at(-1)).includes('PRIVATE'));
+  const trace=metrics.at(-1).detail.trace;assert.equal(trace?.feature,'open');assert.equal(trace?.module,'document_open');assert.equal(trace?.code,code);assert(trace?.steps.some(step=>step.step==='read_failed'));
  }
  await context.openPdfFile(file(prefixed.length,async()=>prefixed.buffer));assert.equal(metrics.at(-1).stage,'succeeded');assert.equal(recents.length,1);
  failRestore=true;await assert.rejects(context.openPdfFile(file(raw.length,async()=>raw.buffer)));assert.equal(metrics.at(-1).detail.code,'password_required');failRestore=false;
  const before=state.docs.slice(),oldRecent=recents.length;failRender=true;
  await assert.rejects(context.openPdfFile(file(raw.length,async()=>raw.buffer)));
- assert.equal(metrics.at(-1).detail.code,'page_render_failed');assert.deepEqual(state.docs,before);assert.equal(recents.length,oldRecent);assert(destroyed>0);
+ assert.equal(metrics.at(-1).detail.code,'page_render_failed');assert.equal(metrics.at(-1).detail.trace?.callsite,'render_first_page');assert(metrics.at(-1).detail.trace?.steps.some(s=>s.step==='render_failed'));assert.deepEqual(state.docs,before);assert.equal(recents.length,oldRecent);assert(destroyed>0);
  const error=Error('cancel');error.name='AbortError';await assert.rejects(context.openPdfFile(file(1,async()=>{throw error})));assert.equal(metrics.at(-1).stage,'cancelled');
  // A late engine promise is awaited, rather than producing a false not-ready error.
  failRender=false;const engine=context.window.pdfjsLib;delete context.window.pdfjsLib;

@@ -17,7 +17,7 @@ const inputElements={
  reorderCancelBtn:{addEventListener(){}},
  reorderConfirmBtn:{addEventListener(_,fn){this.click=fn}}
 };
-const state={pageClipboard:{sourceName:'before'}};
+const state={pageClipboard:{sourceName:'before'}};const events=[];
 const injectedLib={...lib,PDFDocument:{
  load:async bytes=>{
   const pdf=await lib.PDFDocument.load(bytes);
@@ -27,8 +27,8 @@ const injectedLib={...lib,PDFDocument:{
  create:async()=>lib.PDFDocument.create()
 }};
 const ctx=vm.createContext({
- window:{PDFLib:injectedLib},state,Set,Array,console,
- beginOperationMetric:()=>()=>{},activeDoc:()=>ctx.doc,
+ window:{PDFLib:injectedLib,SunriseDiagnostics:require('../src/assets/sunrise-diagnostics.js'),navigator:{userAgent:'Edg/132'}},state,Set,Array,console,
+ beginOperationMetric:feature=>(stage,detail)=>events.push({feature,stage,detail}),activeDoc:()=>ctx.doc,
  showToast:message=>notices.push(message),saveUndoSnapshot:()=>{snapshot++;},
  allowPageStructureChange:()=>true,allowPageFormStructure:()=>true,
  reloadDocPdfJs:async()=>{},refreshAllViews:async()=>{},
@@ -36,6 +36,8 @@ const ctx=vm.createContext({
  openModal:config=>config.onMount(),closeModal:()=>{},
  document:{getElementById:id=>inputElements[id]}
 });
+const from=source.indexOf('    function tracedOperationFailure('),to=source.indexOf('    async function openPdfFile(',from);
+assert(from>=0&&to>from);vm.runInContext(source.slice(from,to),ctx);
 vm.runInContext(
  slice('    async function duplicateSelectedPages(', '    // Resolve supported local destinations')+
  slice('    async function copySelectedPagesToClipboard(', '    function openPastePagesModal(')+
@@ -52,6 +54,11 @@ vm.runInContext(
    assert(notices.some(message=>/페이지 삭제 중단.*synthetic serialization failure/.test(message)));
   } else await assert.rejects(ctx[name](doc),/synthetic serialization failure/);
   assert.equal(doc.bytes,bytes);assert.equal(snapshot,0);
+  const failure=events.at(-1);
+  assert.equal(failure.feature,name==='duplicateSelectedPages'?'page_duplicate':'page_delete');
+  assert.equal(failure.stage,'failed');assert.equal(failure.detail.code,'page_save_failed');
+  assert.equal(failure.detail.trace.module,'page_editor');assert.equal(failure.detail.trace.callsite,'serialize_pages');
+  assert(!JSON.stringify(failure.detail).includes('synthetic serialization failure'));
   assert.equal(doc.overlays.length,0);
  }
  {

@@ -1,5 +1,5 @@
 import diagnostics from './assets/sunrise-diagnostics.js';
-const features=['open','merge','split','extract_text','search','bookmark_edit','bookmark_auto','page_duplicate','page_delete','page_rotate','form_create','form_fill','highlight','batch_compress','batch_mark','batch_split','batch_merge','page_insert','page_extract','page_reorder','page_clipboard','bookmark_add','overlay_insert','overlay_edit','overlay_duplicate','overlay_delete','local_page_compose','local_form_edit','local_stamp','local_metadata','local_batch_preflight','local_images_to_pdf','local_pdf_to_images','local_page_crop','local_page_resize','local_nup','local_pdf_overlay','local_visual_compare','form_fill_bulk','source_text_replace','split_download','extract_images','native_annotation_edit'];
+const features=diagnostics.OPERATION_FEATURES;
 const validVersion=value=>typeof value==='string'&&(value==='unknown'||/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value));
 export function workerVersion(env){
  const value=env?.CF_VERSION_METADATA?.id;
@@ -26,13 +26,13 @@ export async function recordOperation(db,data,today,version='unknown',now=Date.n
    .bind(data.stage,data.session,data.operationId,data.feature,today,today);
   if(data.diagnostic!==undefined){
    const detail=diagnostics.normalize(data.diagnostic);
-   if(data.stage!=='failed'||!detail)return false;
+   if(data.stage!=='failed'||!detail||(detail.trace&&detail.trace.feature!==data.feature))return false;
    const feature=data.feature;
-   const category=feature==='open'?'문서 열기':/bookmark/.test(feature)?'북마크':/compress/.test(feature)?'압축':feature==='search'?'검색':/page|split/.test(feature)?'페이지':/overlay|highlight/.test(feature)?'주석':'기타';
+   const category=feature==='open'?'문서 열기':feature==='save_prepare'?'저장':feature.startsWith('pdf_')?'PDF 보안':feature.startsWith('signature_')?'전자서명':feature.startsWith('office_')?'Office 변환':/bookmark/.test(feature)?'북마크':/compress/.test(feature)?'압축':feature==='search'?'검색':/page|split/.test(feature)?'페이지':/overlay|highlight/.test(feature)?'주석':'기타';
    await db.batch([
     change,
-    db.prepare("INSERT INTO analytics_diagnostics(day,session_id,operation_id,feature,code,phase,origin,size_bucket,page_bucket,browser,client_build,worker_version,received_ms) SELECT day,session_id,operation_id,feature,?,?,?,?,?,?,?,worker_version,? FROM analytics_operations WHERE session_id=? AND operation_id=? AND state='failed' AND changes()>0 AND (SELECT COUNT(*) FROM analytics_diagnostics WHERE day=analytics_operations.day AND session_id=analytics_operations.session_id)<40")
-     .bind(detail.code,detail.phase,detail.origin,detail.size,detail.pages,detail.browser,detail.build,Math.floor(now/60000)*60000,data.session,data.operationId),
+    db.prepare("INSERT INTO analytics_diagnostics(day,session_id,operation_id,feature,code,phase,origin,size_bucket,page_bucket,browser,client_build,worker_version,received_ms,trace_schema_version,trace_id,trace_json) SELECT day,session_id,operation_id,feature,?,?,?,?,?,?,?,worker_version,?,?,?,? FROM analytics_operations WHERE session_id=? AND operation_id=? AND state='failed' AND changes()>0 AND (SELECT COUNT(*) FROM analytics_diagnostics WHERE day=analytics_operations.day AND session_id=analytics_operations.session_id)<40")
+     .bind(detail.code,detail.phase,detail.origin,detail.size,detail.pages,detail.browser,detail.build,Math.floor(now/60000)*60000,detail.trace?.schema??null,detail.trace?.id??null,detail.trace?JSON.stringify(detail.trace):null,data.session,data.operationId),
     db.prepare("UPDATE analytics_sessions SET error_events=error_events+1,last_error_ms=? WHERE session_id=? AND day=(SELECT day FROM analytics_diagnostics WHERE session_id=? AND operation_id=?) AND changes()>0 AND error_events<40")
      .bind(now,data.session,data.session,data.operationId),
     db.prepare("INSERT INTO analytics_errors(day,feature,count) SELECT day,?,1 FROM analytics_diagnostics WHERE session_id=? AND operation_id=? AND changes()>0 ON CONFLICT(day,feature) DO UPDATE SET count=count+1")

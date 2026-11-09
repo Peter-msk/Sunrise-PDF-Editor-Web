@@ -7,7 +7,8 @@ import {readRetentionExecution} from './admin-retention.mjs';
 import {adminReadiness} from './admin-readiness.mjs';
 import {toAdminCsv} from './admin-csv.mjs';
 import {handlePublicationRestore} from './admin-publication-restore.mjs';
-import {diagnosticSummary,diagnosticCsv} from './diagnostic-metrics.mjs';
+import {diagnosticSummary,diagnosticCsv,traceList,traceDetail} from './diagnostic-metrics.mjs';
+import {incidentList,incidentHistory,updateIncident} from './trace-incidents.mjs';
 const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
@@ -19,7 +20,7 @@ const validSid=(id)=>typeof id==='string'&&/^[0-9a-f]{8}-[0-9a-f-]{27,40}$/i.tes
 export async function telemetry(request,env,url){
   if(request.method!=='POST')return response({error:'Method not allowed'},405);
   if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
-  const data=await readJsonObject(request,1024);
+  const data=await readJsonObject(request,3500);
   if(!data||!validSid(data.session)||!['visit','pulse','failure','save_operation','operation'].includes(data.type))return response({error:'Invalid event'},400);
   const now=Date.now(),today=day(),db=env.DB;
   try{
@@ -68,6 +69,31 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/trace-incidents'&&request.method==='GET'){
+    try{return response(await incidentList(db,today))}
+    catch{return response({error:'오류 사건을 조회하지 못했습니다.'},503)}
+  }
+  const incidentMatch=path.match(/^\/api\/admin\/trace-incidents\/([a-f0-9]{8})(?:\/history)?$/);
+  if(incidentMatch){
+    const fingerprint=incidentMatch[1];
+    if(path.endsWith('/history')){
+      if(request.method!=='GET')return response({error:'Method not allowed'},405);
+      try{return response(await incidentHistory(db,fingerprint))}
+      catch{return response({error:'조치 이력을 조회하지 못했습니다.'},503)}
+    }
+    if(request.method!=='PATCH')return response({error:'Method not allowed'},405);
+    if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
+    const body=await readJsonObject(request,1200);
+    try{const result=await updateIncident(db,today,fingerprint,body);return response(result,result.status||200)}
+    catch{return response({error:'오류 사건 처리 상태를 저장하지 못했습니다.'},503)}
+  }
+  if(path==='/api/admin/diagnostic-traces'||path==='/api/admin/diagnostic-trace'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{
+      const result=path.endsWith('diagnostic-traces')?await traceList(db,today,url):await traceDetail(db,today,url);
+      return response(result,result===null?404:200);
+    }catch(error){return response({error:error instanceof RangeError?'유효한 조회 조건이나 추적번호를 지정하세요.':'실행 추적을 조회하지 못했습니다.'},error instanceof RangeError?400:503)}
+  }
   if(path==='/api/admin/diagnostics'||path==='/api/admin/diagnostics.csv'){
     if(request.method!=='GET')return response({error:'Method not allowed'},405);
     try{
