@@ -161,7 +161,7 @@ header button{padding:7px 12px;min-height:35px}
 .admin-quality-summary .figure{height:120px!important}.admin-session-panel{padding-top:15px}
 .admin-operation-panel>h3{margin-top:19px;border-top:1px solid #e9eff3;padding-top:16px;font-size:14px}
 .admin-operation-panel .toolbar{padding:10px 12px;background:#f6f9fb;border-radius:8px;border:1px solid #e1eaf0}
-.admin-help-details{margin-top:12px;border:1px solid #e4edf3;background:#f7fafc;border-radius:7px;padding:9px 11px;color:#486a80}.admin-help-details summary{cursor:pointer;font-weight:700;font-size:11px;list-style-position:inside}.admin-help-details p{margin:9px 0 1px}.admin-diagnostic-panel{border-top:3px solid #ca7c63}.admin-diagnostic-panel .table-scroll{max-height:350px}
+.admin-help-details{margin-top:12px;border:1px solid #e4edf3;background:#f7fafc;border-radius:7px;padding:9px 11px;color:#486a80}.admin-help-details summary{cursor:pointer;font-weight:700;font-size:11px;list-style-position:inside}.admin-help-details p{margin:9px 0 1px}.admin-diagnostic-panel{border-top:3px solid #ca7c63}.admin-diagnostic-panel .table-scroll{max-height:350px}.admin-trace-panel .table-scroll{max-height:320px}.admin-trace-details{border:1px solid #cbd9e5;background:#f8fbfd;border-radius:9px;padding:14px;margin-top:14px}.admin-trace-details h3{margin:0 0 8px}.admin-trace-details h4{margin:12px 0 5px;font-size:12px}.admin-trace-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}.admin-trace-facts>p{margin:0;padding:8px;background:white;border:1px solid #e0e8ef;border-radius:6px;font-size:12px}.admin-trace-details ol{margin:8px 0 0;padding-left:23px}.admin-trace-details li{padding:3px 0;font-size:12px}.admin-trace-details button{font-size:11px}
 .admin-content [data-admin-page="errors"] .metric{min-height:76px}
 .admin-content [data-admin-page="inquiries"] .error-list{padding:4px 0}
 .publication-grid{grid-template-columns:minmax(230px,.88fr) minmax(340px,1.25fr);gap:14px}
@@ -309,10 +309,37 @@ header button{padding:7px 12px;min-height:35px}
 <p id="sunRestoreStatus" class="sun-restore-note" role="status" aria-live="polite">백업을 내려받거나 JSON 파일을 선택해 주세요.</p>
 </section>
 <section class="panel" style="margin-top:12px" aria-labelledby="diagnosticTitle">
-<div class="toolbar"><h2 id="diagnosticTitle">기능 실패 원인 · 작업 진단</h2><button id="diagnosticsReload" type="button">진단 새로고침</button><label>기능 <select id="diagnosticFeature"><option value="all">전체 작업</option><option value="open">문서 열기</option><option value="batch_split">일괄 분할</option><option value="batch_merge">일괄 병합</option></select></label><a id="diagnosticsDownload" href="/api/admin/diagnostics.csv?days=14">진단 CSV</a></div>
+<div class="toolbar"><h2 id="diagnosticTitle">기능 실패 원인 · 작업 진단</h2><button id="diagnosticsReload" type="button">진단 새로고침</button><label>기능 <select id="diagnosticFeature"><option value="all">전체 작업</option><option value="open">문서 열기</option><option value="save_prepare">저장 준비</option><option value="page_duplicate">페이지 복제</option><option value="page_delete">페이지 삭제</option><option value="batch_split">일괄 분할</option><option value="batch_merge">일괄 병합</option><optgroup label="기존 추가 38개 계측 기능"><option value="merge">병합</option><option value="split">분할</option><option value="extract_text">extract · text</option><option value="search">search</option><option value="bookmark_edit">북마크 편집</option><option value="bookmark_auto">북마크 자동 생성</option><option value="page_rotate">페이지 회전</option><option value="form_create">양식 생성</option><option value="form_fill">양식 입력</option><option value="highlight">highlight</option><option value="batch_compress">batch · compress</option><option value="batch_mark">batch · mark</option><option value="page_insert">page · insert</option><option value="page_extract">page · extract</option><option value="page_reorder">page · reorder</option><option value="page_clipboard">page · clipboard</option><option value="bookmark_add">bookmark · add</option><option value="overlay_insert">오버레이 삽입</option><option value="overlay_edit">오버레이 편집</option><option value="overlay_duplicate">overlay · duplicate</option><option value="overlay_delete">overlay · delete</option><option value="local_page_compose">local · page · compose</option><option value="local_form_edit">local · form · edit</option><option value="local_stamp">local · stamp</option><option value="local_metadata">local · metadata</option><option value="local_batch_preflight">local · batch · preflight</option><option value="local_images_to_pdf">local · images · to · pdf</option><option value="local_pdf_to_images">local · pdf · to · images</option><option value="local_page_crop">local · page · crop</option><option value="local_page_resize">local · page · resize</option><option value="local_nup">local · nup</option><option value="local_pdf_overlay">local · pdf · overlay</option><option value="local_visual_compare">local · visual · compare</option><option value="form_fill_bulk">양식 일괄 입력</option><option value="source_text_replace">원문 수정</option><option value="split_download">split · download</option><option value="extract_images">extract · images</option><option value="native_annotation_edit">native · annotation · edit</option></optgroup><optgroup label="보안·전자서명·Office 정밀 추적"><option value="pdf_lock">PDF AES-256 암호 설정</option><option value="pdf_unlock">PDF 암호 해제</option><option value="pdf_crypto_compress">QPDF 무손실 압축</option><option value="signature_sign">전자서명 생성</option><option value="signature_verify">전자서명 무결성 확인</option><option value="office_export_text">Word·Excel 텍스트 내보내기</option><option value="office_export_advanced">Word·Excel 고급 변환</option></optgroup></select></label><a id="diagnosticsDownload" href="/api/admin/diagnostics.csv?days=14">진단 CSV</a></div>
 <p class="muted">위 처리 결과의 기간·수집 Worker 버전 필터를 사용합니다. 오류 코드·발생 단계·분 단위 시각·입력 경로·크기/페이지 구간·브라우저·화면 진단 빌드를 기록합니다. PDF 내용·파일명·오류 전문·스택은 보내지 않습니다. 경고·취소는 실패로 집계하지 않습니다.</p>
 <p id="diagnosticsLegacy" class="muted"></p><p id="diagnosticsStatus" role="status">진단을 불러오는 중입니다.</p>
 <div class="table-scroll"><table><thead><tr><th>최근 시각(KST)</th><th>기능·원인/조사 안내</th><th>횟수</th><th>단계·환경</th><th>버전</th></tr></thead><tbody id="diagnosticRows"></tbody></table></div>
+</section>
+<section class="panel admin-trace-panel" style="margin-top:12px" aria-labelledby="traceTitle">
+<div class="toolbar"><h2 id="traceTitle">정밀 실행 추적 · Trace v2</h2><button id="traceReload" type="button">추적 새로고침</button></div>
+<p class="muted">기존 오류 집계와 별개로, 이번 버전에서 상세 추적을 남긴 실패만 표시합니다. 추적은 최대 14일 보존되며 PDF 본문·파일명·원본 예외 메시지는 저장하지 않습니다.</p>
+<p id="traceStatus" role="status" aria-live="polite">실행 추적을 확인하는 중입니다.</p>
+<div class="table-scroll"><table><thead><tr><th>시각(KST)</th><th>기능·오류</th><th>코드 위치</th><th>버전</th><th>분석</th></tr></thead><tbody id="traceRows"></tbody></table></div>
+<section id="traceDetails" class="admin-trace-details" aria-labelledby="traceDetailTitle" hidden>
+<h3 id="traceDetailTitle">선택한 오류의 처리 경로</h3><p id="traceDetailStatus" role="status"></p>
+<div id="traceFacts" class="admin-trace-facts"></div>
+<h4>실행 단계 (최대 12개)</h4><ol id="traceTimeline"></ol>
+<h4>PDF 구조 플래그 (확인되지 않은 항목은 미확인)</h4><div id="traceStructure"></div>
+</section>
+</section>
+<section class="panel admin-incidents-panel" style="margin-top:12px" aria-labelledby="incidentHeading">
+<div class="toolbar"><h2 id="incidentHeading">오류 사건 · 조사 및 재발 관리</h2><button type="button" id="incidentReload">사건 새로고침</button></div>
+<p class="muted">같은 오류 지문을 묶어 최근 14일 발생량·관련 Worker 버전·조치 상태를 표시합니다. 사고 상태와 담당자 메모는 90일 보존되며 운영 PDF 원문은 수집하지 않습니다.</p>
+<p id="incidentStatus" role="status">오류 사건을 확인하는 중입니다.</p>
+<div class="table-scroll"><table><thead><tr><th>최근 발생(KST)</th><th>기능·오류</th><th>발생·버전</th><th>조사 상태</th><th>관리</th></tr></thead><tbody id="incidentRows"></tbody></table></div>
+<form id="incidentForm" hidden class="admin-trace-details" autocomplete="off">
+<h3 id="incidentSelectedTitle">오류 사건 조사</h3>
+<p class="muted" id="incidentRecurrence"></p>
+<div class="grid"><label>조사 상태<select id="incidentState"><option value="new">미확인</option><option value="investigating">조사 중</option><option value="fix_candidate">수정 후보</option><option value="verifying">검증 중</option><option value="resolved">수정 완료</option><option value="reopened">재발</option></select></label>
+<label>수정 커밋 (40자리 SHA, 선택)<input id="incidentCommit" type="text" inputmode="text" maxlength="40" spellcheck="false" pattern="[0-9a-f]{40}" placeholder="선택 항목"></label></div>
+<label>관리자 조사 메모 (400자 이내, PDF 원문·파일명·이메일 입력 금지)<textarea id="incidentNote" maxlength="400" rows="3"></textarea></label>
+<div><button type="submit" class="primary" id="incidentSave">조사 상태 저장</button> <span id="incidentSaveStatus" role="status" aria-live="polite"></span></div>
+<h4>조치 이력</h4><ol id="incidentAudit"></ol>
+</form>
 </section>
 <p class="muted" style="margin-top:12px">방문·사용시간은 추정치입니다. PDF 내용, 파일명, 검색어, IP 주소 및 오류 전문은 통계 서버에 저장하지 않습니다.</p>
 </main></div>
@@ -425,6 +452,8 @@ header button{padding:7px 12px;min-height:35px}
   help.append(label,diagnosticInfo);diagnosticPanel.append(help);
  }
  root.insertBefore(diagnosticPanel,qualityPanel);
+ diagnosticPanel.after($('traceTitle').closest('.panel'));
+ $('traceTitle').closest('.panel').after($('incidentHeading').closest('.panel'));
  const usageSessionMetrics=$('measuredSessions').closest('.metrics');
  const sessionStatus=$('sessionUsageStatus');
  const sessionPanel=document.createElement('section');sessionPanel.className='panel admin-session-panel';
@@ -445,7 +474,7 @@ header button{padding:7px 12px;min-height:35px}
  const groups={
   overview:['operationAlerts','visitsToday','visitsMonth'],
   usage:['statisticsDownload','dashboardDays','periodVisits','visitChart'],
-  errors:['qualityTitle','errorChart','diagnosticTitle','measuredSessions','operationDays'],
+  errors:['qualityTitle','errorChart','diagnosticTitle','traceTitle','incidentHeading','measuredSessions','operationDays'],
   inquiries:['inquiryChart','statusFilter'],
   publications:['publicationsTitle','sunPublicationRestorePanel'],
   system:['readinessReload','healthWorker','deploymentsStatus','retentionExecution'],
@@ -641,7 +670,7 @@ async function loadOperationQuality(){
   if(versions.some(v=>typeof v!=='string'||(v!=='unknown'&&!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(v))))throw Error('Invalid version');
   $('operationVersion').replaceChildren(new Option('전체 버전',''),...versions.map(v=>new Option(v==='unknown'?'버전 미확인':v,v)));
   $('operationVersion').value=selected;updateOperationsDownload();
-  const names={open:'문서 불러오기',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전',form_create:'양식 필드 생성',form_fill:'양식 값 수정',highlight:'본문 형광펜',batch_compress:'일괄 압축(파일별)',batch_mark:'일괄 표시(파일별)',batch_split:'일괄 분할(실행별)',batch_merge:'일괄 병합(실행별)',page_insert:'페이지 삽입',page_extract:'페이지 추출',page_reorder:'페이지 순서 변경',page_clipboard:'페이지 복사·잘라내기',bookmark_add:'북마크 추가',overlay_insert:'삽입 항목 생성',overlay_edit:'삽입 항목 수정',overlay_duplicate:'삽입 항목 복제',overlay_delete:'삽입 항목 삭제',local_page_compose:'페이지 자유 구성',local_form_edit:'별도 양식 변경',local_stamp:'번호·워터마크',local_metadata:'문서 속성',local_batch_preflight:'일괄 품질검사',local_images_to_pdf:'이미지→PDF',local_pdf_to_images:'PDF→이미지',local_page_crop:'페이지 자르기',local_page_resize:'페이지 크기',local_nup:'모아찍기',local_pdf_overlay:'PDF 겹치기',local_visual_compare:'시각적 비교',form_fill_bulk:'양식 일괄 변경',source_text_replace:'원문 수정',split_download:'분할 다운로드',extract_images:'이미지 추출',native_annotation_edit:'원본 주석 수정'};
+  const names={open:'문서 불러오기',save_prepare:'PDF 저장 준비',merge:'PDF 병합',split:'페이지 분할',extract_text:'텍스트 추출',search:'문서 검색',bookmark_edit:'기존 북마크 수정',bookmark_auto:'자동 북마크 분석',page_duplicate:'페이지 복제',page_delete:'페이지 삭제',page_rotate:'페이지 회전',form_create:'양식 필드 생성',form_fill:'양식 값 수정',highlight:'본문 형광펜',batch_compress:'일괄 압축(파일별)',batch_mark:'일괄 표시(파일별)',batch_split:'일괄 분할(실행별)',batch_merge:'일괄 병합(실행별)',page_insert:'페이지 삽입',page_extract:'페이지 추출',page_reorder:'페이지 순서 변경',page_clipboard:'페이지 복사·잘라내기',bookmark_add:'북마크 추가',overlay_insert:'삽입 항목 생성',overlay_edit:'삽입 항목 수정',overlay_duplicate:'삽입 항목 복제',overlay_delete:'삽입 항목 삭제',local_page_compose:'페이지 자유 구성',local_form_edit:'별도 양식 변경',local_stamp:'번호·워터마크',local_metadata:'문서 속성',local_batch_preflight:'일괄 품질검사',local_images_to_pdf:'이미지→PDF',local_pdf_to_images:'PDF→이미지',local_page_crop:'페이지 자르기',local_page_resize:'페이지 크기',local_nup:'모아찍기',local_pdf_overlay:'PDF 겹치기',local_visual_compare:'시각적 비교',form_fill_bulk:'양식 일괄 변경',source_text_replace:'원문 수정',split_download:'분할 다운로드',extract_images:'이미지 추출',native_annotation_edit:'원본 주석 수정',pdf_lock:'PDF 암호 설정',pdf_unlock:'PDF 암호 해제',pdf_crypto_compress:'QPDF 무손실 압축',signature_sign:'전자서명 생성',signature_verify:'전자서명 검증',office_export_text:'Office 텍스트 변환',office_export_advanced:'Office 고급 변환'};
   const rows=[];
   for(const item of d.items){
    if(!names[item.feature])throw Error('Invalid feature');
@@ -958,6 +987,98 @@ $('diagnosticsReload').addEventListener('click',loadDiagnostics);
 $('diagnosticFeature').addEventListener('change',loadDiagnostics);
 for(const id of ['operationDays','operationVersion'])$(id).addEventListener('change',loadDiagnostics);
 loadDiagnostics();
+
+let traceRequest=0;
+const traceTime=ms=>new Date(ms).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+const traceSteps={select:'입력 선택',read_start:'파일 읽기 시작',read_ok:'파일 읽기 성공',read_failed:'파일 읽기 실패',parse_start:'PDF 해석 시작',parse_ok:'PDF 해석 성공',parse_failed:'PDF 해석 실패',structure_ok:'구조 검사 통과',structure_failed:'지원 불가 구조',limit_failed:'안전 처리 한도 초과',copy_start:'페이지 복사 시작',copy_ok:'페이지 복사 성공',copy_failed:'페이지 복사 실패',save_start:'결과 저장 시작',save_ok:'결과 저장 성공',save_failed:'결과 저장 실패',verify_start:'저장 결과 검증 시작',verify_ok:'결과 검증 성공',verify_failed:'결과 검증 실패',cancelled:'사용자 취소',engine_start:'엔진 준비 시작',engine_ok:'엔진 준비 완료',engine_failed:'엔진 준비 실패',header_start:'PDF 헤더 검사 시작',header_ok:'PDF 헤더 통과',header_failed:'PDF 헤더 검사 실패',metadata_start:'페이지 정보 읽기 시작',metadata_ok:'페이지 정보 확인',metadata_failed:'페이지 정보 실패',render_start:'화면 표시 시작',render_ok:'화면 표시 완료',render_failed:'화면 표시 실패',compile_start:'저장용 문서 생성 시작',compile_ok:'저장용 문서 생성 완료',compile_failed:'저장용 문서 생성 실패',compress_start:'압축 시작',compress_ok:'압축 완료',compress_failed:'압축 실패',state_start:'원본 상태 확인 시작',state_ok:'원본 상태 확인 완료',state_failed:'문서 상태 변경',publish_start:'다운로드 준비 시작',publish_ok:'다운로드 준비 완료',publish_failed:'다운로드 준비 실패',operation_start:'작업 처리 시작',operation_failed:'작업 처리 실패'};
+async function loadTraceDetail(id){
+ const pane=$('traceDetails');pane.hidden=false;
+ $('traceDetailStatus').textContent='실행 추적 '+id+' 조회 중…';
+ $('traceFacts').replaceChildren();$('traceTimeline').replaceChildren();$('traceStructure').replaceChildren();
+ try{
+  const d=await read('/api/admin/diagnostic-trace?trace_id='+encodeURIComponent(id));
+  if(!d||d.schema!==2||d.trace?.id!==id||!Array.isArray(d.trace.steps))throw Error('Invalid trace');
+  const t=d.trace;
+  $('traceDetailStatus').textContent='진단번호: '+t.id+' · 수집 시각: '+traceTime(d.received_ms)+' · Worker: '+d.worker_version;
+  for(const [name,value] of [['작업',t.feature],['실패 원인',t.code],['실패 단계',t.phase],['담당 소스',t.module+'.'+t.callsite],['동일 오류 그룹',t.fingerprint],['화면 진단 빌드',t.client_release]]){
+   const item=document.createElement('p');item.textContent=name+': '+value;$('traceFacts').append(item);
+  }
+  for(const stage of t.steps){const item=document.createElement('li');item.textContent=(traceSteps[stage.step]||stage.step)+' · 이전 단계 이후 '+stage.duration+'ms 구간';$('traceTimeline').append(item)}
+  const flags=Object.entries(t.structure||{}).map(([name,value])=>name+': '+(value===null?'미확인':value?'있음':'없음'));
+  $('traceStructure').textContent=flags.join(' · ');
+ }catch{$('traceDetailStatus').textContent='상세 추적을 조회하지 못했습니다. 세션·14일 보존기간·서버 마이그레이션을 확인하세요.'}
+}
+async function loadTraces(){
+ const seq=++traceRequest,query=operationQuery()+'&feature='+encodeURIComponent($('diagnosticFeature').value);
+ const rows=$('traceRows');rows.replaceChildren();$('traceDetails').hidden=true;
+ $('traceStatus').textContent='추적 조회 중…';
+ try{
+  const d=await read('/api/admin/diagnostic-traces?'+query);
+  if(seq!==traceRequest)return;
+  if(d.schema!==2||!Array.isArray(d.items))throw Error('Unexpected response');
+  for(const event of d.items){
+   const tr=document.createElement('tr');
+   for(const value of [traceTime(event.received_ms),event.feature+' · '+event.code,event.callsite,event.worker_version]){
+    const td=document.createElement('td');td.textContent=String(value);td.style.overflowWrap='anywhere';tr.append(td);
+   }
+   const td=document.createElement('td'),button=document.createElement('button');button.type='button';button.textContent='상세 분석';button.addEventListener('click',()=>loadTraceDetail(event.id));td.append(button);tr.append(td);rows.append(tr);
+  }
+  $('traceStatus').textContent=d.items.length?d.items.length+'개 실행 추적'+(d.truncated?' · 최근 50개만 표시':'')+' · 추적번호로 개별 원인 조사 가능':'선택 기간에 정밀 추적이 수집된 실패가 없습니다. 이전 버전의 오류는 소급 복원할 수 없습니다.';
+ }catch{if(seq===traceRequest){rows.replaceChildren();$('traceStatus').textContent='실행 추적 조회 실패: 관리자 권한·D1 0018 마이그레이션 적용 상태를 확인하세요.'}}
+}
+$('traceReload').addEventListener('click',loadTraces);
+$('diagnosticFeature').addEventListener('change',loadTraces);
+for(const id of ['operationDays','operationVersion'])$(id).addEventListener('change',loadTraces);
+loadTraces();
+
+// Trace v2 DEV3: incident grouping and optimistic-state audit (admin-only).
+const incidentNames={new:'미확인',investigating:'조사 중',fix_candidate:'수정 후보',verifying:'검증 중',resolved:'수정 완료',reopened:'재발'};
+let incidents=[],selectedIncident=null,incidentRequest=0;
+async function loadIncidentHistory(fingerprint){
+ const root=$('incidentAudit');root.replaceChildren();
+ try{
+  const data=await read('/api/admin/trace-incidents/'+fingerprint+'/history');
+  for(const entry of data.items||[]){const item=document.createElement('li');item.textContent=traceTime(entry.happened_ms)+' · '+(incidentNames[entry.status]||entry.status)+' · '+(entry.fix_commit||'커밋 미등록')+(entry.note?' · '+entry.note:'');root.append(item)}
+  if(!root.childElementCount){const li=document.createElement('li');li.textContent='아직 조치 이력이 없습니다.';root.append(li)}
+ }catch{const li=document.createElement('li');li.textContent='조치 이력을 확인하지 못했습니다.';root.append(li)}
+}
+function selectIncident(item){
+ selectedIncident=item;
+ $('incidentForm').hidden=false;
+ $('incidentSelectedTitle').textContent='오류 사건 '+item.fingerprint+' · '+item.feature+' / '+item.code;
+ $('incidentRecurrence').textContent=item.recurred?'수정 완료 이후 같은 오류가 재발했습니다. 다시 조사해 주세요.':'최근 14일 오류 집계 '+item.occurrences+'건 · '+item.version_count+'개 Worker 버전';
+ $('incidentState').value=item.status;$('incidentNote').value=item.note||'';$('incidentCommit').value=item.fix_commit||'';
+ $('incidentSaveStatus').textContent='';loadIncidentHistory(item.fingerprint);
+}
+async function loadIncidents(){
+ const seq=++incidentRequest,root=$('incidentRows');root.replaceChildren();
+ $('incidentStatus').textContent='최근 오류 사건을 확인하고 있습니다.';
+ try{
+  const d=await read('/api/admin/trace-incidents');if(seq!==incidentRequest)return;
+  if(!Array.isArray(d.items))throw Error('Invalid incidents');incidents=d.items;
+  for(const item of incidents){
+   const tr=document.createElement('tr');
+   for(const value of [traceTime(item.last_ms),item.feature+' · '+item.code,item.occurrences+'건 · '+item.version_count+'개 버전',
+     item.recurred?'재발 검토 필요':incidentNames[item.status]||item.status]){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+   const td=document.createElement('td'),button=document.createElement('button');button.type='button';button.textContent='조사';button.addEventListener('click',()=>selectIncident(item));td.append(button);tr.append(td);root.append(tr);
+  }
+  $('incidentStatus').textContent=incidents.length?incidents.length+'개 오류 사건 · 최근 14일 기준'+(d.truncated?' · 최근 100개까지만 표시':''):'조사할 정밀 오류 사건이 없습니다.';
+  if(selectedIncident){const next=incidents.find(x=>x.fingerprint===selectedIncident.fingerprint);if(next)selectIncident(next);else{$('incidentForm').hidden=true;selectedIncident=null}}
+ }catch{$('incidentStatus').textContent='사건 조회 실패: 마이그레이션 0019·관리자 인증·D1 상태를 확인하세요.'}
+}
+$('incidentReload').addEventListener('click',loadIncidents);
+$('incidentForm').addEventListener('submit',async event=>{
+ event.preventDefault();const item=selectedIncident;if(!item)return;
+ const button=$('incidentSave');button.disabled=true;
+ try{
+  const commit=$('incidentCommit').value.trim();
+  const response=await read('/api/admin/trace-incidents/'+item.fingerprint,{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({status:$('incidentState').value,note:$('incidentNote').value,fix_commit:commit||null,revision:item.revision})});
+  await loadIncidents();
+  $('incidentSaveStatus').textContent='저장 완료 · '+response.revision+'차 수정';
+ }catch{$('incidentSaveStatus').textContent='저장 실패/수정 충돌 · 새로고침 후 최신 상태를 확인하세요.'}
+ finally{button.disabled=false}
+});
+loadIncidents();
 
 $('sessionsReload').addEventListener('click',loadSessions);
 $('sessionsRevoke').addEventListener('click',async()=>{

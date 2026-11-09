@@ -153,29 +153,61 @@
       throw error;
     }
   }
-  async function readSource(file,opts,cancelled){
+  // Technical structure flags only: no PDF values, page bytes, or document metadata.
+  function structureFlags(pdf,lib){
+    try{
+      const n=lib.PDFName.of,cat=name=>Boolean(pdf.catalog.get(n(name)));
+      const acro=pdf.catalog.get(n('AcroForm'));
+      const dict=acro?pdf.context.lookup(acro):null;
+      const namesRef=pdf.catalog.get(n('Names'));
+      const namesDict=namesRef?pdf.context.lookup(namesRef):null;
+      const pages=pdf.getPages();
+      const annotations=pages.some(page=>{
+        const ref=page.node.get(n('Annots'));
+        if(!ref)return false;
+        const arr=pdf.context.lookup(ref);
+        return !(arr instanceof lib.PDFArray&&arr.size()===0);
+      });
+      const mark=pdf.catalog.get(n('MarkInfo'));
+      const markDict=mark?pdf.context.lookup(mark):null;
+      const marked=markDict instanceof lib.PDFDict?markDict.get(n('Marked')):null;
+      return {is_encrypted:false,has_xfa:dict instanceof lib.PDFDict?Boolean(dict.get(n('XFA'))):null,
+        has_acroform:Boolean(acro),has_digital_signature:cat('Perms')?true:acro?null:false,has_struct_tree:cat('StructTreeRoot'),
+        has_outlines:cat('Outlines'),has_annots:annotations,has_attachments:cat('AF')||Boolean(namesDict instanceof lib.PDFDict&&namesDict.get(n('EmbeddedFiles'))),
+        has_page_labels:cat('PageLabels'),has_mark_info:Boolean(mark),marked_true:marked===lib.PDFBool.True?true:marked===lib.PDFBool.False?false:null};
+    }catch{return null}
+  }
+  async function readSource(file,opts,cancelled,trace){
+    trace('read_start');
     stopIfCancelled(cancelled);
     const bytes=await stage('batch_read_failed',()=>opts.readFile(file));
+    trace('read_ok');
     // A pending browser File.arrayBuffer() read cannot be interrupted. Avoid
     // expensive parsing if the user cancelled before the read resolved.
     stopIfCancelled(cancelled);
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||
        !bytes.byteLength||bytes.byteLength!==file.size)
       throw stageError(new Error('입력 PDF의 실제 읽은 바이트 수가 파일 크기와 일치하지 않습니다.'),'batch_read_failed');
+    trace('parse_start');
     const pdf=await stage('batch_parse_failed',()=>opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false}));
+    trace('parse_ok',structureFlags(pdf,opts.PDFLib));
     stopIfCancelled(cancelled);
     const pages=checkSource(pdf,opts.PDFLib);
+    trace('structure_ok');
     stopIfCancelled(cancelled);
     return {pdf,pages,name:file.name};
   }
-  async function verifyResult(pdf,expectedPages,opts,cancelled){
+  async function verifyResult(pdf,expectedPages,opts,cancelled,trace){
     stopIfCancelled(cancelled);
+    trace('save_start');
     const bytes=await stage('batch_save_failed',()=>pdf.save({updateFieldAppearances:false}),expectedPages.length);
+    trace('save_ok');
     // Serialization is not cancellable once started; do not parse a result
     // which the caller has already discarded.
     stopIfCancelled(cancelled);
     if(!ArrayBuffer.isView(bytes)||bytes.BYTES_PER_ELEMENT!==1||!bytes.byteLength)
       throw stageError(new Error('저장 결과의 바이트를 읽을 수 없거나 비어 있습니다.'),'batch_save_failed',expectedPages.length);
+    trace('verify_start');
     const restored=await stage('batch_verify_failed',()=>opts.PDFLib.PDFDocument.load(bytes,{updateMetadata:false}),expectedPages.length);
     stopIfCancelled(cancelled);
     try{
@@ -183,6 +215,7 @@
       verifyPages([expectedPages],restored.getPages());
     }catch(error){throw stageError(error,'batch_verify_failed',expectedPages.length)}
     stopIfCancelled(cancelled);
+    trace('verify_ok');
     return bytes;
   }
   async function process(files,settings,handlers,opts){
@@ -192,6 +225,8 @@
     if(!opts?.PDFLib?.PDFDocument||typeof opts.readFile!=='function')
       throw new Error('PDF 처리 엔진 또는 파일 읽기 기능이 없습니다.');
     const cancelled=()=>Boolean(handlers?.cancelled?.());
+    // Instrumentation must never alter an actual PDF operation or its output.
+    const trace=(step,flags)=>{try{handlers?.trace?.(step,flags)}catch{}};
     const progress=(i,total,name)=>handlers?.progress?.(i,total,name);
     const pageProgress=(done,total,name)=>handlers?.pageProgress?.(done,total,name);
     const error=(e)=>handlers?.error?.(e);
@@ -208,7 +243,7 @@
         await yieldToBrowser();
         if(cancelled())break;
         try{
-          const source=await readSource(file,opts,cancelled);
+          const source=await readSource(file,opts,cancelled,trace);
           const chunkCount=Math.ceil(source.pages.length/perFile);
           if(emitted+chunkCount>MAX_OUTPUTS)throw stageError(new Error('이번 작업의 결과 파일 수가 최대 50개를 초과합니다. 출력당 페이지 수를 늘려 주세요.'),'batch_limit_exceeded',source.pages.length);
           const staged=[];
@@ -224,10 +259,12 @@
               const value=source.pdf[getter]();
               if(typeof value==='string'&&value)pdf[setter](value);
             }
+            trace('copy_start');
             const copied=await stage('batch_copy_failed',()=>pdf.copyPages(source.pdf,range),source.pages.length);
+            trace('copy_ok');
             stopIfCancelled(cancelled);
             copied.forEach(page=>pdf.addPage(page));
-            const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts,cancelled);
+            const bytes=await verifyResult(pdf,source.pages.slice(start,end),opts,cancelled,trace);
             try{reserveOutputBytes(emittedBytes+stagedBytes,bytes.byteLength)}catch(error){throw stageError(error,'batch_limit_exceeded',source.pages.length)}
             stagedBytes+=bytes.byteLength;
             staged.push({index:i,part:chunk+1,startPage:start+1,endPage:end,totalParts:chunkCount,name:file.name,bytes});
@@ -250,7 +287,7 @@
       await yieldToBrowser();
       if(cancelled())return;
       try{
-        const loaded=await readSource(file,opts,cancelled);
+        const loaded=await readSource(file,opts,cancelled,trace);
         if(expected.length+loaded.pages.length>MAX_MERGED_PAGES)
           throw new Error('병합 결과는 250쪽을 초과할 수 없습니다.');
         expected.push(...loaded.pages.map(snapshotPageGeometry));
@@ -268,7 +305,9 @@
         const indices=Array.from({length:input.pageCount},(_,i)=>i);
         // Copy each source once: splitting the copy into multiple calls would
         // duplicate shared PDF resources and could increase output size.
+        trace('copy_start');
         const copied=await stage('batch_copy_failed',()=>merged.copyPages(input.pdf,indices),input.pageCount);
+        trace('copy_ok');
         stopIfCancelled(cancelled);
         for(let first=0;first<copied.length;first+=PAGE_YIELD_INTERVAL){
           if(cancelled())return;
@@ -284,7 +323,7 @@
         sources[sourceIndex]=null;
       }
       if(cancelled())return;
-      const bytes=await verifyResult(merged,expected,opts,cancelled);
+      const bytes=await verifyResult(merged,expected,opts,cancelled,trace);
       if(!cancelled())result({index:0,name:'Sunrise_batch_merged.pdf',bytes,startPage:1,endPage:expected.length,totalParts:1,part:1});
     }catch(e){if(!cancelled())error({index:-1,name:'병합 결과',message:e?.message||'병합 결과 검증에 실패했습니다.',code:e?.sunriseDiagnosticCode||'batch_unexpected',pages:expected.length})}
   }

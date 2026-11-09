@@ -3162,9 +3162,9 @@
       const finish=beginOperationMetric('bookmark_edit');let outcome='cancelled';
       let info;
       try {
-        const pdf = await window.PDFLib.PDFDocument.load(bytes);
-        renamePdfOutline(pdf, bookmark.path, bookmark.titles, title, rows, remove, newPage, actionIndex);
-        const nextBytes = await pdf.save();
+        finish.mark?.('parse_start');const pdf = await window.PDFLib.PDFDocument.load(bytes);finish.mark?.('parse_ok');
+        finish.mark?.('state_start');renamePdfOutline(pdf, bookmark.path, bookmark.titles, title, rows, remove, newPage, actionIndex);finish.mark?.('state_ok');
+        finish.mark?.('save_start');const nextBytes = await pdf.save();finish.mark?.('save_ok');
         info = await parsePageCountAndMeta(nextBytes);
         if (doc.bytes !== bytes || doc.pdfJsDoc !== reader || activeDoc() !== doc) {
           await info.pdfJsDoc.destroy(); info = null;
@@ -3205,6 +3205,7 @@
       const limit = Math.min(doc.pageCount, 150), pages = [];
       const finish=beginOperationMetric('bookmark_auto');let outcome='cancelled';
       doc.operationBusy = true;
+      finish.mark?.('read_start');
       try {
         for (let i = 0; i < limit; i++) {
           if (!valid()) return;
@@ -3295,13 +3296,31 @@
     function makeOpenError(code,message,cause) {
       const error=new Error(message,{cause});error.sunriseDiagnosticCode=code;return error;
     }
+    function tracedOperationFailure(trace,code,context={}) {
+      const detail=window.SunriseDiagnostics?.capture({sunriseDiagnosticCode:code},{
+        origin:context.origin||'unknown',bytes:context.bytes,pages:context.pages,ua:window.navigator?.userAgent||''});
+      const safeTrace=trace?.failure(code);
+      if(detail&&safeTrace)detail.trace=safeTrace;
+      return detail;
+    }
     function captureOpenDiagnostic(error,context) {
-      return window.SunriseDiagnostics?.capture(error,{...context,ua:window.navigator?.userAgent||''});
+      const detail=window.SunriseDiagnostics?.capture(error,{...context,ua:window.navigator?.userAgent||''});
+      if(detail&&context.trace){
+        const stage={engine_not_ready:'engine_failed',empty_file:'read_failed',invalid_size:'read_failed',
+          read_failed:'read_failed',partial_read:'read_failed',invalid_header:'header_failed',
+          password_required:'parse_failed',pdf_parse_failed:'parse_failed',no_pages:'metadata_failed',
+          display_parse_failed:'metadata_failed',page_metadata_failed:'metadata_failed',page_render_failed:'render_failed'};
+        context.trace.mark(stage[detail.code]||'parse_failed');
+        const safeTrace=context.trace.failure(detail.code);
+        if(safeTrace)detail.trace=safeTrace;
+      }
+      return detail;
     }
     async function openPdfFile(file,options={switchActive:true}) {
-      const context={finish:beginOperationMetric('open'),origin:'file',bytes:file?.size};let transferred=false;
+      const context={finish:beginOperationMetric('open'),origin:'file',bytes:file?.size,trace:window.SunriseDiagnostics?.createTrace('open')};let transferred=false;
+      context.trace?.mark('read_start');
       try {
-        const bytes=await readPdfInputFile(file);transferred=true;
+        const bytes=await readPdfInputFile(file);transferred=true;context.trace?.mark('read_ok');
         return await openPdfFromBytes(file.name,bytes,{...options,openingContext:context});
       } catch(error) {
         if(!transferred)context.finish(error?.name==='AbortError'?'cancelled':'failed',captureOpenDiagnostic(error,context));
@@ -3324,26 +3343,36 @@
     function beginOperationMetric(feature) {
       try {
         const finish=window.sunriseTelemetryOperationStart?.(feature);
-        return (stage,detail)=>{try{finish?.(stage,detail)}catch(_){}};
+        const report=(stage,detail)=>{try{finish?.(stage,detail)}catch(_){}};
+        report.mark=step=>{try{return finish?.mark?.(step)===true}catch(_){return false}};
+        report.structure=flags=>{try{return finish?.structure?.(flags)===true}catch(_){return false}};
+        report.mark('input_start');
+        return report;
       } catch (_) { return ()=>{}; }
     }
 
     async function openPdfFromBytes(fileName, uint8Bytes, options = { switchActive: true }) {
-      const context=options.openingContext||{finish:beginOperationMetric('open'),origin:options.origin||'generated',bytes:uint8Bytes?.byteLength};
+      const context=options.openingContext||{finish:beginOperationMetric('open'),origin:options.origin||'generated',bytes:uint8Bytes?.byteLength,trace:window.SunriseDiagnostics?.createTrace('open')};
       const finish=context.finish;let outcome='failed',failure,info,newDoc;const previous=activeDoc();
       try {
       const originalBytes = uint8Bytes instanceof Uint8Array ? uint8Bytes : new Uint8Array(uint8Bytes);
+      context.trace?.mark('engine_start');
       if(window.sunrisePdfEngineReady)await window.sunrisePdfEngineReady;
       if (!window.PDFLib || !window.pdfjsLib || !window.SunriseDiagnostics) throw makeOpenError("engine_not_ready","PDF 편집 엔진을 불러오지 못했습니다. 페이지를 새로고침해 주세요.");
+      context.trace?.mark('engine_ok');context.trace?.mark('header_start');
       if (!window.SunriseDiagnostics.hasPdfHeader(originalBytes)) {
         throw makeOpenError("invalid_header","유효한 PDF 파일이 아닙니다.");
       }
+      context.trace?.mark('header_ok');
       validatePdfByteLength(originalBytes.byteLength);
+      context.trace?.mark('parse_start');
       let restored;
       try { restored = await window.SunriseEditState.restore(originalBytes, window.PDFLib); }
       catch (error) { throw makeOpenError(isEncryptedPdfError(error)?'password_required':'pdf_parse_failed',isEncryptedPdfError(error)?'암호 보호 PDF입니다. 암호 해제 도구로 허가된 복사본을 만든 뒤 열어 주세요.':'PDF 구조를 편집용으로 해석하지 못했습니다. 원본 손상 또는 지원 형식을 확인해 주세요.',error); }
-      const bytes = restored.bytes;
+      const bytes = restored.bytes;context.trace?.mark('parse_ok');context.trace?.mark('metadata_start');
       info = await parsePageCountAndMeta(bytes);context.pages=info.pageCount;
+      context.trace?.mark('metadata_ok');
+      context.trace?.structure({has_digital_signature:Boolean(restored.signed),has_attachments:Array.isArray(info.attachments)?info.attachments.length>0:null});
       if (!info.pdfJsDoc) throw new Error("PDF 문서를 읽지 못했습니다. 손상되거나 암호로 보호된 파일일 수 있습니다.");
 
       newDoc = {
@@ -3395,6 +3424,7 @@
       if(restored.signed)showToast("전자서명 또는 서명 관련 구조를 보존하기 위해 읽기 전용으로 열었습니다.","fa-file-signature");
       if (restored.warning) showToast("이 PDF의 저장된 편집 항목을 안전하게 복원하지 못했습니다. 원본 표시는 유지됩니다.", "fa-circle-exclamation");
 
+      context.trace?.mark('render_start');
       if (options.switchActive !== false) {
         await setActiveDocument(state.docs.length - 1);
       } else {
@@ -3402,6 +3432,7 @@
         updateCommandStates();
       }
       if(newDoc.openingFailure)throw newDoc.openingFailure;
+      context.trace?.mark('render_ok');
       newDoc.openingDiagnostic=false;
       addRecentFile(fileName,info.pageCount,originalBytes);
       outcome='succeeded';
@@ -3414,7 +3445,10 @@
         }
         if(info?.pdfJsDoc)try{await info.pdfJsDoc.destroy()}catch(_){}
         throw error;
-      } finally { finish(outcome,outcome==='failed'?captureOpenDiagnostic(failure,context):undefined); }
+      } finally {
+        if(outcome!=='failed')context.trace?.cancel();
+        finish(outcome,outcome==='failed'?captureOpenDiagnostic(failure,context):undefined);
+      }
     }
 
     function addRecentFile(name, pageCount, bytes) {
@@ -5500,7 +5534,7 @@
       const finish=beginOperationMetric('merge');let outcome='cancelled';
       try {
         const { PDFDocument } = window.PDFLib;
-        const mergedPdf = await PDFDocument.create();
+        finish.mark?.('engine_start');const mergedPdf = await PDFDocument.create();finish.mark?.('engine_ok');
         let totalMergedPages = 0;
         const mergedBookmarks=[];
 
@@ -6430,7 +6464,7 @@
         const file=files[index]; handlers.progress(index,files.length,file.name);
         const finish=beginOperationMetric('batch_compress');let outcome='cancelled';
         try {
-          const bytes=await readPdfInputFile(file);
+          finish.mark?.('read_start');const bytes=await readPdfInputFile(file);finish.mark?.('read_ok');
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
           guardBatchSource(original);
           if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
@@ -6465,7 +6499,7 @@
         handlers.progress(index,files.length,file.name);
         const finish=beginOperationMetric('batch_mark');let outcome='cancelled';
         try{
-          const bytes=await readPdfInputFile(file);
+          finish.mark?.('read_start');const bytes=await readPdfInputFile(file);finish.mark?.('read_ok');
           const original=await window.PDFLib.PDFDocument.load(bytes,{updateMetadata:false});
           guardBatchSource(original);
           if(!original.getPageCount())throw new Error('페이지가 없는 PDF입니다.');
@@ -6622,14 +6656,30 @@
             running=true;cancelled=false;start.disabled=true;
             files.disabled=mode.disabled=true;sync();cancel.textContent='작업 취소';results.replaceChildren();
             let successes=0,failures=0,firstFailure=null;
-            const finish=beginOperationMetric(settings.mode==='merge'?'batch_merge':'batch_split');let outcome='cancelled';
-            const captureBatchFailure=(code,index,pageCount)=>window.SunriseDiagnostics?.capture(
-              {sunriseDiagnosticCode:code||'batch_unexpected'},
-              {origin:'file',bytes:selected[index]?.size,pages:pageCount,ua:navigator.userAgent}
-            );
+            const feature=settings.mode==='merge'?'batch_merge':'batch_split';
+            const finish=beginOperationMetric(feature);let outcome='cancelled';
+            const executionTrace=window.SunriseDiagnostics?.createTrace(feature);
+            const traceStep=(step,flags)=>{
+              executionTrace?.mark(step);
+              if(flags)executionTrace?.structure(flags);
+            };
+            const failureStep={batch_read_failed:'read_failed',batch_parse_failed:'parse_failed',
+              batch_unsupported_structure:'structure_failed',batch_limit_exceeded:'limit_failed',
+              batch_copy_failed:'copy_failed',batch_save_failed:'save_failed',batch_verify_failed:'verify_failed'};
+            const captureBatchFailure=(code,index,pageCount)=>{
+              const safe=Object.hasOwn(failureStep,code)?code:'batch_unexpected';
+              if(failureStep[safe])executionTrace?.mark(failureStep[safe]);
+              const detail=window.SunriseDiagnostics?.capture(
+                {sunriseDiagnosticCode:safe},
+                {origin:'file',bytes:selected[index]?.size,pages:pageCount,ua:navigator.userAgent});
+              const recorded=executionTrace?.failure(safe);
+              if(detail&&recorded)detail.trace=recorded;
+              return detail;
+            };
             try{
               await window.SunriseBatchPages.process(selected,settings,{
                 cancelled:()=>cancelled||!open(),
+                trace:traceStep,
                 progress:(index,total,name)=>{if(open())status.textContent=`${index+1}/${total} 처리 중: ${name}`},
                 pageProgress:(done,total,name)=>{if(open())status.textContent=`${name} · ${done}/${total}쪽 ${settings.mode==='merge'?'병합':'분할'} 중`},
                 result:({name,bytes,part,startPage,endPage})=>{
@@ -6659,6 +6709,13 @@
               if(open())status.textContent=error?.message||'일괄 작업을 시작하지 못했습니다.';
             }
             finally{
+              if(outcome==='failed'&&firstFailure?.trace?.id&&open()){
+                const reference=document.createElement('p');
+                reference.className='muted';
+                reference.textContent='오류 추적번호: '+firstFailure.trace.id+' (서버 수집 여부는 연결 상태에 따라 다름)';
+                results.prepend(reference);
+              }
+              if(outcome!=='failed')executionTrace?.cancel();
               finish(outcome,outcome==='failed'?firstFailure:null);
               running=false;start.disabled=false;cancel.disabled=false;cancel.textContent='닫기';
               files.disabled=false;mode.disabled=false;sync();
@@ -6778,29 +6835,42 @@
             controls.forEach(control => control.disabled = true);
             status.textContent = "PDF를 준비하고 있습니다. 잠시만 기다려 주세요.";
             let reportSave=()=>{},saveOutcome='cancelled';
+            const saveTrace=window.SunriseDiagnostics?.createTrace('save_prepare');
+            const reportTrace=beginOperationMetric('save_prepare');
+            let savePhase='compile',saveFailure=null;
             try { reportSave=window.sunriseTelemetrySaveStart?.(lastFailedSave) || reportSave; } catch (_) { /* Metrics must not block saving. */ }
             try {
+              saveTrace?.mark('compile_start');
               const captured = captureSaveState(doc);
               let bytes = await compileDocumentWithOverlays(captured.snapshot);
+              saveTrace?.mark('compile_ok');
               const isOpen = () => document.getElementById('modalBackdrop').classList.contains('open') && document.getElementById('saveAsConfirmBtn') === button;
               if (!isOpen()) return;
               const settings = compress ? {...pdfCompressionSettings(Number(document.getElementById('compressionStrength').value)),
                 quality:Number(document.getElementById('compressionQuality').value), maxEdge:Number(document.getElementById('compressionMaxEdge').value)} : null;
+              if(compress){savePhase='compress';saveTrace?.mark('compress_start');}
               const result = compress ? await compressPdfImages(bytes, settings, (index,total) => {
                 if (!isOpen()) throw new Error('압축 창이 닫혀 작업을 중단했습니다.');
                 if (!saveStateIsCurrent(doc, captured)) throw new Error('문서가 변경되어 압축을 중단했습니다.');
                 status.textContent = `이미지 압축 ${index}/${total} · 용량 계산 중…`;
               }) : null;
+              if(compress)saveTrace?.mark('compress_ok');
               if (result) bytes = result.bytes;
               // Reopen and compare the exact bytes offered for download. Reject
               // a damaged/altered page tree before creating a Blob URL.
+              savePhase='verify';saveTrace?.mark('verify_start');
               await verifySavedPdfBytes(captured.snapshot.bytes, bytes);
+              saveTrace?.mark('verify_ok');
               if (!document.getElementById("modalBackdrop").classList.contains("open") ||
                   document.getElementById("saveAsConfirmBtn") !== button) return;
+              savePhase='state';saveTrace?.mark('state_start');
               if (!saveStateIsCurrent(doc, captured)) throw new Error("준비 중 문서가 변경되었습니다. 다시 준비해 주세요.");
+              saveTrace?.mark('state_ok');
               const link = document.getElementById("saveAsDownloadLink");
               const confirm = document.getElementById("saveAsDownloadedBtn");
+              savePhase='publish';saveTrace?.mark('publish_start');
               pendingSaveUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+              saveTrace?.mark('publish_ok');
               link.href = pendingSaveUrl; link.download = name; link.style.display = "inline-flex";
               saveOutcome='ready';
               button.style.display = "none"; document.getElementById("saveAsFilenameInput").disabled = true;
@@ -6828,10 +6898,15 @@
             } catch (error) {
               if (!document.getElementById('modalBackdrop').classList.contains('open') || document.getElementById('saveAsConfirmBtn') !== button) return;
               saveOutcome='failed';
+              const code={compile:'save_compile_failed',compress:'save_compress_failed',verify:'save_verify_failed',state:'save_stale_state',publish:'save_publish_failed'}[savePhase]||'save_unexpected';
+              saveTrace?.mark({compile:'compile_failed',compress:'compress_failed',verify:'verify_failed',state:'state_failed',publish:'publish_failed'}[savePhase]||'save_failed');
+              saveFailure=tracedOperationFailure(saveTrace,code,{origin:'unknown',bytes:doc.bytes?.byteLength,pages:doc.pageCount});
               showToast(`저장 실패: ${error.message || error}`, "fa-circle-exclamation");
               status.textContent = `PDF 준비 실패: ${error.message || error}`;
               button.disabled = false;
             } finally {
+              if(saveOutcome!=='failed')saveTrace?.cancel();
+              reportTrace(saveOutcome==='ready'?'succeeded':saveOutcome,saveFailure);
               try { reportSave(saveOutcome); } catch (_) { /* Metrics must not block saving. */ }
               lastFailedSave=saveOutcome==='failed' ? (reportSave.id || null) : null;
               controls.forEach(control => control.disabled = false);
@@ -6875,7 +6950,7 @@
         onMount: () => {
           document.getElementById("blankInsertCancelBtn").addEventListener("click", closeModal);
           document.getElementById("blankInsertConfirmBtn").addEventListener("click", async () => {
-            const metricFinish=beginOperationMetric('page_insert');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('page_insert');let metricOutcome='cancelled';metricFinish.mark?.('parse_start');
             try {
             const posMode = document.getElementById("blankPosSelect").value;
             const sizeMode = document.getElementById("blankSizeSelect").value;
@@ -6916,30 +6991,43 @@
 
     async function duplicateSelectedPages(doc) {
       const finish=beginOperationMetric('page_duplicate');let outcome='cancelled';
+      const pageTrace=window.SunriseDiagnostics?.createTrace('page_duplicate');
+      let pagePhase='parse',pageFailure=null;pageTrace?.mark('parse_start');
       try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
       const { PDFDocument } = window.PDFLib;
       const originalBytes = doc.bytes;
       const pdfDoc = await PDFDocument.load(originalBytes);
+      pageTrace?.mark('parse_ok');pagePhase='structure';
       if (doc.bytes !== originalBytes || !allowPageStructureChange(pdfDoc)) return;
+      pageTrace?.mark('structure_ok');
+      pagePhase='copy';pageTrace?.mark('copy_start');
       const copied = await pdfDoc.copyPages(pdfDoc, indices);
       const insertAt = Math.max(...indices) + 1;
       copied.forEach((p, offset) => pdfDoc.insertPage(insertAt + offset, p));
+      pageTrace?.mark('copy_ok');pagePhase='save';pageTrace?.mark('save_start');
       const updatedBytes = await pdfDoc.save();
+      pageTrace?.mark('save_ok');
       if(doc.bytes!==originalBytes){showToast("문서 상태가 변경되어 복제를 취소했습니다.","fa-circle-exclamation");return;}
       const pageMap = Array.from({ length: doc.pageCount }, (_, index) => index);
       pageMap.splice(insertAt, 0, ...indices);
       saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 복제`);
       remapPageItems(doc, pageMap);
       doc.bytes = updatedBytes;
+      pagePhase='render';pageTrace?.mark('render_start');
       await reloadDocPdfJs(doc);
       doc.currentPage = Math.min(insertAt, doc.pageCount - 1);
       doc.selectedPages = new Set([doc.currentPage]);
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 복제했습니다.`, "fa-clone");
-      outcome='succeeded';
-      } catch(error) { outcome='failed';throw error; } finally { finish(outcome); }
+      pageTrace?.mark('render_ok');outcome='succeeded';
+      } catch(error) {
+        outcome='failed';const code={parse:'page_parse_failed',structure:'page_structure_failed',copy:'page_edit_failed',save:'page_save_failed',render:'page_display_failed'}[pagePhase]||'page_unexpected';
+        pageTrace?.mark({parse:'parse_failed',structure:'structure_failed',copy:'copy_failed',save:'save_failed',render:'render_failed'}[pagePhase]||'copy_failed');
+        pageFailure=tracedOperationFailure(pageTrace,code,{bytes:doc.bytes?.byteLength,pages:doc.pageCount});
+        throw error;
+      } finally {if(outcome!=='failed')pageTrace?.cancel();finish(outcome,pageFailure);}
     }
 
     // Resolve supported local destinations to stable page references. Refuse
@@ -7142,7 +7230,7 @@
     }
 
     async function copySelectedPagesToClipboard(doc, isCut = false) {
-      const metricFinish=beginOperationMetric('page_clipboard');let metricOutcome='cancelled';
+      const metricFinish=beginOperationMetric('page_clipboard');let metricOutcome='cancelled';metricFinish.mark?.('parse_start');
       try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
@@ -7225,7 +7313,7 @@
         onMount: () => {
           document.getElementById("pasteCancelBtn").addEventListener("click", closeModal);
           document.getElementById("pasteConfirmBtn").addEventListener("click", async () => {
-            const metricFinish=beginOperationMetric('page_insert');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('page_insert');let metricOutcome='cancelled';metricFinish.mark?.('parse_start');
             try {
             const posMode = document.getElementById("pastePosSelect").value;
             const { PDFDocument } = window.PDFLib;
@@ -7296,7 +7384,7 @@
             const originalBytes=doc.bytes,captured=captureSaveState(doc,false);
             const unchanged=()=>activeDoc()===doc&&doc.bytes===originalBytes&&
               saveStateIsCurrent(doc,captured);
-            const metricFinish=beginOperationMetric('page_extract');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('page_extract');let metricOutcome='cancelled';metricFinish.mark?.('parse_start');
             doc.operationBusy=true;
             try {
             const rangeStr = document.getElementById("extractRangeInput").value;
@@ -7480,7 +7568,7 @@
             let chunks;
             try{chunks=planDocumentSplit(input.value,doc.pageCount,Number(per.value));}
             catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
-            const finish=beginOperationMetric("split");let outcome="failed";
+            const finish=beginOperationMetric("split");let outcome="failed";finish.mark?.('compile_start');
             discard();const generation=planGeneration;
             setBusy(true);
             try{
@@ -7516,7 +7604,7 @@
                     if(status.isConnected)status.textContent="문서 상태가 변경되었습니다. 분할 창을 다시 열어 주세요.";
                     return;
                   }
-                  const saveFinish=beginOperationMetric("split_download");let saveOutcome="failed";
+                  const saveFinish=beginOperationMetric("split_download");let saveOutcome="failed";saveFinish.mark?.('engine_start');
                   setBusy(true);
                   try{
                     status.textContent=(i+1)+"/"+plans.length+"번 파일 생성 중 · "+spec.indices.length+"쪽";
@@ -7566,6 +7654,8 @@
       const originalReader=doc.pdfJsDoc;
       doc.operationBusy=true;
       const finish=beginOperationMetric('page_delete');let outcome='cancelled';
+      const pageTrace=window.SunriseDiagnostics?.createTrace('page_delete');
+      let pagePhase='parse',pageFailure=null;pageTrace?.mark('parse_start');
       try {
       const indices = Array.from(doc.selectedPages).sort((a, b) => a - b);
       if (indices.length === 0) indices.push(doc.currentPage);
@@ -7576,8 +7666,10 @@
       const { PDFDocument } = window.PDFLib;
       const originalBytes = doc.bytes;
       const pdfDoc = await PDFDocument.load(originalBytes);
+      pageTrace?.mark('parse_ok');pagePhase='structure';
       if (doc.bytes !== originalBytes) { showToast("문서가 변경되어 페이지 작업을 취소했습니다.", "fa-circle-exclamation"); return; }
       if (!allowPageStructureChange(pdfDoc, indices)) return;
+      pageTrace?.mark('structure_ok');pagePhase='copy';pageTrace?.mark('copy_start');
       const delSet = new Set(indices);
       for (const idx of indices.slice().reverse()) {
         pdfDoc.removePage(idx);
@@ -7594,26 +7686,31 @@
           const shift = indices.filter((dIdx) => dIdx < bm.page).length;
           return { ...bm, page: bm.page - shift };
         });
-      const nextBytes=await pdfDoc.save();
+      pageTrace?.mark('copy_ok');pagePhase='save';pageTrace?.mark('save_start');
+      const nextBytes=await pdfDoc.save();pageTrace?.mark('save_ok');pagePhase='verify';pageTrace?.mark('verify_start');
       const reopened=await PDFDocument.load(nextBytes,{updateMetadata:false});
       verifyPdfPageGeometry(pdfDoc,reopened,"페이지 삭제");
       if(reopened.getPageCount()!==doc.pageCount-indices.length)
         throw Error("삭제 후 페이지 수가 올바르지 않습니다.");
-      const parsed=await parsePageCountAndMeta(nextBytes);
+      const parsed=await parsePageCountAndMeta(nextBytes);pageTrace?.mark('verify_ok');
       if(doc.bytes!==originalBytes||doc.pdfJsDoc!==originalReader||activeDoc()!==doc){
         await parsed.pdfJsDoc.destroy();
         showToast("문서 상태가 변경되어 삭제를 취소했습니다.","fa-circle-exclamation");return;
       }
       saveUndoSnapshot(doc, `선택 페이지 ${indices.length}장 삭제`);
       doc.overlays=nextOverlays;doc.bookmarks=nextBookmarks;doc.bytes=nextBytes;
+      pagePhase='render';pageTrace?.mark('render_start');
       await reloadDocPdfJs(doc,{info:parsed});
       await refreshAllViews();
       showToast(`선택한 ${indices.length}개 페이지를 삭제했습니다.`, "fa-trash-can");
-      outcome='succeeded';
+      pageTrace?.mark('render_ok');outcome='succeeded';
       } catch(error) {
-        outcome='failed';console.error("페이지 삭제 중단",error);
+        outcome='failed';const code={parse:'page_parse_failed',structure:'page_structure_failed',copy:'page_edit_failed',save:'page_save_failed',verify:'page_verify_failed',render:'page_display_failed'}[pagePhase]||'page_unexpected';
+        pageTrace?.mark({parse:'parse_failed',structure:'structure_failed',copy:'copy_failed',save:'save_failed',verify:'verify_failed',render:'render_failed'}[pagePhase]||'copy_failed');
+        pageFailure=tracedOperationFailure(pageTrace,code,{bytes:doc.bytes?.byteLength,pages:doc.pageCount});
+        console.error("페이지 삭제 중단",error);
         showToast("페이지 삭제 중단: "+String(error?.message||error),"fa-circle-exclamation");
-      } finally {doc.operationBusy=false;finish(outcome);}
+      } finally {doc.operationBusy=false;if(outcome!=='failed')pageTrace?.cancel();finish(outcome,pageFailure);}
     }
 
     function openReorderPagesModal(doc) {
@@ -7705,7 +7802,7 @@
           !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.width) || !Number.isFinite(doc.pageSizes?.[item.pageIndex]?.height))) {
         showToast("삽입 항목의 위치 또는 방향을 확인할 수 없어 회전을 중단했습니다.", "fa-triangle-exclamation"); return;
       }
-      const finish=beginOperationMetric('page_rotate');let outcome='failed';
+      const finish=beginOperationMetric('page_rotate');let outcome='failed';finish.mark?.('parse_start');
       doc.operationBusy = true;
       const anchorPage = doc.currentPage, oldBytes = doc.bytes, oldReader = doc.pdfJsDoc;
       const overlayState = JSON.stringify(doc.overlays);
@@ -7718,7 +7815,7 @@
       });
       try {
         const { PDFDocument, degrees } = window.PDFLib;
-        const pdfDoc = await PDFDocument.load(doc.bytes);
+        const pdfDoc = await PDFDocument.load(doc.bytes);finish.mark?.('parse_ok');
         indices.forEach(idx => {
           const page = pdfDoc.getPage(idx);
           page.setRotation(degrees(((page.getRotation().angle || 0) + deltaDegrees + 360) % 360));
@@ -7766,7 +7863,7 @@
     }
 
     async function createPdfFormField(bytes, spec) {
-      const finish=beginOperationMetric('form_create');let outcome='failed';
+      const finish=beginOperationMetric('form_create');let outcome='failed';finish.mark?.('parse_start');
       try {
       const {PDFDocument} = window.PDFLib;
       if (!/^[^\.\x00-\x1f]{1,80}$/.test(spec.name) || !spec.name.trim() || spec.name !== spec.name.trim()) throw new Error("필드 이름은 1~80자이며 앞뒤 공백과 마침표를 사용할 수 없습니다.");
@@ -7799,7 +7896,7 @@
     }
 
     async function updatePdfFormField(bytes, name, value) {
-      const finish=beginOperationMetric('form_fill');let outcome='failed';
+      const finish=beginOperationMetric('form_fill');let outcome='failed';finish.mark?.('parse_start');
       try {
       const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
       if(typeof name!=='string' || name.length>512)throw new Error('필드 이름이 올바르지 않습니다.');
@@ -7826,7 +7923,7 @@
     // USR-10: commit multiple AcroForm values in one transaction.
     // Validate every requested value BEFORE changing even an in-memory PDF field.
     async function updatePdfFormFields(bytes, changes) {
-      const finish=beginOperationMetric('form_fill_bulk');let outcome='failed';
+      const finish=beginOperationMetric('form_fill_bulk');let outcome='failed';finish.mark?.('parse_start');
       try {
         const {PDFDocument,PDFTextField,PDFCheckBox}=window.PDFLib;
         if(!Array.isArray(changes)||changes.length<1||changes.length>100)
@@ -8104,7 +8201,7 @@
               return;
             }
             doc.operationBusy=true;apply.disabled=true;
-            const finish=beginOperationMetric("source_text_replace");let outcome="failed",info=null;
+            const finish=beginOperationMetric("source_text_replace");let outcome="failed",info=null;finish.mark?.('state_start');
             try{
               const output=advanced?await window.SunriseContentEditor.replaceText({
                 bytes:source,pageNumber,targetId:records[Number(select.value)]?.id,original,replacement,
@@ -8494,7 +8591,7 @@
             if(!current()||doc.operationBusy||!checked||checked.raw!==input.value)return;
             const edits=checked.edits;
             doc.operationBusy=true;apply.disabled=true;inspect.disabled=true;input.disabled=true;
-            const finish=beginOperationMetric('source_text_replace');
+            const finish=beginOperationMetric('source_text_replace');finish.mark?.('state_start');
             let outcome='failed',info=null;
             try{
               const output=await engine.replaceSimpleSourceTextBatch({
@@ -9057,17 +9154,20 @@
           close.addEventListener('click',()=>{controller?.abort();closeModal();});
           run.addEventListener('click',async()=>{
             if(running||!valid())return;running=true;run.disabled=true;controller=new AbortController();get('losslessOutput').replaceChildren();
+            const opTrace=beginOperationMetric('pdf_crypto_compress');let opOutcome='failed';opTrace.mark?.('structure_start');
             try{
               const original=await window.PDFLib.PDFDocument.load(doc.bytes,{updateMetadata:false});window.SunrisePdfProtect.assertUnsignedPdf(original,window.PDFLib);
-              const compiled=await compileDocumentWithOverlays(captured.snapshot);if(!valid())return;
+              const compiled=await compileDocumentWithOverlays(captured.snapshot);opTrace.mark?.('structure_ok');if(!valid()){opOutcome='cancelled';return;}
               status.textContent='문서 스트림을 재압축하고 구조를 확인합니다.';
-              const result=await window.SunrisePdfProtect.compressPdf({bytes:compiled,signal:controller.signal});if(!valid())return;
-              await verifySavedPdfBytes(compiled,result.bytes);if(!valid())return;
+              opTrace.mark?.('compress_start');
+              const result=await window.SunrisePdfProtect.compressPdf({bytes:compiled,signal:controller.signal});opTrace.mark?.('compress_ok');if(!valid()){opOutcome='cancelled';return;}
+              opTrace.mark?.('verify_start');await verifySavedPdfBytes(compiled,result.bytes);opTrace.mark?.('verify_ok');if(!valid()){opOutcome='cancelled';return;}
               const button=document.createElement('button');button.type='button';button.className='dialog-btn primary';button.textContent='압축 결과 다운로드';
               const filename=doc.name.replace(/\.pdf$/i,'')+'_lossless.pdf';button.addEventListener('click',()=>downloadBytes(result.bytes,filename));get('losslessOutput').append(button);
               status.textContent=(compiled.length/1048576).toFixed(2)+' MiB → '+(result.bytes.length/1048576).toFixed(2)+' MiB'+(result.bytes.length>=compiled.length?' · 용량 감소가 없어 원본 바이트를 유지했습니다.':' · 이미지 재인코딩 없이 압축했습니다.');
-            }catch(error){if(valid())status.textContent=error.name==='AbortError'?'압축을 취소했습니다.':error.message;}
-            finally{running=false;controller=null;if(run.isConnected)run.disabled=false;}
+              opOutcome='succeeded';
+            }catch(error){if(error?.name==='AbortError')opOutcome='cancelled';if(valid())status.textContent=error.name==='AbortError'?'압축을 취소했습니다.':error.message;}
+            finally{opTrace(opOutcome);running=false;controller=null;if(run.isConnected)run.disabled=false;}
           });
         }});
     }
@@ -9149,6 +9249,8 @@
             input.value='';confirm.value='';ownerInput.value='';
             running=true;button.disabled=true;acknowledged.disabled=true;
             controller = new AbortController();
+            const opTrace=beginOperationMetric('pdf_lock');let opOutcome='failed';
+            opTrace.mark?.('structure_start');
             status.textContent='원본 PDF 상태와 기존 서명 구조를 확인하고 있습니다.';
             try {
               const frozen = {
@@ -9171,24 +9273,31 @@
                 throw Error('20MiB를 초과하는 PDF는 이 암호 보호 기능에서 지원하지 않습니다.');
               const pdf = await window.PDFLib.PDFDocument.load(compiled,{updateMetadata:false});
               window.SunrisePdfProtect.assertUnsignedPdf(pdf,window.PDFLib);
+              opTrace.mark?.('structure_ok');
               if (pdf.getPageCount() > 200) throw Error('이 기능은 최대 200쪽 PDF까지 지원합니다.');
               status.textContent='브라우저 내 QPDF WASM으로 AES-256 암호를 적용하고 결과를 확인하고 있습니다.';
+              opTrace.mark?.('crypto_start');
               const result = await window.SunrisePdfProtect.protectPdf({
                 bytes:compiled instanceof Uint8Array ? compiled : new Uint8Array(compiled),
                 password, ownerPassword, signal:controller.signal
               });
               if(!isCurrent() || controller.signal.aborted || !status.isConnected || !backdrop.classList.contains('open'))
                 throw Error('암호 보호 결과를 저장하기 전에 문서 또는 창이 변경됐습니다.');
+              opTrace.mark?.('crypto_ok');opTrace.mark?.('verify_start');
               if(result.pages !== pdf.getPageCount()) throw Error('암호 보호 결과 페이지 수가 다릅니다.');
+              opTrace.mark?.('verify_ok');
               const fileName = (doc.name.replace(/\.pdf$/i,'') || 'document')
                 .replace(/[\\/:*?"<>|]/g,'_').slice(0,100) + '_AES256_protected.pdf';
               downloadBytes(result.bytes,fileName,'application/pdf');
               status.textContent = 'AES-256 암호 보호 PDF 다운로드를 요청했습니다. 별도의 PDF 뷰어에서 비밀번호 입력과 내용·페이지 표시를 확인하세요.';
+              opOutcome='succeeded';
             } catch (error) {
+              if(error?.name==='AbortError')opOutcome='cancelled';
               if(status.isConnected && backdrop.classList.contains('open'))
                 status.textContent = error?.name === 'AbortError' ? '암호 보호 작업을 취소했습니다.' :
                   '암호 보호 PDF 생성 실패: ' + String(error?.message || '처리할 수 없습니다.');
             } finally {
+              opTrace(opOutcome);
               password = null; ownerPassword = null; controller = null; running = false;
               if(button.isConnected) { button.disabled=false; acknowledged.disabled=false; }
             }
@@ -9248,21 +9357,27 @@
             if(!password){status.textContent='PDF 열기 암호를 입력하세요.';return;}
             passwordInput.value='';busy=true;button.disabled=true;fileInput.disabled=true;
             controller=new AbortController();
+            const opTrace=beginOperationMetric('pdf_unlock');let opOutcome='failed';
             try{
+              opTrace.mark?.('read_start');
               status.textContent='암호화된 PDF를 불러와 암호를 확인하고 있습니다.';
-              const input=new Uint8Array(await sourceFile.arrayBuffer());
+              const input=new Uint8Array(await sourceFile.arrayBuffer());opTrace.mark?.('read_ok');
               if(controller.signal.aborted||!status.isConnected||!backdrop.classList.contains('open'))return;
-              const result=await engine.unlockPdf({bytes:input,password,signal:controller.signal});
+              opTrace.mark?.('crypto_start');
+              const result=await engine.unlockPdf({bytes:input,password,signal:controller.signal});opTrace.mark?.('crypto_ok');
               if(controller.signal.aborted||!status.isConnected||!backdrop.classList.contains('open'))return;
               const filename=(sourceFile.name.replace(/\.pdf$/i,'')||'document')
                 .replace(/[\\/:*?"<>|]/g,'_').slice(0,100)+'_unlocked.pdf';
               downloadBytes(result.bytes,filename,'application/pdf');
               status.textContent='암호 해제 PDF 다운로드를 요청했습니다. 독립 뷰어에서 내용과 페이지를 확인하세요.';
+              opOutcome='succeeded';
             }catch(error){
+              if(error?.name==='AbortError')opOutcome='cancelled';
               if(status.isConnected&&backdrop.classList.contains('open'))
                 status.textContent=error?.name==='AbortError'?'암호 해제 작업을 취소했습니다.':
                   'PDF 암호 해제 실패: '+String(error?.message||'처리할 수 없습니다.');
             }finally{
+              opTrace(opOutcome);
               password=null;passwordInput.value='';controller=null;busy=false;
               if(button.isConnected){button.disabled=false;fileInput.disabled=false;}
             }
@@ -9283,13 +9398,15 @@
           document.getElementById('certificateVerifyClose').addEventListener('click',closeModal);
           button.addEventListener('click',async()=>{
             if(!valid()||button.disabled)return;button.disabled=true;host.replaceChildren();status.textContent='파일 전체 해시와 CMS 서명을 확인하고 있습니다.';
+            const opTrace=beginOperationMetric('signature_verify');let opOutcome='failed';opTrace.mark?.('signature_start');
             try{
-              const result=await window.SunrisePdfCms.verifyPdfSignature({bytes:source,PDFLib:window.PDFLib});if(!valid())return;
+              const result=await window.SunrisePdfCms.verifyPdfSignature({bytes:source,PDFLib:window.PDFLib});opTrace.mark?.('signature_ok');if(!valid()){opOutcome='cancelled';return;}
               status.textContent='서명 암호학적 무결성 확인: '+(result.cryptographicIntegrity?'일치':'불일치')+' / 현재 인증서 유효기간: '+(result.certificateCurrentlyValid?'기간 내':'기간 밖')+'. 발급기관 신뢰·폐기·타임스탬프는 미확인입니다.';
               const save=document.createElement('button');save.type='button';save.className='dialog-btn';save.textContent='검사 결과 JSON 저장';
               save.addEventListener('click',()=>downloadBytes(new TextEncoder().encode(JSON.stringify(result,null,2)),'signature_integrity_report.json','application/json'));host.append(save);
+              opOutcome='succeeded';
             }catch(error){if(valid())status.textContent='서명을 확인하지 못했습니다: '+error.message;}
-            finally{if(button.isConnected)button.disabled=false;}
+            finally{opTrace(opOutcome);if(button.isConnected)button.disabled=false;}
           });
         }});
     }
@@ -9379,6 +9496,7 @@
             working = true;controller=new AbortController(); button.disabled = true;modeInput.disabled=containerInput.disabled=rootInput.disabled=true;
             certInput.disabled = true;keyInput.disabled = true;keyPasswordInput.disabled = true;confirmInput.disabled = true;
             status.textContent = '서명할 PDF를 준비하고 인증서와 키 쌍을 확인하고 있습니다.';
+            const opTrace=beginOperationMetric('signature_sign');let opOutcome='failed';opTrace.mark?.('input_start');
             let privateKeyPem = null, certificatePem = null,containerBytes=null;
             let keyPassword = keyPasswordInput.value;
             keyPasswordInput.value = '';
@@ -9393,20 +9511,25 @@
               let trustAnchorsPem=rootFile?await rootFile.text():null;
               if(p12)containerBytes=new Uint8Array(await containerFile.arrayBuffer());
               else{const [certText,keyText]=await Promise.all([certFile.text(),keyFile.text()]);certificatePem=certText;privateKeyPem=keyText;}
+              opTrace.mark?.('input_ok');
               if (!current() || !modalActive()) throw Error('서명 도중 문서 또는 창이 변경되었습니다.');
-              const pdfBytes = await compileDocumentWithOverlays(frozen);
+              opTrace.mark?.('compile_start');const pdfBytes = await compileDocumentWithOverlays(frozen);opTrace.mark?.('compile_ok');
               if (!current() || !modalActive()) throw Error('서명 도중 문서 또는 창이 변경되었습니다.');
               status.textContent = 'CMS 서명을 생성하고 PDF ByteRange를 확인하고 있습니다.';
               const signingOptions={bytes:pdfBytes instanceof Uint8Array?pdfBytes:new Uint8Array(pdfBytes),PDFLib:window.PDFLib,signal:controller.signal,trustAnchorsPem,incremental:true};
+              opTrace.mark?.('signature_start');
               const output=p12?await window.SunrisePki.signPdfWithPkcs12({...signingOptions,container:containerBytes,password:keyPassword}):await signer.signPdfWithPem({...signingOptions,certificatePem,privateKeyPem,keyPassword,profile:'cades'});
+              opTrace.mark?.('signature_ok');
               if (!current() || !modalActive()) throw Error('서명 완료 전 문서 또는 창이 변경되었습니다.');
               const baseName = doc.name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]/g, '_').slice(0,100);
               downloadBytes(output.bytes, baseName + '_cert_signed.pdf');
               status.textContent = '서명 PDF 다운로드를 요청했습니다. '+(output.pkiTrustVerified?'선택한 루트 기준 체인 확인 완료. ':'인증서 신뢰 미확인. ')+'폐기 상태·타임스탬프·외부 뷰어 적합성은 확인하지 않았습니다.';
+              opOutcome='succeeded';
             } catch (error) {
               if (modalActive()) status.textContent = '서명 파일 생성 실패: ' + String(error?.message || error);
             } finally {
               // The private key is not stored in application state or browser storage.
+              opTrace(opOutcome);
               containerBytes?.fill(0);containerBytes=null;privateKeyPem = null; certificatePem = null; keyPassword = null;controller=null;
               keyPasswordInput.value = '';
               keyInput.value = ''; certInput.value = '';containerInput.value='';
@@ -9490,7 +9613,7 @@
               return;
             }
 
-            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('overlay_insert');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
             try {
             const targetPages = scope === "all" ? Array.from({ length: doc.pageCount }, (_, i) => i) : [doc.currentPage];
             // Refuse unknown geometry: never place text outside an unusually small page.
@@ -9607,7 +9730,7 @@
             const color=document.getElementById("shapeColorInput").value;
             const bgColor=document.getElementById("shapeFillInput").value;
             const id="ov_"+overlayIdCounter++;
-            const metricFinish=beginOperationMetric('overlay_insert');let outcome='failed';
+            const metricFinish=beginOperationMetric('overlay_insert');metricFinish.mark?.('state_start');let outcome='failed';
             try {
               saveUndoSnapshot(doc,"도형 삽입");
               doc.overlays.push({id,pageIndex:doc.currentPage,type:"Shape",shapeKind,
@@ -9663,7 +9786,7 @@
           });
           document.getElementById("tblCancelBtn").addEventListener("click", closeModal);
           document.getElementById("tblConfirmBtn").addEventListener("click", () => {
-            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('overlay_insert');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
             try {
             const hCells = document.getElementById("tblHeaderInput").value.split(",").map((s) => s.trim());
             const rCells = document.getElementById("tblRowInput").value.split(",").map((s) => s.trim());
@@ -9726,7 +9849,7 @@
         onMount: () => {
           document.getElementById("pgNumCancelBtn").addEventListener("click", closeModal);
           document.getElementById("pgNumConfirmBtn").addEventListener("click", () => {
-            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('overlay_insert');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
             try {
             const tpl = document.getElementById("pgNumFormatInput").value || "- {page} / {total} -";
             const from = Number(document.getElementById("pgNumFromPage").value);
@@ -9795,7 +9918,7 @@
         onMount: () => {
           document.getElementById("hfCancelBtn").addEventListener("click", closeModal);
           document.getElementById("hfConfirmBtn").addEventListener("click", () => {
-            const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+            const metricFinish=beginOperationMetric('overlay_insert');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
             try {
             const hTxt = document.getElementById("hfHeaderText").value.trim();
             const fTxt = document.getElementById("hfFooterText").value.trim();
@@ -9922,7 +10045,7 @@
               if(isShape||isAnnotation)
                 opacity=validateOverlayDimension(document.getElementById("editItemOpacityInput").value,.1,1,"투명도");
             } catch(error) {showToast(error.message,"fa-triangle-exclamation");return;}
-            const metricFinish=beginOperationMetric('overlay_edit');let outcome='failed';
+            const metricFinish=beginOperationMetric('overlay_edit');metricFinish.mark?.('state_start');let outcome='failed';
             try {
               saveUndoSnapshot(doc,`항목 수정 (${item.type})`);
               if(isTable){
@@ -9948,7 +10071,7 @@
     }
 
     function duplicateSelectedInsertItem(doc) {
-      const metricFinish=beginOperationMetric('overlay_duplicate');let metricOutcome='cancelled';
+      const metricFinish=beginOperationMetric('overlay_duplicate');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
       try {
       const target = doc.overlays.find((o) => o.id === state.selectedInsertId) || doc.overlays.find((o) => o.pageIndex === doc.currentPage);
       if (!target) {
@@ -9971,7 +10094,7 @@
     }
 
     function deleteSelectedInsertItem(doc) {
-      const metricFinish=beginOperationMetric('overlay_delete');let metricOutcome='cancelled';
+      const metricFinish=beginOperationMetric('overlay_delete');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
       try {
       const target = doc.overlays.find((o) => o.id === state.selectedInsertId) || doc.overlays.find((o) => o.pageIndex === doc.currentPage);
       if (!target) {
@@ -10119,12 +10242,12 @@
           hit.kind!=="text" || !hit.highlightRect || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
         showToast("위치를 확인할 수 있는 본문 검색 결과에서만 형광펜을 추가할 수 있습니다.","fa-circle-info"); return;
       }
-      const finish=beginOperationMetric('highlight');let outcome='failed';
+      const finish=beginOperationMetric('highlight');let outcome='failed';finish.mark?.('parse_start');
       doc.operationBusy=true;
       const oldBytes=doc.bytes, reader=doc.pdfJsDoc;
       try {
-        const pdfDoc=await window.PDFLib.PDFDocument.load(oldBytes);
-        addPdfHighlight(pdfDoc,hit.pageIndex,hit.highlightRect);
+        const pdfDoc=await window.PDFLib.PDFDocument.load(oldBytes);finish.mark?.('parse_ok');
+        finish.mark?.('state_start');addPdfHighlight(pdfDoc,hit.pageIndex,hit.highlightRect);
         const nextBytes=await pdfDoc.save(), info=await parsePageCountAndMeta(nextBytes);
         if (activeDoc()!==doc || doc.bytes!==oldBytes || doc.pdfJsDoc!==reader || doc.currentPage!==hit.pageIndex ||
             state.searchResults[state.activeSearchHitIndex]!==hit || document.getElementById("inlineSearchInput")?.value.trim()!==state.lastSearchTerm) {
@@ -10147,13 +10270,13 @@
       state.searchResults = []; state.activeSearchHitIndex = -1; state.searchScrollHit = null;
       document.getElementById("searchIndicator")?.replaceChildren();
       if (!doc || !term) { if (countEl) countEl.textContent = "-"; return; }
-      const finish=beginOperationMetric('search');let outcome='cancelled';
+      const finish=beginOperationMetric('search');let outcome='cancelled';finish.mark?.('read_start');
       try {
       state.lastSearchTerm = term; if (inlineInput && inlineInput.value !== term) inlineInput.value = term;
       if (countEl) countEl.textContent = "검색 중";
       const reader = doc.pdfJsDoc;
       const valid = () => epoch === searchEpoch && activeDoc() === doc && doc.pdfJsDoc === reader;
-      const ready = await ensurePageTexts(doc);
+      const ready = await ensurePageTexts(doc);if(ready)finish.mark?.('read_ok');
       if (!ready || !valid()) return;
       const caseSensitive = Boolean(options.caseSensitive), needle = caseSensitive ? term : term.toLowerCase();
       let truncated = false;
@@ -10233,12 +10356,13 @@
           start.addEventListener('click',async()=>{
             if(running||!valid())return;
             running=true;doc.officeExportBusy=true;start.disabled=true;close.textContent='작업 취소';
+            const opTrace=beginOperationMetric('office_export_advanced');let opOutcome='failed';opTrace.mark?.('compile_start');
             let info=null;const pages=[];let totalImageBytes=0;
             try{
               if(doc.pageCount>(visual||mixed?30:50))throw Error('지원 페이지 수를 초과했습니다. PDF를 나누어 변환하세요.');
               status.textContent='현재 편집 내용을 준비하고 있습니다.';
-              const compiled=await compileDocumentWithOverlays(captured.snapshot);abort();
-              info=await parsePageCountAndMeta(compiled);abort();
+              const compiled=await compileDocumentWithOverlays(captured.snapshot);opTrace.mark?.('compile_ok');abort();
+              opTrace.mark?.('parse_start');info=await parsePageCountAndMeta(compiled);opTrace.mark?.('parse_ok');abort();
               for(let i=0;i<info.pdfJsDoc.numPages;i++){
                 abort();status.textContent=(i+1)+'/'+info.pdfJsDoc.numPages+'쪽을 변환합니다.';
                 const page=await info.pdfJsDoc.getPage(i+1),viewport=page.getViewport({scale:1});
@@ -10263,20 +10387,20 @@
                 await new Promise(resolve=>setTimeout(resolve,0));
               }
               abort();
-              let result;
+              let result;opTrace.mark?.('office_start');
               if(visual)result=window.SunriseOfficeExport.docxVisual(pages);
               else{
                 status.textContent='원본 표 선과 병합 셀을 분석합니다.';
                 const rules=await window.SunriseContentEditor.tableRules({bytes:compiled,PDFLib:window.PDFLib,pageNumbers:pages.map((_,i)=>i+1),cancelled:()=>!valid()});abort();
                 result=mixed?window.SunriseOfficeExport.docxMixed(pages,rules):excel?window.SunriseOfficeExport.xlsxGrids(pages,rules):window.SunriseOfficeExport.docxGrids(pages,rules);
               }
-              abort();
+              opTrace.mark?.('office_ok');abort();
               const name=(doc.name.replace(/\.pdf$/i,'').replace(/[\\/:*?"<>|]/g,'_').slice(0,100)||'document')+(visual?'_page_images.docx':mixed?'_editable_mixed.docx':excel?'_merged_cells.xlsx':'_merged_cells.docx');
               const button=document.createElement('button');button.type='button';button.className='dialog-btn primary';button.textContent='변환 파일 다운로드';
               button.addEventListener('click',()=>downloadBytes(result,name,excel?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'));
-              get('advancedOfficeOutput').replaceChildren(button);status.textContent='변환 파일을 준비했습니다. 다운로드 후 내용을 확인하세요.';
-            }catch(error){if(status.isConnected)status.textContent=error.name==='AbortError'?'변환을 취소했습니다.':error.message;}
-            finally{renderTask?.cancel();if(info)await info.pdfJsDoc.destroy();pages.length=0;running=false;doc.officeExportBusy=false;if(start.isConnected){start.disabled=stopped;close.textContent='닫기';}}
+              get('advancedOfficeOutput').replaceChildren(button);status.textContent='변환 파일을 준비했습니다. 다운로드 후 내용을 확인하세요.';opOutcome='succeeded';
+            }catch(error){if(error?.name==='AbortError')opOutcome='cancelled';if(status.isConnected)status.textContent=error.name==='AbortError'?'변환을 취소했습니다.':error.message;}
+            finally{opTrace(opOutcome);renderTask?.cancel();if(info)await info.pdfJsDoc.destroy();pages.length=0;running=false;doc.officeExportBusy=false;if(start.isConnected){start.disabled=stopped;close.textContent='닫기';}}
           });
         }});
     }
@@ -10291,7 +10415,7 @@
       const captured=captureSaveState(doc,false);
       const unchanged=()=>activeDoc()===doc&&doc.pdfJsDoc===reader&&doc.bytes===original&&
         saveStateIsCurrent(doc,captured);
-      const finish=beginOperationMetric("extract_text");let outcome="failed";
+      const finish=beginOperationMetric('office_export_text');let outcome="failed";finish.mark?.('read_start');
       doc.officeExportBusy=true;
       try {
         if(doc.pageCount>120)throw Error("Office 텍스트 변환은 최대 120쪽까지 지원합니다.");
@@ -10316,7 +10440,9 @@
               width:viewport.width,height:viewport.height,rotation:viewport.rotation});
           }
         }
+        finish.mark?.('read_ok');
         if(!pages.some(text=>text.trim()))throw Error("PDF 텍스트 레이어가 없습니다. 이미지 기반 문서의 OCR은 지원하지 않습니다.");
+        finish.mark?.('office_start');
         const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):
           format==="docx-layout"?window.SunriseOfficeExport.docxLayout(layoutPages):
           format==="docx-two-columns"?window.SunriseOfficeExport.docxTwoColumn(layoutPages):
@@ -10325,6 +10451,7 @@
           format==="xlsx-pages"?window.SunriseOfficeExport.xlsxPerPage(pages):
           format==="xlsx-columns"?window.SunriseOfficeExport.xlsxColumns(columnPages):
           window.SunriseOfficeExport.xlsx(pages);
+        finish.mark?.('office_ok');
         if(!unchanged()){outcome="cancelled";return;}
         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
         downloadBytes(bytes,stem+(format==="xlsx-columns"?"_columns.xlsx":
@@ -10358,10 +10485,10 @@
     }
 
     async function openExtractTextModal(doc) {
-      const finish=beginOperationMetric('extract_text');let outcome='failed';
+      const finish=beginOperationMetric('extract_text');let outcome='failed';finish.mark?.('read_start');
       try {
       showToast("문서 텍스트를 준비하고 있습니다.", "fa-file-lines");
-      if (!await ensurePageTexts(doc) || activeDoc() !== doc) { outcome='cancelled'; return; }
+      if (!await ensurePageTexts(doc) || activeDoc() !== doc) { outcome='cancelled'; return; }finish.mark?.('read_ok');
       const fullText = Array.from({ length: doc.pageCount }, (_, i) => {
         const t = doc.pageTexts[i] || "";
         const ov = doc.overlays
@@ -10444,7 +10571,7 @@
             cancel.disabled = false;
             results.replaceChildren();
             const finish = beginOperationMetric("extract_images");
-            let outcome = "failed";
+            let outcome = "failed";finish.mark?.('engine_start');
             try {
               const options = {
                 currentPage: scope.value === "current" ? doc.currentPage + 1 : undefined,
@@ -10876,9 +11003,9 @@
             edit.disabled=true;remove.disabled=true;jump.disabled=true;
             search.disabled=true;type.disabled=true;select.disabled=true;closeButton.disabled=true;
             const finish=beginOperationMetric("native_annotation_edit");
-            let outcome="failed",info;
+            let outcome="failed",info;finish.mark?.('parse_start');
             try{
-              const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});
+              const pdf=await window.PDFLib.PDFDocument.load(originalBytes,{updateMetadata:false});finish.mark?.('parse_ok');
               const fresh=listNativeAnnotations(pdf,item.pageIndex).find(a=>a.index===item.index && a.ref===item.ref);
               if(!fresh)throw new Error("주석 참조가 변경되어 작업을 중단했습니다.");
               await updateNativeAnnotationWithAppearance(pdf,originalBytes,item.pageIndex,item.index,action,textInput.value);
@@ -11102,7 +11229,7 @@
     function placePendingItem(event) {
       const pending = state.pendingPlacement, doc = activeDoc();
       if (!pending || pending.doc !== doc || doc.operationBusy) return;
-      const metricFinish=beginOperationMetric('overlay_insert');let metricOutcome='cancelled';
+      const metricFinish=beginOperationMetric('overlay_insert');metricFinish.mark?.('state_start');let metricOutcome='cancelled';
       try {
       const rect = document.getElementById("pageStage").getBoundingClientRect();
       const size = doc.pageSizes[doc.currentPage] || {width:595, height:842};

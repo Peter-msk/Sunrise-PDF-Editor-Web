@@ -18,6 +18,7 @@
         if(typeof callback==='function')finish=callback;
       }
     }catch{/* local action still proceeds */}
+    const mark=step=>{try{finish.mark?.(step)}catch{/* non-critical diagnostics */}};
     let ended=false;
     const complete=stage=>{
       if(ended)return;
@@ -29,10 +30,11 @@
     };
     // Call the handler inside the tracker so synchronous PDF engine exceptions
     // also produce a terminal status and do not create a dangling 'started'.
-    return Promise.resolve().then(job).then(result=>{
-      complete(cancelled()?'cancelled':'succeeded');
+    return Promise.resolve().then(()=>{mark('input_ok');mark('engine_start');return job()}).then(result=>{
+      mark('engine_ok');complete(cancelled()?'cancelled':'succeeded');
       return result;
     },error=>{
+      if(!cancelled()&&error?.name!=='AbortError')mark('engine_failed');
       complete(cancelled()||error?.name==='AbortError'?'cancelled':'failed');
       throw error;
     });

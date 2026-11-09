@@ -9,7 +9,8 @@ const {DatabaseSync}=require('node:sqlite');
  CREATE TABLE inquiry_rate_limits(day TEXT);
  CREATE TABLE analytics_sessions(day TEXT);
  CREATE TABLE admin_sessions(expires_ms INTEGER,last_seen_ms INTEGER);
- CREATE TABLE admin_login_limits(window_start_ms INTEGER);`);
+ CREATE TABLE admin_login_limits(window_start_ms INTEGER);
+ CREATE TABLE admin_trace_incidents(fingerprint TEXT PRIMARY KEY,updated_ms INTEGER NOT NULL);`);
  // The supplied clock differs from the real clock and crosses a KST day boundary.
  const now=Date.parse('2025-03-01T15:00:00.000Z');
  const cutoff=new Date(now-90*86400000);
