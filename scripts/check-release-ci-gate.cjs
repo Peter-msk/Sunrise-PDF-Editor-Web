@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 function assertNoPreviewAssets(root=path.resolve(__dirname,'..')){
  if(fs.existsSync(path.join(root,'dist','SUNRISE_PREVIEW_ONLY.json')))
-  throw Error('Preview-only assets exist; run the locked production build before release.');
+  throw Error('Preview-only assets exist; run and validate the offline production build before release.');
 }
 const REQUIRED_JOBS=Object.freeze([
  'Node contracts and production build',

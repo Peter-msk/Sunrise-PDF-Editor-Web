@@ -10,6 +10,12 @@
   'use strict';
 
   const MAX_IMAGES = 60;
+  // pdf-lib keeps embedded image bytes and a full output PDF in memory.
+  // Preflight the *aggregate* before reading any File into an ArrayBuffer.
+  const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
+  const MAX_TOTAL_INPUT_BYTES = 120 * 1024 * 1024;
+  const MAX_RASTER_PIXELS = 48_000_000;
+  const MAX_TOTAL_RASTER_PIXELS = 200_000_000;
   const MAX_PDF_DIM = 14400; // ISO 32000 commonly supported maximum page dimension, pt.
   const MM_TO_PT = 72 / 25.4;
   const PAGE_SIZES = Object.freeze({ a4: [595.2756, 841.8898], letter: [612, 792] });
@@ -29,12 +35,18 @@
     const files = Array.from(input);
     if (files.length < 1 || files.length > MAX_IMAGES)
       throw new Error(`한 번에 1~${MAX_IMAGES}개 이미지를 선택해 주세요.`);
+    let totalBytes = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       if (!file || !Number.isSafeInteger(file.size) || file.size < 1 ||
           typeof file.name !== 'string' || !file.name || file.name.length > 240 ||
           typeof file.arrayBuffer !== 'function')
         throw new Error(`${i + 1}번째 이미지 파일의 이름·크기·읽기 기능을 확인해 주세요.`);
+      if (file.size > MAX_IMAGE_BYTES)
+        throw new Error(`이미지 1개의 용량은 최대 32MB입니다 (${i + 1}번째 파일).`);
+      totalBytes += file.size;
+      if (!Number.isSafeInteger(totalBytes) || totalBytes > MAX_TOTAL_INPUT_BYTES)
+        throw new Error('선택한 이미지 용량 합계는 최대 120MB입니다.');
       const extension = file.name.split('.').pop().toLowerCase();
       if (!Object.prototype.hasOwnProperty.call(EXT, extension))
         throw new Error(`지원하지 않는 형식: ${file.name} (JPG·PNG·WebP 지원)`);
@@ -82,19 +94,23 @@
         const start = offset + 4;
         if ([69, 120, 105, 102, 0, 0].every((v, i) => bytes[start + i] === v)) {
           const tiff = start + 6;
+          const segmentEnd = offset + 2 + length;
+          // TIFF pointers are relative to APP1. Do not interpret subsequent
+          // JPEG segments as EXIF metadata when an IFD offset is malformed.
+          if (tiff + 8 > segmentEnd) return 1;
           const little = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
           const big = bytes[tiff] === 0x4d && bytes[tiff + 1] === 0x4d;
           if (!little && !big) return 1;
           const u16 = i => little ? bytes[i] + bytes[i + 1] * 256 : bytes[i] * 256 + bytes[i + 1];
           const u32 = i => little ? (bytes[i] + bytes[i + 1] * 256 + bytes[i + 2] * 65536 + bytes[i + 3] * 16777216)
                                    : (bytes[i] * 16777216 + bytes[i + 1] * 65536 + bytes[i + 2] * 256 + bytes[i + 3]);
-          if (u16(tiff + 2) !== 42 || tiff + 8 > bytes.length) return 1;
+          if (u16(tiff + 2) !== 42) return 1;
           const directory = tiff + u32(tiff + 4);
-          if (directory + 2 > bytes.length) return 1;
+          if (directory < tiff + 8 || directory + 2 > segmentEnd) return 1;
           const count = Math.min(u16(directory), 128);
           for (let j = 0; j < count; j++) {
             const pos = directory + 2 + j * 12;
-            if (pos + 12 > bytes.length) break;
+            if (pos + 12 > segmentEnd) break;
             if (u16(pos) === 0x0112 && u16(pos + 2) === 3 && u32(pos + 4) === 1) {
               const n = u16(pos + 8);
               return n >= 1 && n <= 8 ? n : 1;
@@ -107,12 +123,72 @@
     return 1;
   }
 
+  // PNG is losslessly inflated by pdf-lib: the uncompressed pixel dimensions
+  // must be checked *before* calling embedPng, even when the file is tiny.
+  function checkPngHeader(bytes) {
+    if (bytes.length < 24 || bytes[12] !== 73 || bytes[13] !== 72 ||
+        bytes[14] !== 68 || bytes[15] !== 82)
+      throw new Error('PNG 이미지 헤더가 손상되었습니다.');
+    const width = (bytes[16] * 16777216 + bytes[17] * 65536 + bytes[18] * 256 + bytes[19]);
+    const height = (bytes[20] * 16777216 + bytes[21] * 65536 + bytes[22] * 256 + bytes[23]);
+    checkPixels(width, height);
+  }
+
+  function checkPixels(width, height) {
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+        width < 1 || height < 1 || width > 32767 || height > 32767 ||
+        width * height > MAX_RASTER_PIXELS)
+      throw new Error('이미지 해상도가 너무 큽니다. 가로·세로 크기를 낮춘 후 다시 시도하세요.');
+    return width * height;
+  }
+
+  // Read image dimensions from lightweight headers before invoking any
+  // browser decoder. Unknown-but-valid headers remain the decoder's concern.
+  function checkJpegFrame(bytes) {
+    let pos = 2;
+    while (pos + 9 < bytes.length) {
+      if (bytes[pos++] !== 0xff) break;
+      while (pos < bytes.length && bytes[pos] === 0xff) pos++;
+      const marker = bytes[pos++];
+      if (marker === 0xda || marker === 0xd9) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (pos + 2 > bytes.length) break;
+      const length = bytes[pos] * 256 + bytes[pos + 1];
+      if (length < 2 || pos + length > bytes.length) break;
+      if ((marker >= 0xc0 && marker <= 0xcf) &&
+          ![0xc4, 0xc8, 0xcc].includes(marker) && length >= 7) {
+        checkPixels(bytes[pos + 5] * 256 + bytes[pos + 6],
+          bytes[pos + 3] * 256 + bytes[pos + 4]);
+        return;
+      }
+      pos += length;
+    }
+  }
+
+  function checkWebpHeader(bytes) {
+    if (bytes.length < 30) return; // Browser decoder rejects truncated files.
+    const type = String.fromCharCode(bytes[12],bytes[13],bytes[14],bytes[15]);
+    if (type === 'VP8X') {
+      checkPixels(1 + bytes[24] + bytes[25] * 256 + bytes[26] * 65536,
+        1 + bytes[27] + bytes[28] * 256 + bytes[29] * 65536);
+    } else if (type === 'VP8L' && bytes[20] === 0x2f) {
+      checkPixels(1 + bytes[21] + ((bytes[22] & 63) << 8),
+        1 + ((bytes[22] >>> 6) | (bytes[23] << 2) | ((bytes[24] & 15) << 10)));
+    } else if (type === 'VP8 ' && bytes[23] === 0x9d && bytes[24] === 1 && bytes[25] === 0x2a) {
+      checkPixels((bytes[26] + bytes[27] * 256) & 0x3fff,
+        (bytes[28] + bytes[29] * 256) & 0x3fff);
+    }
+  }
+
   async function decodeToPng(file, options) {
     if (typeof options.browserConvert !== 'function')
       throw new Error('이 브라우저에서 이미지 방향 보정 또는 WebP 변환 기능을 사용할 수 없습니다.');
     const result = await options.browserConvert(file);
     if (!(result instanceof Uint8Array) || detectType(result) !== 'png')
       throw new Error('브라우저 이미지 변환 결과가 올바른 PNG 형식이 아닙니다.');
+    if (result.byteLength > MAX_IMAGE_BYTES)
+      throw new Error('변환된 PNG 용량이 32MB를 초과했습니다. 원본 이미지 크기를 줄여 주세요.');
+    checkPngHeader(result);
     return result;
   }
 
@@ -165,6 +241,7 @@
     pdf.setTitle('Sunrise PDF Editor - Images');
     pdf.setCreator('Sunrise PDF Editor');
     const expected = [];
+    let embeddedPixels = 0;
     for (let index = 0; index < files.length; index++) {
       checkCancel(options);
       await yieldUI();
@@ -176,6 +253,8 @@
       if (buffer.byteLength !== file.size) throw new Error(`${file.name}: 파일을 완전히 읽지 못했습니다.`);
       let bytes = new Uint8Array(buffer);
       const type = detectType(bytes);
+      if (type === 'jpeg') checkJpegFrame(bytes);
+      if (type === 'webp') checkWebpHeader(bytes);
       const extension = EXT[file.name.split('.').pop().toLowerCase()];
       if (extension !== type) throw new Error(`${file.name}: 확장자와 실제 이미지 형식이 다릅니다.`);
       const requiresConversion = type === 'webp' ||
@@ -185,11 +264,15 @@
         bytes = await decodeToPng(file, options);
         checkCancel(options);
       }
+      if (requiresConversion || type === 'png') checkPngHeader(bytes);
       options.onProgress?.({done:index,total:files.length,name:file.name,phase:'embedding'});
       const embedded = requiresConversion || type === 'png'
         ? await pdf.embedPng(bytes)
         : await pdf.embedJpg(bytes);
       checkCancel(options);
+      embeddedPixels += checkPixels(embedded.width, embedded.height);
+      if (embeddedPixels > MAX_TOTAL_RASTER_PIXELS)
+        throw new Error('이미지 해상도 합계가 너무 큽니다. 이미지를 나누어 PDF로 변환해 주세요.');
       const geometry = getPageGeometry(embedded, settings);
       const page = pdf.addPage([geometry.width, geometry.height]);
       page.drawImage(embedded, {
@@ -227,5 +310,6 @@
   }
 
   return Object.freeze({create, normalizeFiles, normalizeSettings, detectType,
-    jpegExifOrientation, getPageGeometry, MAX_IMAGES});
+    jpegExifOrientation, getPageGeometry, MAX_IMAGES, MAX_IMAGE_BYTES,
+    MAX_TOTAL_INPUT_BYTES, MAX_RASTER_PIXELS, MAX_TOTAL_RASTER_PIXELS});
 });

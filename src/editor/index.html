@@ -2426,6 +2426,28 @@
       document.getElementById("modalBackdrop").classList.remove("open");
     }
 
+    // Browser PDF preview URLs are owned by this page. Keep a bounded, short-lived
+    // reference while the new tab loads and release it on timeout or page exit.
+    const pendingPrintPreviews = new Map();
+    function releasePrintPreview(url) {
+      if (pendingPrintPreviews.has(url)) clearTimeout(pendingPrintPreviews.get(url));
+      pendingPrintPreviews.delete(url);
+      URL.revokeObjectURL(url);
+    }
+    function openPrintPreview(bytes) {
+      const url = URL.createObjectURL(new Blob([bytes], {type:"application/pdf"}));
+      let popup = null;
+      try { popup = window.open(url, "_blank"); }
+      catch (_) { releasePrintPreview(url); return false; }
+      if (!popup) { releasePrintPreview(url); return false; }
+      while (pendingPrintPreviews.size >= 2) releasePrintPreview(pendingPrintPreviews.keys().next().value);
+      pendingPrintPreviews.set(url, setTimeout(() => releasePrintPreview(url), 180000));
+      return true;
+    }
+    window.addEventListener('pagehide', () => {
+      for (const url of [...pendingPrintPreviews.keys()]) releasePrintPreview(url);
+    });
+
     const pendingDownloads=[];
     function downloadBytes(bytes, filename, mime = "application/pdf") {
       const blob=new Blob([bytes],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -3647,7 +3669,10 @@
       bar.appendChild(addBtn);
     }
 
+    // Detect even A -> B -> A tab switches while an async export is pending.
+    let activeDocumentRevision = 0;
     async function setActiveDocument(index) {
+      const previous = activeDoc();
       cancelPlacement();
       if (index !== state.activeDocIndex) clearSearchResults();
       if (index < 0 || index >= state.docs.length) {
@@ -3655,17 +3680,21 @@
       } else {
         state.activeDocIndex = index;
       }
+      if (activeDoc() !== previous) activeDocumentRevision++;
       state.selectedInsertId = null;
       await refreshAllViews();
     }
 
     async function refreshAllViews() {
+      const doc = activeDoc(), revision = activeDocumentRevision;
       syncSidePaneDomState();
       renderDocTabs();
       renderRibbon();
       updateCommandStates();
       await renderCurrentPageCanvas();
+      if (activeDoc() !== doc || activeDocumentRevision !== revision) return;
       await renderLeftPane();
+      if (activeDoc() !== doc || activeDocumentRevision !== revision) return;
       renderRightPane();
     }
 
@@ -3951,11 +3980,14 @@
       const generation = ++renderGeneration;
       document.getElementById("searchIndicator")?.replaceChildren();
       if (currentRenderTask) {
-        currentRenderTask.cancel();
-        try { await currentRenderTask.promise; } catch (error) {
+        const cancelledTask = currentRenderTask;
+        cancelledTask.cancel();
+        try { await cancelledTask.promise; } catch (error) {
           if (error.name !== "RenderingCancelledException") console.warn("Previous render failed", error);
         }
-        currentRenderTask = null;
+        if (currentRenderTask === cancelledTask) currentRenderTask = null;
+        // Another navigation may have started while cancellation was pending.
+        if (generation !== renderGeneration) return;
       }
       const doc = activeDoc();
       if (!doc) return;
@@ -5625,15 +5657,24 @@
         case "printPdf":
           if (!doc) return;
           {
-            const compiled = await compileDocumentWithOverlays(doc);
-            const blob = new Blob([compiled], { type: "application/pdf" });
-            const url = URL.createObjectURL(blob);
-            const win = window.open(url, "_blank");
-            if (!win) {
-              downloadBytes(compiled, doc.name.replace(/\.pdf$/i, "_print.pdf"));
-              showToast("팝업이 차단되어 인쇄용 PDF를 다운로드했습니다.", "fa-print");
-            } else {
-              showToast("새 탭에서 인쇄 미리보기를 열었습니다.", "fa-print");
+            try {
+              // Render an immutable snapshot. Never expose a print result from a
+              // closed, changed or no-longer-active document after an await.
+              const captured = captureSaveState(doc), activationRevision = activeDocumentRevision;
+              const compiled = await compileDocumentWithOverlays(captured.snapshot);
+              if (!state.docs.includes(doc) || activeDoc() !== doc ||
+                  activationRevision !== activeDocumentRevision || !saveStateIsCurrent(doc, captured)) {
+                showToast("인쇄 준비 중 문서가 변경되어 결과를 취소했습니다. 다시 인쇄해 주세요.", "fa-triangle-exclamation");
+                break;
+              }
+              if (!openPrintPreview(compiled)) {
+                downloadBytes(compiled, doc.name.replace(/\.pdf$/i, "_print.pdf"));
+                showToast("팝업이 차단되어 인쇄용 PDF를 다운로드했습니다.", "fa-print");
+              } else {
+                showToast("새 탭에서 인쇄 미리보기를 열었습니다.", "fa-print");
+              }
+            } catch (error) {
+              showToast("인쇄용 PDF 준비 실패: " + String(error?.message || "문서 상태를 확인해 주세요."), "fa-triangle-exclamation");
             }
           }
           break;
@@ -11172,7 +11213,9 @@
       if (doc.operationBusy) { showToast("페이지 작업을 처리하고 있습니다. 잠시 기다려 주세요.", "fa-hourglass-half"); return; }
       if (doc.dirty && !window.confirm(`“${doc.name}”에 저장하지 않은 변경사항이 있습니다. 닫으시겠습니까?`)) return;
       if (idx === state.activeDocIndex) clearSearchResults();
+      const closingActive = idx === state.activeDocIndex;
       const removed = state.docs.splice(idx, 1)[0];
+      if (closingActive) activeDocumentRevision++;
       if (state.docs.length === 0) {
         state.activeDocIndex = -1;
       } else if (idx < state.activeDocIndex) {

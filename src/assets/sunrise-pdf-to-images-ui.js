@@ -47,7 +47,8 @@
   function ready(){
     return typeof root.openModal==='function' && typeof root.closeModal==='function' &&
       typeof root.SunrisePdfToImages?.convert==='function' &&
-      typeof root.pdfjsLib?.getDocument==='function' && typeof root.URL?.createObjectURL==='function';
+      typeof root.pdfjsLib?.getDocument==='function' &&
+      typeof root.SunriseLocalUI?.downloadBlob==='function';
   }
   function launch(){
     if(!ready()){notify('PDF.js 렌더러 또는 PDF 이미지 변환 기능이 아직 준비되지 않았습니다.');return;}
@@ -55,7 +56,7 @@
     root.openModal({title:'PDF를 이미지로 변환',icon:'fa-file-image',width:'710px',
       bodyHtml:`<p>여러 PDF를 선택해 각 페이지를 PNG 또는 JPG 이미지로 변환하고 하나의 ZIP으로 저장합니다. 문서는 서버에 업로드하지 않습니다.</p>
         <input id="sunPdfToImagesFile" type="file" multiple accept=".pdf,application/pdf" style="display:block;width:100%;margin:9px 0;">
-        <div id="sunPdfToImagesDrop" role="button" tabindex="0" class="sun-pdf-image-drop" aria-label="PDF 파일을 이곳에 끌어놓거나 파일 선택 열기">PDF 1~5개를 이곳에 끌어놓거나 눌러서 선택</div>
+        <div id="sunPdfToImagesDrop" role="button" tabindex="0" class="sun-pdf-image-drop" aria-label="PDF 파일을 이곳에 끌어놓거나 파일 선택 열기">PDF 1~5개를 이곳에 끌어놓거나 눌러서 선택 (파일당 60MiB)</div>
         <ul id="sunPdfToImagesFiles" class="sun-pdf-image-files" aria-live="polite"></ul>
         <div class="sun-pdf-image-options">
           <div><label for="sunPdfToImagesFormat">이미지 형식</label><select id="sunPdfToImagesFormat"><option value="png">PNG (무손실)</option><option value="jpeg">JPG (압축)</option></select></div>
@@ -63,7 +64,7 @@
           <div><label for="sunPdfToImagesPages">페이지 범위</label><input id="sunPdfToImagesPages" type="text" value="all" placeholder="all 또는 1-3,5,8" maxlength="250" autocomplete="off"></div>
           <div><label for="sunPdfToImagesQuality">JPG 품질: <output id="sunPdfToImagesQualityLabel">88%</output></label><input id="sunPdfToImagesQuality" type="range" min="50" max="100" value="88" step="1" disabled></div>
         </div>
-        <p class="sun-pdf-image-help">페이지 범위는 모든 입력 파일에 동일하게 적용됩니다. 선택한 페이지 합계 최대 100쪽. 고해상도 페이지는 브라우저 메모리 보호를 위해 제한됩니다. PNG에는 JPG 품질 설정이 적용되지 않습니다.</p>
+        <p class="sun-pdf-image-help">페이지 범위는 모든 입력 파일에 동일하게 적용됩니다. 선택한 페이지 합계 최대 100쪽, PDF 파일당 60MiB·합계 120MiB. 고해상도 페이지는 브라우저 메모리 보호를 위해 제한됩니다. PNG에는 JPG 품질 설정이 적용되지 않습니다.</p>
         <div class="sun-pdf-image-status"><div id="sunPdfToImagesStatus" role="status" aria-live="polite">PDF를 선택해 주세요.</div><progress id="sunPdfToImagesProgress" max="100" value="0" hidden></progress></div>
         <div id="sunPdfToImagesDownloads"></div>
         <p class="sun-pdf-image-help">텍스트 선택 기능이 없는 페이지 이미지가 만들어집니다. 이미지 추출(내장 원본 이미지만 추출)과 다른 기능이며 OCR은 수행하지 않습니다. 결과 ZIP에는 변환된 이미지가 포함됩니다.</p>`,
@@ -74,19 +75,25 @@
         const quality=$('sunPdfToImagesQuality'),qualityLabel=$('sunPdfToImagesQualityLabel');
         const start=$('sunPdfToImagesStart'),cancel=$('sunPdfToImagesCancel');
         const progress=$('sunPdfToImagesProgress'),status=$('sunPdfToImagesStatus'),downloads=$('sunPdfToImagesDownloads');
-        let files=[],running=false,controller=null,serial=0;
-        const visible=()=>doc.contains(start) && $('modalBackdrop')?.classList.contains('open')!==false;
+        let files=[],running=false,controller=null,serial=0,validSelection=false;
+        root.SunriseLocalUI?.watchModal?.(start, () => {
+          serial++;
+          controller?.abort();
+          files = [];
+          downloads.replaceChildren();
+        });
+        const visible=()=>doc.contains(start) && $('modalBackdrop')?.classList.contains('open')===true;
         const invalidate=()=>{serial++;downloads.replaceChildren();if(!running)status.textContent='옵션을 확인하고 이미지 변환을 누르세요.';};
         function displayFiles(){
           filesHost.replaceChildren();
           files.forEach((file,index)=>filesHost.append(make('li',`${index+1}. ${file.name} · ${(file.size/1048576).toFixed(1)}MiB`)));
-          start.disabled=running||!files.length;
+          start.disabled=running||!validSelection;
         }
         function selectFiles(items){
           if(running)return;
           const next=Array.from(items||[]);
-          invalidate();files=next;
-          try{root.SunrisePdfToImages.normalizeFiles(next);status.textContent=`${next.length}개 PDF 선택 완료. 옵션을 설정해 주세요.`;}
+          invalidate();files=next;validSelection=false;
+          try{root.SunrisePdfToImages.normalizeFiles(next);validSelection=true;status.textContent=`${next.length}개 PDF 선택 완료. 옵션을 설정해 주세요.`;}
           catch(e){status.textContent=e.message||'PDF 파일을 확인해 주세요.';}
           displayFiles();
         }
@@ -124,6 +131,7 @@
               pdfjsLib:root.pdfjsLib,
               readFile:typeof root.readPdfInputFile==='function'?root.readPdfInputFile:undefined,
               createCanvas:()=>doc.createElement('canvas'),signal:controller.signal,
+              cancelled:()=>!visible() || serial!==thisRun,
               onProgress:info=>{
                 if(!visible()||controller.signal.aborted)return;
                 state.done=Math.max(state.done,info.done||0);
@@ -136,10 +144,8 @@
             const button=make('button',`ZIP 다운로드 · ${result.count}개 이미지 · ${(result.blob.size/1048576).toFixed(1)}MiB`,'sun-pdf-image-download');
             button.type='button';
             button.addEventListener('click',()=>{
-              const url=root.URL.createObjectURL(result.blob);
-              const anchor=make('a');anchor.href=url;anchor.download=result.outputName;
-              doc.body.append(anchor);anchor.click();anchor.remove();
-              root.setTimeout(()=>root.URL.revokeObjectURL(url),60_000);
+              try{root.SunriseLocalUI.downloadBlob(result.blob,result.outputName);}
+              catch(error){if(visible())status.textContent=error?.message||'ZIP 다운로드를 시작하지 못했습니다.';}
             });
             downloads.append(button);
             status.textContent=`완료: PDF ${result.results.length}개에서 이미지 ${result.count}개를 만들었습니다. ZIP으로 별도 저장하세요.`;

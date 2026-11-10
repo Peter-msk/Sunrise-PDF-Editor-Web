@@ -12,6 +12,9 @@
 
   const MAX_PAGES = 60;
   const MAX_SOURCE_BYTES = 120 * 1024 * 1024;
+  // Keep accumulated PNG buffers below the shared 256MiB ZIP limit before
+  // the final pack step. Reserve space for reports, ZIP headers and the browser.
+  const MAX_REPORT_IMAGE_BYTES = 240 * 1024 * 1024;
   const MAX_CANVAS_PIXELS = 8_000_000;
   const MAX_CANVAS_SIDE = 8192;
   const DPI = Object.freeze([72, 96, 144, 200]);
@@ -219,6 +222,7 @@
       const maxPages=Math.max(docs[0].numPages, docs[1].numPages);
       const pages=parsePageNumbers(settings.pages,maxPages);
       const images=[],rows=[];
+      let accumulatedImageBytes=0;
       const canvasA=opts.createCanvas(),canvasB=opts.createCanvas(),canvasDiff=opts.createCanvas();
       try {
         for (let index=0; index<pages.length; index++) {
@@ -256,7 +260,14 @@
                 ctx.putImageData(new ImageData(diff.data,diff.width,diff.height),0,0);
                 const blob=await pngBlob(canvasDiff);
                 checkCancel(opts);
+                // Reject oversized output BEFORE allocating another ArrayBuffer.
+                if (blob.size > MAX_REPORT_IMAGE_BYTES-accumulatedImageBytes)
+                  throw new Error('비교 이미지 ZIP이 브라우저 메모리 보호 한도를 초과합니다. DPI 또는 페이지 범위를 줄여 주세요.');
                 const bytes=new Uint8Array(await blob.arrayBuffer());
+                checkCancel(opts);
+                if (bytes.byteLength !== blob.size)
+                  throw new Error('비교 이미지가 완전하게 읽히지 않았습니다.');
+                accumulatedImageBytes += bytes.byteLength;
                 images.push({name,bytes});
               }
               rows.push({page:pageNo,status:changed?'different':'same',

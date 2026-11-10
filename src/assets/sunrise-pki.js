@@ -24,6 +24,10 @@
         if(operation==='chain'&&data.chainVerified!==true){finish(Error('인증서 체인 확인이 완료되지 않았습니다.'));return;}
         finish(null,data);
       };
+      // Abort may arrive during Worker creation, before listener registration.
+      // Avoid sending certificates or private-key containers after cancellation.
+      if(signal?.aborted){abort();return;}
+      if(done)return;
       try{worker.postMessage({operation,...payload},payload.bytes?[payload.bytes]:[]);}
       catch{finish(Error('인증서 입력을 전달하지 못했습니다.'));}
     });

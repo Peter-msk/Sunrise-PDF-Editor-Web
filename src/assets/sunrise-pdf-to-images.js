@@ -10,6 +10,8 @@
   'use strict';
 
   const MAX_FILES = 5;
+  const MAX_INPUT_FILE_BYTES = 60 * 1024 * 1024;
+  const MAX_TOTAL_INPUT_BYTES = 120 * 1024 * 1024;
   const MAX_OUTPUT_PAGES = 100;
   const MAX_CANVAS_PIXELS = 24_000_000;
   const MAX_CANVAS_SIDE = 16_384;
@@ -39,8 +41,10 @@
         !/\.pdf$/i.test(f.name) || !Number.isSafeInteger(f.size) || f.size <= 0 ||
         typeof f.arrayBuffer !== 'function')
         throw new Error(`${i + 1}번째 PDF 파일의 이름·크기 또는 읽기 기능이 올바르지 않습니다.`);
-      if (!Number.isSafeInteger(total + f.size))
-        throw new Error('선택한 PDF의 합산 파일 크기가 안전한 정수 범위를 초과합니다.');
+      if (f.size > MAX_INPUT_FILE_BYTES)
+        throw new Error(`${i + 1}번째 PDF는 최대 60MiB까지 변환할 수 있습니다.`);
+      if (!Number.isSafeInteger(total + f.size) || total + f.size > MAX_TOTAL_INPUT_BYTES)
+        throw new Error('선택한 PDF의 합산 파일 크기는 최대 120MiB입니다.');
       total += f.size;
     }
     return files;

@@ -10,6 +10,7 @@ const summary=JSON.parse(raw.slice(raw.lastIndexOf('\n')+1));
 const validation=JSON.parse(fs.readFileSync(path.join(root,'docs/R36_VALIDATION.json'),'utf8'));
 const r36=path.join(root,'dist/SUNRISE_PREVIEW_ONLY.json');
 const preview=fs.existsSync(r36);
+const production=fs.existsSync(path.join(root,'dist/SUNRISE_RELEASE_MANIFEST.json'))&&!preview&&!fs.existsSync(path.join(root,'dist/SUNRISE_BUILD_INCOMPLETE.json'));
 const pct=x=>x+'%';
 const out=[];
 const sourceScope=JSON.parse(fs.readFileSync(path.join(root,'docs/SOURCE_FEATURE_AUDIT.json'),'utf8'));
@@ -35,7 +36,7 @@ out.push(`- 관리자 14개 기준 소스 구현률: **100%** (실운영 승인 
 out.push(`- 사용자 19개 과거 기준 소스 구현률: **${pct((baseline.features.filter(x=>x.id.startsWith('USR-')).reduce((s,x)=>s+x.implementation,0)/19).toFixed(1))}**.`);
 out.push(`- 제품 전체 33개 과거 기준 소스 구현률: **${pct(summary.productImplementation.toFixed(1))}**.`);
 out.push(`- 과거 7단계 동일가중 복합 관리점수: **${pct(summary.overall)}** (개발 완료율과 다름).`);
-out.push(`- R36 Node 계약 검사: **${validation.sourceContractRun.passedCommands}/${validation.sourceContractRun.commandCount} PASS**. 정식 빌드: **${validation.productionBuild.result}**. 현 빌드: **${preview?'미압축 검증용(dist), 배포 금지':'정식 빌드 증빙 미확인'}**.`);
+out.push(`- R36 Node 계약 검사: **${validation.sourceContractRun.passedCommands}/${validation.sourceContractRun.commandCount} PASS**. 정식 빌드: **${validation.productionBuild.result}**. 현 빌드: **${preview?'미압축 검증용(dist), 배포 금지':production?'R07 오프라인 소스보존형 정식 빌드(운영 배포 승인 별도)':'정식 빌드 증빙 미확인'}**.`);
 out.push('');
 out.push('## 단계별 공식 기준선');out.push('');
 out.push('| 단계 | 관리용 소스 구현률 | 복합관리 점수 |');out.push('|---|---:|---:|');
@@ -55,7 +56,7 @@ out.push('| ID | 기능 | 소스 구현률(기준선) | 남은 수용 작업 |')
 for(const x of baseline.features.filter(x=>x.id.startsWith('ADM-')))out.push(`| ${x.id} | ${x.name} | ${pct(x.implementation)} | ${(x.note||'').replaceAll('|','/')} |`);
 out.push('');out.push('## 반드시 구분할 미완료 게이트');out.push('');
 out.push('1. **구현 한계:** 외부 이름 CMap과 범용 원문 재흐름, XFA 자동 계산/스크립트 양식, PAdES LT/LTA, 임의 PDF의 고충실도 Office 복원은 지원 완료로 선언할 수 없습니다. OCR은 범위에서 제외합니다.');
-out.push('2. **정식 빌드:** 잠긴 `terser@5.51.2`, `pdfstudio@0.4.0`, `node-forge@1.4.1` 의존성을 `npm ci`로 설치해 `npm run build`를 재실행해야 합니다. 검증용 미압축 빌드는 운영 배포 금지입니다.');
+out.push('2. **정식 빌드:** R07부터 외부 Terser 없이 `npm run build`로 소스 보존형 정식 빌드를 생성합니다. 고정된 `vendor/pdfstudio` 및 `vendor/node-forge` 무결성과 R07 출시 매니페스트를 확인합니다. 프리뷰 빌드는 운영 배포 금지입니다.');
 out.push('3. **브라우저·Office·모바일:** 현재 실행 환경 Chromium이 로컬 주소 및 파일 URL을 관리 정책으로 차단했으므로 실제 웹 동작을 PASS로 기록하지 않습니다.');
 out.push('4. **운영 배포:** GitHub main/CI, Cloudflare Worker, 원격 D1 및 격리 복원은 이번 개발에서 변경/검증하지 않았습니다.');
 out.push('');out.push('**마감 원칙:** 이미 통과한 비영향 검사는 반복하지 않고, 기능 수정과 영향을 받는 경로만 우선 검증합니다. 다만 실제 운영 배포 승인은 잠긴 의존성 기반 정식 빌드와 필수 CI 및 백업 복구를 통과한 뒤에만 가능합니다.');out.push('');

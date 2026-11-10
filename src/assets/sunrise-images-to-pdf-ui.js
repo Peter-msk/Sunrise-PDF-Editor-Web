@@ -66,16 +66,21 @@
           width * height > 48000000)
         throw new Error('브라우저에서 변환할 이미지 해상도가 너무 큽니다. 원본 해상도를 낮춘 후 다시 시도하세요.');
       const canvas = doc.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('이미지 변환에 필요한 Canvas 컨텍스트를 생성하지 못했습니다.');
-      ctx.drawImage(bitmap, 0, 0);
-      const blob = await new Promise((resolve, reject) => {
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error('이미지를 PNG로 변환하지 못했습니다.')), 'image/png');
-      });
-      canvas.width = canvas.height = 0; // release graphics backing storage.
-      return new Uint8Array(await blob.arrayBuffer());
+      try {
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('이미지 변환에 필요한 Canvas 컨텍스트를 생성하지 못했습니다.');
+        ctx.drawImage(bitmap, 0, 0);
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('이미지를 PNG로 변환하지 못했습니다.')), 'image/png');
+        });
+        if (blob.size > (root.SunriseImagesToPdf?.MAX_IMAGE_BYTES || 32 * 1024 * 1024))
+          throw new Error('변환된 PNG 용량이 32MB를 초과했습니다. 원본 이미지 크기를 줄여 주세요.');
+        return new Uint8Array(await blob.arrayBuffer());
+      } finally {
+        canvas.width = canvas.height = 0; // release graphics storage even on encode errors.
+      }
     } finally { bitmap?.close?.(); }
   }
 
@@ -90,7 +95,7 @@
     root.openModal({
       title:'이미지를 PDF로',icon:'fa-images',width:'780px',
       bodyHtml:`<p>JPG·PNG·WebP 이미지를 선택한 순서대로 PDF 한 파일로 묶습니다. 이미지는 서버로 전송하지 않습니다.</p>
-        <label for="sunImagesInput">이미지 파일 선택 (최대 60개)</label>
+        <label for="sunImagesInput">이미지 파일 선택 (최대 60개 · 파일당 32MB · 합계 120MB)</label>
         <input id="sunImagesInput" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple style="display:block;width:100%;margin:9px 0;min-height:44px">
         <p class="sun-images-note">파일 순서는 아래의 ↑ ↓ 버튼으로 변경할 수 있습니다. 데스크톱에서는 드래그로도 순서를 바꿀 수 있습니다.</p>
         <ol id="sunImagesOrder" class="sun-images-order" aria-label="PDF 이미지 페이지 순서"></ol>
@@ -111,7 +116,7 @@
         const progress = $('sunImagesProgress'), makeButton = $('sunImagesMake');
         const cancel = $('sunImagesCancel'), download = $('sunImagesDownload');
         const size = $('sunImagesSize'), orientation = $('sunImagesOrientation'), margin = $('sunImagesMargin');
-        let files = [], running = false, stopped = false, serial = 0;
+        let files = [], validSelection = false, running = false, stopped = false, serial = 0;
         const visible = () => doc.contains(makeButton);
         const invalidate = () => { serial++; download.replaceChildren(); status.firstChild && (status.firstChild.textContent = '설정을 확인하고 PDF 만들기를 누르세요.'); };
         const redraw = () => {
@@ -145,14 +150,15 @@
             });
             row.append(num,name,up,down);list.append(row);
           });
-          makeButton.disabled = running || !files.length;
+          makeButton.disabled = running || !validSelection;
         };
         input.addEventListener('change', () => {
           if (running) return;
           files = Array.from(input.files || []);
-          download.replaceChildren();serial++;
+          download.replaceChildren();serial++;validSelection=false;
           try {
             root.SunriseImagesToPdf.normalizeFiles(files);
+            validSelection=true;
             status.firstChild.textContent = `${files.length}개 이미지가 선택되었습니다.`;
           } catch (error) { status.firstChild.textContent = error?.message || '이미지를 확인해 주세요.'; }
           redraw();

@@ -6,12 +6,16 @@ globalThis.crypto ||= webcrypto;
   const stored=[],requests=[];
   const db={prepare(sql) {
     return {
-      args:[],bind(...args){this.args=args;return this},
+      sql,args:[],bind(...args){this.args=args;return this},
       async all(){if(sql.includes('site_announcements'))return {results:[{title:'공지 제목',body:'공지 내용',published_at:'2026-10-30'}]};
-        if(sql.includes('site_releases'))return {results:[{version:'버전',added:'신규',improved:'보완',removed:'삭제 없음'}]};throw Error('unknown read')},
-      async first(){assert(sql.includes('inquiry_rate_limits'));return {key:'rate-key'};},
-      async run(){requests.push(sql);if(sql.startsWith('INSERT INTO inquiries'))stored.push(this.args);return {success:true};}
+        if(sql.includes('site_releases'))return {results:[{version:'버전',added:'신규',improved:'보완',removed:'삭제 없음'}]};throw Error('unknown read')}
     };
+  },async batch(statements){
+    assert.equal(statements.length,2,'rate limit and inquiry are one transaction');
+    assert.match(statements[0].sql,/INSERT INTO inquiry_rate_limits/);
+    assert.match(statements[1].sql,/INSERT INTO inquiries.*WHERE changes\(\)=1/);
+    requests.push(...statements.map(x=>x.sql));stored.push(statements[1].args);
+    return [{meta:{changes:1}},{meta:{changes:1}}];
   }};
   const env={DB:db,INQUIRY_HASH_SALT:'test-only-secret',ASSETS:{fetch:async()=>new Response('static',{status:200})}};
   const origin='https://example.test';

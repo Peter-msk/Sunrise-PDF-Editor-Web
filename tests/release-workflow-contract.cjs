@@ -1,11 +1,10 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs');
+// GitHub Actions can be intentionally disabled for quota management.
+// The release contract must still guard the same workflow without re-enabling it.
 const active='.github/workflows/manual-production-release.yml';
 const paused=active+'.paused';
-// Production automation can be intentionally paused to protect Actions quota.
-// Verify the preserved workflow's entire release safety contract without enabling it.
-assert.notEqual(fs.existsSync(active),fs.existsSync(paused),
- 'Exactly one active or paused manual production workflow must be present');
+assert.notEqual(fs.existsSync(active),fs.existsSync(paused),'Release workflow must exist in exactly one active/paused form');
 const filename=fs.existsSync(active)?active:paused;
 const workflow=fs.readFileSync(filename,'utf8');
 assert(!fs.existsSync('.github/workflows/production-release.yml'),

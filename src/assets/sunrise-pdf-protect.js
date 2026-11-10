@@ -76,6 +76,10 @@
         complete(null,{bytes:new Uint8Array(data.output),pages:data.pageCount,
           bits:data.bits||0,method:data.encryption||null});
       };
+      // Worker startup may have synchronously aborted the request before its
+      // listener was attached. Never send a password after cancellation.
+      if(signal?.aborted){abort();return;}
+      if(settled)return;
       try{worker.postMessage({input:copy.buffer,password,
         ownerPassword:operation==='lock'?ownerPassword||null:null,operation},[copy.buffer]);}
       catch{complete(Error('암호 작업 입력을 Worker에 전달하지 못했습니다.'));}

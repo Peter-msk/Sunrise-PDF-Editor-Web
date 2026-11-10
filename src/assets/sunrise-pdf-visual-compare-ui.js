@@ -39,16 +39,10 @@
     `;
     doc.head.append(style);
   }
-  function saveBlob(blob, filename) {
-    const url=root.URL.createObjectURL(blob);
-    const link=make('a');link.href=url;link.download=filename;
-    doc.body.append(link);link.click();link.remove();
-    root.setTimeout(()=>root.URL.revokeObjectURL(url),60_000);
-  }
   function ready() {
     return Boolean(root.SunrisePdfVisualCompare?.convert && root.SunrisePdfToImages?.packEntries &&
       root.pdfjsLib?.getDocument && typeof root.openModal==='function' &&
-      typeof root.closeModal==='function');
+      typeof root.closeModal==='function' && typeof root.SunriseLocalUI?.downloadBlob==='function');
   }
   function showTable(host, report) {
     host.replaceChildren();
@@ -95,7 +89,13 @@
         const status=$('sunCmpStatus'),progress=$('sunCmpProgress'),results=$('sunCmpResults'),download=$('sunCmpDownload');
         const controls=[source,target,pages,dpi,tolerance,images];
         let busy=false, controller=null, generation=0;
-        const visible=()=>doc.contains(run);
+        const visible=()=>doc.contains(run) && $('modalBackdrop')?.classList.contains('open')===true;
+        root.SunriseLocalUI?.watchModal?.(run, () => {
+          generation++;
+          controller?.abort();
+          results.replaceChildren();
+          download.replaceChildren();
+        });
         const invalidate=()=>{if(busy)return;generation++;results.replaceChildren();download.replaceChildren();
           status.textContent='설정 변경됨. 새 비교를 실행해 주세요.';};
         for (const control of controls) control.addEventListener('change',invalidate);
@@ -124,7 +124,7 @@
               readFile:typeof root.readPdfInputFile==='function'?root.readPdfInputFile:undefined,
               createCanvas:()=>doc.createElement('canvas'),
               createZip:entries=>root.SunrisePdfToImages.packEntries(entries),
-              signal:controller.signal,cancelled:()=>!visible(),
+              signal:controller.signal,cancelled:()=>!visible() || generation!==runId,
               onProgress:info=>{
                 if (!visible() || controller.signal.aborted) return;
                 progress.max=Math.max(1,info.total||1);progress.value=info.done||0;
@@ -138,7 +138,10 @@
             showTable(results,result.report);
             const button=make('button',`비교 보고서 ZIP 다운로드 (PNG ${result.imageCount}개)`,
               'dialog-btn primary sun-cmp-download');
-            button.type='button';button.addEventListener('click',()=>saveBlob(result.blob,result.fileName));
+            button.type='button';button.addEventListener('click',()=>{
+              try{root.SunriseLocalUI.downloadBlob(result.blob,result.fileName);}
+              catch(error){if(visible())status.textContent=error?.message||'ZIP 다운로드를 시작하지 못했습니다.';}
+            });
             download.append(button);
           } catch(error) {
             if (visible())status.textContent=error?.name==='AbortError'?'비교가 취소되었습니다. 결과물을 만들지 않았습니다.':

@@ -6,15 +6,27 @@ const STATES=Object.freeze(['new','investigating','fix_candidate','verifying','r
 const fail=(message,status=400)=>({error:message,status});
 const redactRisk=/@|(?:[a-z]:[\\/])|https?:\/\/|\b\S+\.pdf\b|[\x00-\x1f\x7f]/i;
 export async function incidentList(db,today){
- const result=await db.prepare("SELECT json_extract(trace_json,'$.fingerprint') fingerprint, feature, code, phase, COUNT(*) occurrences,MIN(received_ms) first_ms,MAX(received_ms) last_ms,COUNT(DISTINCT worker_version) version_count FROM analytics_diagnostics WHERE trace_schema_version=2 AND json_valid(trace_json)=1 AND day BETWEEN date(?,'-13 days') AND ? GROUP BY fingerprint,feature,code,phase ORDER BY last_ms DESC LIMIT 101")
-  .bind(today,today).all();
- const states=await db.prepare('SELECT fingerprint,status,note,fix_commit,revision,created_ms,updated_ms,resolved_ms FROM admin_trace_incidents ORDER BY updated_ms DESC LIMIT 101').all();
- const stateMap=new Map((states.results||[]).map(row=>[row.fingerprint,row]));
+ // Join the state for the *selected* recent incidents, not an independent
+ // LIMIT 101 of all past state updates. Otherwise recent, investigated incidents
+ // can silently appear as "new" when enough unrelated states have been edited.
+ const result=await db.prepare(`SELECT grouped.*, saved.status, saved.note, saved.fix_commit,
+    saved.revision, saved.resolved_ms
+   FROM (
+    SELECT json_extract(trace_json,'$.fingerprint') fingerprint, feature, code, phase,
+      COUNT(*) occurrences, MIN(received_ms) first_ms, MAX(received_ms) last_ms,
+      COUNT(DISTINCT worker_version) version_count
+    FROM analytics_diagnostics
+    WHERE trace_schema_version=2 AND json_valid(trace_json)=1
+      AND day BETWEEN date(?,'-13 days') AND ?
+    GROUP BY fingerprint,feature,code,phase
+   ) grouped
+   LEFT JOIN admin_trace_incidents saved ON saved.fingerprint=grouped.fingerprint
+   ORDER BY grouped.last_ms DESC LIMIT 101`).bind(today,today).all();
  const rows=(result.results||[]).slice(0,100).map(row=>{
-  const saved=stateMap.get(row.fingerprint);
-  const status=saved?.status||'new',resolvedAt=saved?.resolved_ms??null;
-  return {...row,status,note:saved?.note||'',fix_commit:saved?.fix_commit||null,revision:saved?.revision||0,
-   resolved_ms:resolvedAt,recurred:status==='resolved'&&resolvedAt!==null&&row.last_ms>resolvedAt};
+  const status=row.status||'new',resolvedAt=row.resolved_ms??null;
+  return {...row,status,note:row.note||'',fix_commit:row.fix_commit||null,
+   revision:row.revision||0,resolved_ms:resolvedAt,
+   recurred:status==='resolved'&&resolvedAt!==null&&row.last_ms>resolvedAt};
  });
  return {windowDays:14,retentionDays:90,items:rows,truncated:(result.results||[]).length>100};
 }

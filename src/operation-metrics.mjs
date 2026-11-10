@@ -19,8 +19,15 @@ export async function recordOperation(db,data,today,version='unknown',now=Date.n
  if(typeof data.operationId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(data.operationId)||!features.includes(data.feature)||!['started','succeeded','failed','cancelled'].includes(data.stage))return false;
  if(data.diagnostic!==undefined&&data.stage!=='failed')return false;
  if(data.stage==='started'){
-  await db.prepare("INSERT OR IGNORE INTO analytics_operations(day,session_id,operation_id,feature,state,worker_version) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_operations WHERE day=? AND session_id=?)<100")
+  const inserted=await db.prepare("INSERT OR IGNORE INTO analytics_operations(day,session_id,operation_id,feature,state,worker_version) SELECT ?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_operations WHERE day=? AND session_id=?)<100")
    .bind(today,data.session,data.operationId,data.feature,'started',version,today,data.session,today,data.session).run();
+  // A start is accepted only if an operation row actually exists. A duplicate
+  // delivery of the same event is idempotently successful, but missing visit
+  // or an exhausted daily quota must not be reported as recorded.
+  if(inserted?.meta?.changes===1)return true;
+  const existing=await db.prepare("SELECT 1 accepted FROM analytics_operations WHERE session_id=? AND operation_id=? AND feature=? AND day BETWEEN date(?,'-1 day') AND ? LIMIT 1")
+   .bind(data.session,data.operationId,data.feature,today,today).first();
+  return !!existing;
  }else{
   const change=db.prepare("UPDATE analytics_operations SET state=? WHERE session_id=? AND operation_id=? AND feature=? AND state='started' AND day BETWEEN date(?,'-1 day') AND ?")
    .bind(data.stage,data.session,data.operationId,data.feature,today,today);

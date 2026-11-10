@@ -3,7 +3,6 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const repo=path.resolve(__dirname,'..'),temp=fs.mkdtempSync(path.join(os.tmpdir(),'sunrise-build-endings-'));
 try{
  fs.cpSync(path.join(repo,'vendor'),path.join(temp,'vendor'),{recursive:true});
- const hasTerser=(()=>{try{return !!require.resolve('terser')}catch{return false}})();
  for(const dir of ['scripts','src/editor','src/assets','src/tools','dist/editor','dist/assets'])fs.mkdirSync(path.join(temp,dir),{recursive:true});
  for(const name of ['build-release.cjs','site-integration.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(temp,'scripts',name));
  // Mirror the actual release asset set so new tools do not invalidate the line-ending fixture.
@@ -14,7 +13,7 @@ try{
  for(const newline of ['\n','\r\n','\r']){
   const input=source.replaceAll('\n',newline);fs.writeFileSync(path.join(temp,'src/editor/index.html'),input);
   fs.writeFileSync(path.join(temp,'dist/index.html'),'<html><head></head><body><button type="button" class="contact-nav-button" id="contactNavButton">문의하기</button><main></main></body></html>');
-  const result=spawnSync(process.execPath,[path.join(temp,'scripts/build-release.cjs'),...(hasTerser?[]:['--preview-unminified'])],{cwd:temp,encoding:'utf8',shell:false,timeout:15000,env:{...process.env,NODE_PATH:path.join(repo,'node_modules')}});
+  const result=spawnSync(process.execPath,[path.join(temp,'scripts/build-release.cjs')],{cwd:temp,encoding:'utf8',shell:false,timeout:15000,env:{...process.env,NODE_PATH:path.join(repo,'node_modules')}});
   assert.equal(result.status,0,result.stderr);
   assert.equal(fs.readFileSync(path.join(temp,'src/editor/index.html'),'utf8'),input,'build must leave source line endings intact');
   const output=fs.readFileSync(path.join(temp,'dist/editor/index.html'),'utf8');assert(!output.includes('\r'));assert(output.includes('/assets/sunrise-telemetry.js'));

@@ -23,6 +23,19 @@ for(const vendor of ['pdfstudio','node-forge']) {
   }
  }
 }
+const incomplete=path.join(dist,'SUNRISE_BUILD_INCOMPLETE.json');
+assert(!fs.existsSync(incomplete),'Incomplete release build marker must not exist');
+const manifestPath=path.join(dist,'SUNRISE_RELEASE_MANIFEST.json');
+if(fs.existsSync(manifestPath)){
+ const m=JSON.parse(fs.readFileSync(manifestPath,'utf8'));
+ assert.equal(m.build,'offline-source-preserving');
+ assert.equal(m.minifier,'none');
+ for(const [rel,digest] of Object.entries(m.assets)){
+  const asset=path.join(dist,rel);
+  assert(fs.existsSync(asset),'Release manifest asset missing: '+rel);
+  assert.equal(crypto.createHash('sha256').update(fs.readFileSync(asset)).digest('hex'),digest,'Release asset altered: '+rel);
+ }
+}
 const marker=path.join(dist,'SUNRISE_PREVIEW_ONLY.json');
 if(fs.existsSync(marker)){
  const info=JSON.parse(fs.readFileSync(marker,'utf8'));

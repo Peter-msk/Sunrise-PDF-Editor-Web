@@ -41,9 +41,17 @@ async function submitInquiry(request,env,url) {
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.INQUIRY_HASH_SALT+':'+day+':'+ip));
   const key=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');
   try {
-    const allowed=await env.DB.prepare("INSERT INTO inquiry_rate_limits (key,last_sent_ms,daily_count,day) VALUES (?, ?, 1, ?) ON CONFLICT(key) DO UPDATE SET last_sent_ms=excluded.last_sent_ms,daily_count=inquiry_rate_limits.daily_count+1 WHERE inquiry_rate_limits.last_sent_ms < ? AND inquiry_rate_limits.daily_count < 8 RETURNING key").bind(key,now,day,now-60000).first();
-    if (!allowed) return respond({error:'문의가 너무 자주 접수되었습니다. 1분 후 다시 시도해 주세요.'},429);
-    await env.DB.prepare('INSERT INTO inquiries (category,email,message) VALUES (?,?,?)').bind(category,email,message).run();
+    // Atomic acceptance: a failed inquiry INSERT must not consume the visitor's
+    // daily quota or 60-second window. A denied rate-limit update must never
+    // create an inquiry. D1 batch executes these statements in a transaction.
+    const result=await env.DB.batch([
+      env.DB.prepare("INSERT INTO inquiry_rate_limits (key,last_sent_ms,daily_count,day) VALUES (?, ?, 1, ?) ON CONFLICT(key) DO UPDATE SET last_sent_ms=excluded.last_sent_ms,daily_count=inquiry_rate_limits.daily_count+1 WHERE inquiry_rate_limits.last_sent_ms < ? AND inquiry_rate_limits.daily_count < 8")
+        .bind(key,now,day,now-60000),
+      env.DB.prepare('INSERT INTO inquiries (category,email,message) SELECT ?,?,? WHERE changes()=1')
+        .bind(category,email,message)
+    ]);
+    if (result[0]?.meta?.changes!==1) return respond({error:'문의가 너무 자주 접수되었습니다. 1분 후 다시 시도해 주세요.'},429);
+    if (result[1]?.meta?.changes!==1) throw Error('Inquiry transaction did not persist an inquiry');
     return respond({ok:true,message:'문의가 접수되었습니다.'},201);
   } catch(error) {
     console.error('Inquiry D1 write failed',error?.name||'error');
