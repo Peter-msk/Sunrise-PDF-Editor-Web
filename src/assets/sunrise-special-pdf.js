@@ -78,5 +78,103 @@
    throw Error('마스킹 결과가 50 MiB를 초과했습니다.');
   return {bytes:result,pages:1,masked:box,sourcePage:pageNumber};
  }
- return {correctionCandidate,validateMaskRect,checkRasterSize,exportMaskedPage};
+
+ // Explicit per-page coordinates only. There is no automatic privacy detection.
+ // Format: page,x,y,width,height (top-left of the rendered page at scale 1).
+ const MAX_MASK_PAGES=10,MAX_MASK_LINES=40,MAX_MASKS_PER_PAGE=12;
+ function parseMaskPlan(raw,pageSizes){
+  if(typeof raw!=='string'||raw.length>5000||!Array.isArray(pageSizes)||!pageSizes.length)
+   throw Error('마스킹 페이지 목록이 올바르지 않습니다.');
+  const rows=raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if(!rows.length||rows.length>MAX_MASK_LINES)
+   throw Error('마스킹 좌표는 1~40줄까지 입력할 수 있습니다.');
+  const groups=new Map();
+  rows.forEach((row,index)=>{
+   const parts=row.split(',').map(x=>x.trim());
+   if(parts.length!==5||parts.some(x=>!x))
+    throw Error((index+1)+'행은 페이지,X,Y,너비,높이 다섯 숫자가 필요합니다.');
+   if(!/^\d+$/.test(parts[0]))throw Error((index+1)+'행의 페이지 번호가 올바르지 않습니다.');
+   const pageNumber=Number(parts[0]);
+   if(!Number.isSafeInteger(pageNumber)||pageNumber<1||pageNumber>pageSizes.length)
+    throw Error((index+1)+'행의 페이지 번호가 문서 범위를 벗어났습니다.');
+   const {width,height}=pageSizes[pageNumber-1]||{};
+   const rectangle=validateMaskRect({x:parts[1],y:parts[2],width:parts[3],height:parts[4]},width,height);
+   const list=groups.get(pageNumber)||[];
+   if(list.length>=MAX_MASKS_PER_PAGE)throw Error('각 페이지의 마스크는 최대 12개입니다.');
+   list.push(rectangle);groups.set(pageNumber,list);
+   if(groups.size>MAX_MASK_PAGES)throw Error('한 번에 최대 10개 페이지만 출력할 수 있습니다.');
+  });
+  return [...groups].sort((a,b)=>a[0]-b[0])
+   .map(([pageNumber,rectangles])=>({pageNumber,rectangles}));
+ }
+ function checkOutputStructure(bytes,PDFLib,expectedPages){
+  if(!bytes?.byteLength||bytes.byteLength>50*1024*1024)
+   throw Error('마스킹 PDF가 50 MiB를 초과하거나 비어 있습니다.');
+  if(!PDFLib?.PDFDocument?.load)throw Error('출력 PDF 구조 검증을 수행할 수 없습니다.');
+  return PDFLib.PDFDocument.load(bytes).then(document=>{
+   if(document.getPageCount()!==expectedPages)throw Error('출력 PDF 페이지 수가 일치하지 않습니다.');
+   const name=PDFLib.PDFName.of;
+   for(const key of ['AcroForm','Outlines','Names','Perms','Metadata','SunriseWebEdits'])
+    if(document.catalog.get(name(key))!==undefined)
+     throw Error('출력 PDF에 예상하지 못한 문서 객체가 포함되었습니다: '+key);
+   for(const page of document.getPages()){
+    const annotations=page.node.Annots();
+    if(annotations && annotations.size()>0)
+     throw Error('출력 PDF에 주석 객체가 남아 있습니다.');
+   }
+   return {pageCount:document.getPageCount(),sourceStreamsCopied:false};
+  });
+ }
+ async function exportMaskedPages({reader,plan,PDFLib,makeCanvas,cancelled,onProgress}){
+  if(!reader?.getPage||!PDFLib?.PDFDocument?.create||
+    !Array.isArray(plan)||!plan.length||plan.length>MAX_MASK_PAGES)
+   throw Error('마스킹 변환의 페이지 목록이 올바르지 않습니다.');
+  const used=new Set(),output=await PDFLib.PDFDocument.create();
+  let maskCount=0;
+  for(let index=0;index<plan.length;index++){
+   if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
+   const {pageNumber,rectangles}=plan[index]||{};
+   if(!Number.isSafeInteger(pageNumber)||pageNumber<1||pageNumber>reader.numPages||used.has(pageNumber)||
+      !Array.isArray(rectangles)||rectangles.length<1||rectangles.length>MAX_MASKS_PER_PAGE)
+    throw Error('마스킹할 페이지 및 사각형 목록이 올바르지 않습니다.');
+   used.add(pageNumber);
+   const page=await reader.getPage(pageNumber);
+   const view=page.getViewport({scale:1});
+   checkRasterSize(view.width,view.height);
+   const boxes=rectangles.map(rect=>validateMaskRect(rect,view.width,view.height));
+   const viewport=page.getViewport({scale:RENDER_SCALE});
+   const canvas=makeCanvas?makeCanvas():document.createElement('canvas');
+   canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+   const ctx=canvas.getContext('2d',{alpha:false});
+   if(!ctx||typeof canvas.toBlob!=='function')throw Error('PDF 래스터 렌더러가 없습니다.');
+   try{
+    ctx.fillStyle='#FFFFFF';ctx.fillRect(0,0,canvas.width,canvas.height);
+    await page.render({canvasContext:ctx,canvas,viewport}).promise;
+    if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
+    ctx.fillStyle='#000000';
+    for(const box of boxes){
+     ctx.fillRect(Math.floor(box.x*RENDER_SCALE),Math.floor(box.y*RENDER_SCALE),
+       Math.ceil(box.width*RENDER_SCALE),Math.ceil(box.height*RENDER_SCALE));
+    }
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+    if(!blob?.size)throw Error('마스킹 이미지 생성에 실패했습니다.');
+    const data=new Uint8Array(await blob.arrayBuffer());
+    if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
+    const image=await output.embedPng(data);
+    const pageOut=output.addPage([view.width,view.height]);
+    pageOut.drawImage(image,{x:0,y:0,width:view.width,height:view.height});
+    maskCount+=boxes.length;
+    if(onProgress)onProgress({done:index+1,total:plan.length,maskCount});
+   }finally{
+    canvas.width=0;canvas.height=0;
+   }
+  }
+  if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
+  const bytes=await output.save();
+  const inspection=await checkOutputStructure(bytes,PDFLib,plan.length);
+  if(cancelled?.())throw Error('마스킹 변환이 취소되었습니다.');
+  return {bytes,pages:plan.length,maskCount,sourcePages:plan.map(x=>x.pageNumber),inspection};
+ }
+
+ return {correctionCandidate,validateMaskRect,checkRasterSize,exportMaskedPage,parseMaskPlan,checkOutputStructure,exportMaskedPages};
 });

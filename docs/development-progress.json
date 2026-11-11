@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 전용 PR #17은 운영 main에 반영됐으나 Cloudflare 운영 D1 스키마/배포 보고 비밀값 준비 미충족으로 실제 운영 배포는 보류. PDF 사용자 개발 PR #18의 DOCX/XLSX 텍스트 변환은 Node·Linux Chromium·Windows Chrome/Edge 실제 파일 다운로드 계약 통과. 원본 Word/Excel 레이아웃 복원/인증서서명/완전삭제 미구현, OCR 제외.",
+  "basis": "관리자 전용 운영 main PR #17과 Cloudflare Worker 배포는 별도 완료되었으며 관리자 실제 로그인 후 수용 검증은 별도. 사용자 편집기 USR-13 다중 페이지·영역 마스킹/사전 좌표 검증/출력 구조 검사 Node 및 Linux Chromium·Windows Chrome/Edge 4/4 PASS (PR #20). 사용자 PDF 신규 Draft 코드는 운영 배포하지 않음. OCR 제외.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -308,11 +308,11 @@
       "id": "USR-13",
       "name": "민감정보 완전 삭제",
       "phase": 4,
-      "implementation": 25,
-      "automated": 70,
-      "practical": 15,
+      "implementation": 43,
+      "automated": 85,
+      "practical": 20,
       "deployment": 0,
-      "note": "현재 쪽 한 장에 불투명 검정 좌표 마스크→새 래스터 PDF 생성, 기존 텍스트·주석·첨부·양식·북마크 데이터 비이식 및 다운로드·화소 검사 PASS. 영역 밖 내용 노출, 전체 문서 완전 삭제는 미지원; 민감정보 완전 삭제 인증·출시 판정 불가"
+      "note": "페이지별 쉼표 구분 마스크 계획으로 최대 10쪽·40영역(쪽당 12개), 입력 경계/사전 미리 검증, 진행·취소, 선택 쪽만 신규 래스터 PDF 작성, 원본 텍스트·양식·첨부·북마크·편집 메타데이터 비이식 및 출력 PDF 구조 검사. Node·Linux Chromium·Windows Chrome/Edge에서 2쪽·3영역 실다운로드·픽셀/텍스트 확인 PASS. 지정 외 이미지/문구 노출 가능, 문서 전체 완전 삭제/인증 불가. OCR 제외"
     },
     {
       "id": "USR-14",

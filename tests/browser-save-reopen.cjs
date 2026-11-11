@@ -273,6 +273,7 @@ async function main(){
    // USR-13: the only exported material must be masked raster pixels.
    const privacySource=await PDFLib.PDFDocument.create();
    privacySource.addPage([400,600]).drawText('Sensitive Secret 123',{x:80,y:480,size:15});
+   privacySource.addPage([400,600]).drawText('Secondary Secret 456',{x:120,y:480,size:15});
    await page.locator('#openPdfInput').setInputFiles({
      name:'privacy-page.pdf',mimeType:'application/pdf',
      buffer:Buffer.from(await privacySource.save())
@@ -281,35 +282,51 @@ async function main(){
      null,{timeout:40000});
    await page.evaluate(()=>executeCommand('maskedPageExport'));
    await page.locator('#maskExportBtn').waitFor({state:'visible'});
+   await page.locator('#maskPlanLines').fill('3,70,100,180,40');
+   await page.locator('#maskPlanCheck').click();
+   assert((await page.locator('#maskPlanPreview').innerText()).includes('검증 실패'));
+   await page.locator('#maskPlanLines').fill('1,70,100,180,40\n1,260,200,50,30\n2,105,100,200,40');
+   await page.locator('#maskPlanCheck').click();
+   assert((await page.locator('#maskPlanPreview').innerText()).includes('2쪽 / 3개 영역'));
    await page.locator('#maskConfirmed').check();
    const maskingDownload=page.waitForEvent('download',{timeout:60000});
    await page.locator('#maskExportBtn').click();
    const maskedEvent=await maskingDownload;
-   const maskedPath=path.join(downloadDir,'masked-page.pdf');
+   const maskedPath=path.join(downloadDir,'masked-multiple-pages.pdf');
    await maskedEvent.saveAs(maskedPath);
    const maskedDisk=fs.readFileSync(maskedPath);
    const maskedPdf=await PDFLib.PDFDocument.load(maskedDisk);
-   assert.equal(maskedPdf.getPageCount(),1);
+   assert.equal(maskedPdf.getPageCount(),2);
    assert.equal(maskedPdf.catalog.get(PDFLib.PDFName.of('SunriseWebEdits')),undefined);
    const rasterEvidence=await page.evaluate(async b64=>{
      const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
-     const document=await window.pdfjsLib.getDocument({data:bytes}).promise;
+     const output=await window.pdfjsLib.getDocument({data:bytes}).promise;
      try{
-       const pdfPage=await document.getPage(1);
-       const text=await pdfPage.getTextContent();
-       const view=pdfPage.getViewport({scale:1});
-       const canvas=globalThis.document.createElement('canvas');
-       canvas.width=Math.ceil(view.width);canvas.height=Math.ceil(view.height);
-       const ctx=canvas.getContext('2d');
-       await pdfPage.render({canvasContext:ctx,canvas,viewport:view}).promise;
-       return {text:text.items.map(x=>x.str).join(''),mask:[...ctx.getImageData(80,115,1,1).data]};
-     }finally{await document.destroy()}
+       const pages=[];
+       for(let n=1;n<=output.numPages;n++){
+         const pdfPage=await output.getPage(n);
+         const text=await pdfPage.getTextContent();
+         const view=pdfPage.getViewport({scale:1});
+         const canvas=globalThis.document.createElement('canvas');
+         canvas.width=Math.ceil(view.width);canvas.height=Math.ceil(view.height);
+         const ctx=canvas.getContext('2d');
+         await pdfPage.render({canvasContext:ctx,canvas,viewport:view}).promise;
+         const checks=n===1?[[80,115],[270,215]]:[[120,115]];
+         pages.push({text:text.items.map(x=>x.str).join(''),
+           masks:checks.map(([x,y])=>[...ctx.getImageData(x,y,1,1).data])});
+       }
+       return pages;
+     }finally{await output.destroy()}
    },maskedDisk.toString('base64'));
-   assert.equal(rasterEvidence.text,'','raster export must not copy original searchable text');
-   assert(rasterEvidence.mask.slice(0,3).every(x=>x<10),'mask region must be black in actual PDF pixels');
+   assert.equal(rasterEvidence.length,2);
+   for(const p of rasterEvidence){
+     assert.equal(p.text,'','new raster output must not copy original searchable text');
+     for(const pixel of p.masks)
+       assert(pixel.slice(0,3).every(x=>x<10),'selected mask pixels must be black');
+   }
    await page.locator('#maskExportClose').click();
    assert.equal(pageErrors.length,0,'Editor runtime errors: '+pageErrors.join(' | '));
-   console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, masked raster export, embedded PNG, quality reports and range split');
+   console.log('PASS: PDF edit/save/reopen, visual text correction, labeled signature, multi-page masked raster export, embedded PNG, quality reports and range split');
    await context.close();
  }finally{
    if(browser)await browser.close();
