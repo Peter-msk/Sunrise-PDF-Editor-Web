@@ -2149,6 +2149,14 @@
       return { bytes: bytes.byteLength, pageCount: pages.length, orientation };
     }
 
+    async function verifySavedPdfBytes(originalBytes, outputBytes) {
+      if (!window.PDFLib) throw new Error('PDF 검사 엔진을 불러오지 못했습니다.');
+      validatePdfByteLength(outputBytes?.byteLength);
+      const original = await window.PDFLib.PDFDocument.load(originalBytes, {updateMetadata:false});
+      const output = await window.PDFLib.PDFDocument.load(outputBytes, {updateMetadata:false});
+      verifyPdfPageGeometry(original, output, '저장');
+    }
+
     function openSavedPdfCheckModal() {
       openModal({
         title: "저장 PDF 제출 전 확인", icon: "fa-clipboard-check",
@@ -5907,23 +5915,34 @@
         editablePdfForm(pdf);
     }
 
+    // In an ordinary save, editing overlays must not silently remove pages or
+    // change their rotation/page boxes. Shared with batch compression validation.
+    function verifyPdfPageGeometry(original, output, operation) {
+      const before = original.getPages(), after = output.getPages();
+      if (!before.length || before.length !== after.length)
+        throw new Error(operation + ' 후 페이지 수가 일치하지 않습니다.');
+      const near = (a, b) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.01;
+      for (let i = 0; i < before.length; i++) {
+        const a = before[i], b = after[i];
+        const rotationA = a.getRotation().angle, rotationB = b.getRotation().angle;
+        if (![0, 90, 180, 270].includes(((rotationA % 360) + 360) % 360) ||
+            rotationA !== rotationB)
+          throw new Error((i + 1) + '쪽 회전 정보가 변경되었습니다.');
+        for (const method of ['getMediaBox', 'getCropBox', 'getBleedBox', 'getTrimBox', 'getArtBox']) {
+          const first = a[method](), last = b[method]();
+          if (!['x', 'y', 'width', 'height'].every(key => near(first[key], last[key])))
+            throw new Error((i + 1) + '쪽 페이지 크기·좌표가 변경되었습니다: ' + method);
+        }
+      }
+    }
+
     // Batch output must preserve structural and form invariants. This is
     // intentionally not a visual/pixel comparison; image quality is controlled
     // separately by the explicit compression strength.
     function verifyBatchPdfStructure(original, output) {
       const {PDFName,PDFTextField,PDFCheckBox,PDFRadioGroup,PDFDropdown,PDFOptionList,PDFButton} = window.PDFLib;
       const n = PDFName.of;
-      const originalPages = original.getPages(), resultPages = output.getPages();
-      if (originalPages.length !== resultPages.length) throw new Error('압축 후 페이지 수가 일치하지 않습니다.');
-      const near=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<0.01;
-      for (let i=0;i<originalPages.length;i++){
-        const first=originalPages[i],last=resultPages[i];
-        if(first.getRotation().angle!==last.getRotation().angle)throw new Error(`${i+1}쪽 회전 정보가 변경되었습니다.`);
-        for (const getBox of ['getMediaBox','getCropBox']){
-          const a=first[getBox](),b=last[getBox]();
-          if(!['x','y','width','height'].every(key=>near(a[key],b[key])))throw new Error(`${i+1}쪽 페이지 크기·좌표가 변경되었습니다.`);
-        }
-      }
+      verifyPdfPageGeometry(original, output, '압축');
       for(const key of ['AcroForm','Outlines','Names']){
         if(Boolean(original.catalog.get(n(key))) !== Boolean(output.catalog.get(n(key))))
           throw new Error('압축 후 문서 구조가 변경되었습니다: '+key);
@@ -6289,6 +6308,9 @@
                 status.textContent = `이미지 압축 ${index}/${total} · 용량 계산 중…`;
               }) : null;
               if (result) bytes = result.bytes;
+              // Reopen and compare the exact bytes offered for download. Reject
+              // a damaged/altered page tree before creating a Blob URL.
+              await verifySavedPdfBytes(captured.snapshot.bytes, bytes);
               if (!document.getElementById("modalBackdrop").classList.contains("open") ||
                   document.getElementById("saveAsConfirmBtn") !== button) return;
               if (!saveStateIsCurrent(doc, captured)) throw new Error("준비 중 문서가 변경되었습니다. 다시 준비해 주세요.");
