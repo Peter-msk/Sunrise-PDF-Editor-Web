@@ -37,8 +37,14 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
    if(args[0]==='@-'){
     const lines=payload.split('\n');
     if(lines.includes('--encrypt')){
-     if(state==='failEncryption')return {code:1};
+     const sourceSnapshot=lines[lines.length-3];
      const stage=lines[lines.length-2];
+     assert.notEqual(sourceSnapshot,original,'QPDF must not read the mutable original');
+     assert(sourceSnapshot.includes('.sunrise-pdf-lock-'),'QPDF must read a private snapshot');
+     // Tests the actual bytes supplied to the encryption engine, not merely
+     // the source path or the final post-conversion fingerprint.
+     assert.deepEqual(await fs.readFile(sourceSnapshot),raw);
+     if(state==='failEncryption')return {code:1};
      await fs.writeFile(stage,raw);
      return {code:0};
     }
