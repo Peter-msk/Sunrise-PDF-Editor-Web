@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 전용 PR #17은 운영 main에 반영됐으나 Cloudflare 운영 D1 스키마/배포 보고 비밀값 준비 미충족으로 실제 운영 배포는 보류. PDF 사용자 개발 PR #18의 DOCX/XLSX 텍스트 변환은 Node·Linux Chromium·Windows Chrome/Edge 실제 파일 다운로드 계약 통과. 원본 Word/Excel 레이아웃 복원/인증서서명/완전삭제 미구현, OCR 제외.",
+  "basis": "2026-11-01 관리자 Cloudflare Worker + 운영 D1 마이그레이션 배포, 외부 HTTP 비로그인/공개 API 9/9 PASS. 관리자 실제 로그인 후 업무 수용 및 배포 보고 비밀값/버전 메타데이터 바인딩은 미완. 신규 사용자 PDF 개발 PR #21은 여러 쪽/다중 영역 마스킹과 DOCX/XLSX 줄바꿈·Excel 셀 길이 안전성, Node·Chromium·Windows Chrome/Edge 실제 회귀 4/4 PASS, 사용자 기능 운영 미배포. OCR 제외.",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -91,8 +91,8 @@
       "implementation": 100,
       "automated": 100,
       "practical": 80,
-      "deployment": 0,
-      "note": "Linux/Windows 상태·버전·장애/복구 표시와 운영 D1 구조/Worker 바인딩 이름·종류 읽기 확인. 실제 운영 새 스키마/배포는 미적용"
+      "deployment": 50,
+      "note": "관리자 운영 Cloudflare Worker/D1 배포(2026-11-01) 및 관리자 비로그인 상태 9개 HTTP 스모크 PASS. 관리자 인증 후 상태 대시보드 실제 업무 확인·CF_VERSION_METADATA 바인딩 미완"
     },
     {
       "id": "ADM-09",
@@ -101,8 +101,8 @@
       "implementation": 100,
       "automated": 100,
       "practical": 40,
-      "deployment": 0,
-      "note": "합성 서명 보고의 변조/시각/중복·역순/권한/DB 실패 검사 및 Linux/Windows 버전 표시 통과. 운영 배포 비밀값/버전 바인딩 미연결 확인"
+      "deployment": 30,
+      "note": "운영 Cloudflare 배포 버전 ID 확인, GitHub main 관리자 릴리스 및 외부 HTTP 스모크 PASS. GitHub production 배포 자격/DEPLOYMENT_EVENT_SECRET/CF_VERSION_METADATA 비밀값 미연결, 운영 배포 이력 자동 서명 보고 미검증"
     },
     {
       "id": "ADM-10",
@@ -308,11 +308,11 @@
       "id": "USR-13",
       "name": "민감정보 완전 삭제",
       "phase": 4,
-      "implementation": 25,
-      "automated": 70,
-      "practical": 15,
+      "implementation": 50,
+      "automated": 85,
+      "practical": 25,
       "deployment": 0,
-      "note": "현재 쪽 한 장에 불투명 검정 좌표 마스크→새 래스터 PDF 생성, 기존 텍스트·주석·첨부·양식·북마크 데이터 비이식 및 다운로드·화소 검사 PASS. 영역 밖 내용 노출, 전체 문서 완전 삭제는 미지원; 민감정보 완전 삭제 인증·출시 판정 불가"
+      "note": "최대 12쪽·36개 검정 영역 좌상단 좌표 입력→선택 페이지들만 새 래스터 PDF 생성. 페이지/좌표/총 48MP/50MiB 제한·취소·정렬, Node/Chromium/Windows Chrome·Edge 디스크 출력·본문 텍스트 미복사 검사 PASS. 영역 밖 개인정보 노출·전 문서 완전 비식별화/인증 보장 불가, 사용자 검토 및 출시 미완"
     },
     {
       "id": "USR-14",
@@ -338,11 +338,11 @@
       "id": "USR-16",
       "name": "Word·Excel 변환",
       "phase": 4,
-      "implementation": 40,
-      "automated": 75,
-      "practical": 15,
+      "implementation": 50,
+      "automated": 85,
+      "practical": 25,
       "deployment": 0,
-      "note": "PDF 텍스트 레이어에서 Word DOCX(단락·페이지 구분) 및 Excel XLSX(페이지/텍스트 2열) 변환 구현. OpenXML ZIP CRC32·Unicode 계약, Chromium·Windows Chrome/Edge 실제 다운로드 테스트 PASS. 원본의 표 구조·이미지·서식 재구성/스캔 OCR 미지원, 실무 Office 앱에서 수동 검증·운영 배포 미완"
+      "note": "PDF.js 실제 text item EOL/문자 기준선 변화를 반영해 DOCX 문단 및 XLSX 행 구분 개선, 32,767자 Excel 셀 초과 시 조용한 잘림 대신 중단. Node·Chromium·Windows Chrome/Edge 회귀 PASS. PDF 표 구조/레이아웃 완벽 재현·이미지 OCR·실제 Office 앱 수용·운영 배포 미완"
     },
     {
       "id": "TECH-01",
@@ -380,9 +380,10 @@
     "scope": "ADM-01~14",
     "functionalValidation": "node-28-passed",
     "browserValidation": "linux-chromium-windows-chrome-edge-admin-flows-passed",
-    "productionRollout": "pending",
+    "productionRollout": "cloudflare-operator-only-live-20261101-http-smoke-9of9-pass",
     "evidence": "docs/ADMIN_SOURCE_CLOSEOUT.md",
     "validationEvidence": "docs/ADMIN_VALIDATION_REPORT.md",
-    "productionSchemaReview": "read-only-gaps-confirmed"
+    "productionSchemaReview": "migrations-0005-through-0015-applied-to-live-d1",
+    "productionEvidence": "docs/ADMIN_CLOUD_DEPLOYMENT_STATUS.md"
   }
 }

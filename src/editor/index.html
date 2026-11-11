@@ -1987,6 +1987,7 @@
               { id: "insertStamp", label: "스탬프", icon: "fa-stamp", shortcut: "Ctrl+Alt+T", docReq: true },
               { id: "insertVisualSignature", label: "시각 서명 (인증서 아님)", icon: "fa-signature", docReq: true },
               { id: "maskedPageExport", label: "현재 쪽 마스킹 PDF", icon: "fa-user-shield", docReq: true },
+              { id: "maskedMultiExport", label: "여러 쪽·여러 영역 마스킹 PDF", icon: "fa-shield-halved", docReq: true },
               { id: "insertWatermark", label: "워터마크", icon: "fa-droplet", shortcut: "Ctrl+Alt+W", docReq: true },
             ],
           },
@@ -5446,6 +5447,10 @@
           if (!doc) return;
           openMaskedPageExportModal(doc);
           break;
+        case "maskedMultiExport":
+          if (!doc) return;
+          openMaskedMultiExportModal(doc);
+          break;
 
         case "insertWatermark":
           if (!doc) return;
@@ -7380,6 +7385,84 @@
 
     // USR-13: a fresh, SINGLE-PAGE raster PDF is made from masked visible pixels.
     // No source content streams, annotations, metadata or attachments are copied.
+    function openMaskedMultiExportModal(doc){
+      if(!window.SunriseSpecialPdf?.exportMaskedPages){
+        showToast("다중 마스킹 PDF 엔진을 불러오지 못했습니다.","fa-triangle-exclamation");return;
+      }
+      const reader=doc.pdfJsDoc,source=doc.bytes,initialPage=doc.currentPage+1;
+      openModal({
+        title:"여러 쪽·여러 영역 마스킹 PDF (새 파일)",icon:"fa-shield-halved",width:"680px",
+        bodyHtml:[
+          '<div class="dialog-info-box">원본 PDF를 수정하지 않고 <strong>마스크를 지정한 페이지들만</strong> 새로운 이미지 기반 PDF로 출력합니다. ',
+          '원본 텍스트·메타데이터·첨부·양식·주석·북마크는 새 파일로 복사하지 않습니다. ',
+          '<strong>영역 밖의 민감정보는 그대로 보이므로 완전 삭제나 인증된 비식별화를 보장하지 않습니다.</strong> ',
+          '1~12페이지·총 36개 영역을 지원하며, 삽입 항목·양식·서명이 있는 원본 PDF는 차단합니다.</div>',
+          '<p style="font-size:12px">한 줄마다 <code>쪽번호,X,Y,너비,높이</code>를 입력하세요. 쉼표 구분, 좌상단 pt 기준. ',
+          '대상 문서는 '+doc.pageCount+'쪽입니다.</p>',
+          '<textarea id="multiMaskRegions" class="dialog-textarea" rows="7" spellcheck="false">'+
+            initialPage+',70,100,180,40</textarea>',
+          '<label style="display:flex;gap:8px;margin:12px 0">',
+          '<input type="checkbox" id="multiMaskConfirm"> 지정하지 않은 쪽은 출력하지 않으며, ',
+          '지정한 영역 밖의 픽셀은 그대로 남는다는 점을 확인했습니다.</label>',
+          '<p id="multiMaskStatus" role="status">마스킹 영역을 지정하세요.</p>'
+        ].join(''),
+        footerHtml:'<div></div><div class="modal-footer-right">'+
+          '<button type="button" id="multiMaskGo" class="dialog-btn primary">마스킹 PDF 생성</button>'+
+          '<button type="button" id="multiMaskClose" class="dialog-btn">닫기/취소</button></div>',
+        onMount:()=>{
+          const submit=document.getElementById("multiMaskGo");
+          const status=document.getElementById("multiMaskStatus");
+          let stopped=false,running=false;
+          const valid=()=>!stopped&&activeDoc()===doc&&doc.pdfJsDoc===reader&&
+            doc.bytes===source&&!doc.overlays.length&&status.isConnected;
+          document.getElementById("multiMaskClose").addEventListener("click",()=>{
+            stopped=true;if(running)status.textContent="변환 취소 요청됨.";
+            else closeModal();
+          });
+          submit.addEventListener("click",async()=>{
+            if(running||!valid()||doc.operationBusy)return;
+            if(!document.getElementById("multiMaskConfirm").checked){
+              showToast("마스킹 범위와 한계를 먼저 확인해 주세요.","fa-triangle-exclamation");return;
+            }
+            let plan;
+            try{
+              plan=window.SunriseSpecialPdf.parseMaskPlan(
+                document.getElementById("multiMaskRegions").value,doc.pageCount,doc.pageSizes);
+              const original=await window.PDFLib.PDFDocument.load(source);
+              const name=window.PDFLib.PDFName.of;
+              if(original.catalog.has(name("Perms"))||original.catalog.has(name("AcroForm")))
+                throw Error("서명·양식이 포함된 원본 PDF는 출력하지 않습니다.");
+              if(!valid())throw Error("문서가 변경되었습니다.");
+            }catch(error){showToast(error.message||"마스킹 입력 오류","fa-triangle-exclamation");return;}
+            const finish=beginOperationMetric("page_extract");let outcome="failed";
+            running=true;submit.disabled=true;
+            try{
+              status.textContent="선택한 페이지를 순서대로 렌더링하는 중입니다…";
+              const output=await window.SunriseSpecialPdf.exportMaskedPages({
+                reader,regions:plan,PDFLib:window.PDFLib,
+                cancelled:()=>!valid(),
+                onProgress:progress=>{
+                  if(status.isConnected)status.textContent=
+                    progress.page+"/"+progress.total+"쪽 처리 (원본 "+progress.sourcePage+"쪽)";
+                }
+              });
+              if(!valid())throw Error("변환 도중 문서가 변경되었습니다.");
+              const stem=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
+              downloadBytes(output.bytes,stem+"_masked_selected_pages.pdf","application/pdf");
+              status.textContent=output.pages+"쪽 · "+output.masked+
+                "개 영역의 새 이미지 PDF가 준비됐습니다. 영역 밖 내용은 그대로 남습니다.";
+              outcome="succeeded";
+            }catch(error){
+              if(status.isConnected)status.textContent="다중 마스킹 PDF 실패: "+(error?.message||error);
+            }finally{
+              running=false;if(status.isConnected)submit.disabled=false;
+              finish(outcome);
+            }
+          });
+        }
+      });
+    }
+
     function openMaskedPageExportModal(doc) {
       if(!window.SunriseSpecialPdf?.exportMaskedPage){
         showToast("마스킹 PDF 엔진을 불러오지 못했습니다.","fa-triangle-exclamation");return;
@@ -8221,11 +8304,12 @@
       const finish=beginOperationMetric("extract_text");let outcome="failed";
       try {
         if(doc.pageCount>120)throw Error("Office 텍스트 변환은 최대 120쪽까지 지원합니다.");
-        showToast("PDF 텍스트 레이어를 판독하고 있습니다. OCR은 사용하지 않습니다.","fa-file-lines");
-        if(!await ensurePageTexts(doc) || activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original){
+        showToast("PDF 텍스트 줄바꿈 정보를 판독하고 있습니다. OCR은 사용하지 않습니다.","fa-file-lines");
+        const pages=await window.SunriseOfficeExport.extractPdfPages(reader,
+          ()=>activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original);
+        if(activeDoc()!==doc || doc.pdfJsDoc!==reader || doc.bytes!==original){
           outcome="cancelled";return;
         }
-        const pages=Array.from({length:doc.pageCount},(_,i)=>doc.pageTexts[i]||"");
         if(!pages.some(text=>text.trim()))throw Error("PDF 텍스트 레이어가 없습니다. 이미지 기반 문서의 OCR은 지원하지 않습니다.");
         const bytes=format==="docx"?window.SunriseOfficeExport.docx(pages):window.SunriseOfficeExport.xlsx(pages);
         const stem=(doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document");
