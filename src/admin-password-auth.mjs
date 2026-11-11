@@ -42,10 +42,14 @@ export async function getAdminSession(request,env){
  if(!env?.DB)return null;
  const token=cookieValue(request);if(!token)return null;
  const now=Date.now(),hash=await digest(token);
- const existing=await env.DB.prepare('UPDATE admin_sessions SET last_seen_ms=? WHERE token_hash=? AND expires_ms>? AND last_seen_ms>? RETURNING admin_id').bind(now,hash,now,now-IDLE_MS).first();
+ const existing=await env.DB.prepare('UPDATE admin_sessions SET last_seen_ms=? WHERE token_hash=? AND expires_ms>? AND last_seen_ms>? RETURNING admin_id,created_ms').bind(now,hash,now,now-IDLE_MS).first();
  if(!existing)return null;
- const account=await env.DB.prepare('SELECT username FROM admin_accounts WHERE id=?').bind(existing.admin_id).first();
- return account?.username||null;
+ const account=await env.DB.prepare('SELECT username,updated_at FROM admin_accounts WHERE id=?').bind(existing.admin_id).first();
+ if(!account)return null;
+ // A password rotation invalidates all sessions created before that change,
+ // even if later session table cleanup fails.
+ const changed=account.updated_at?Date.parse(account.updated_at):0;
+ return Number.isFinite(changed)&&changed>0&&existing.created_ms<=changed?null:account.username;
 }
 async function throttle(request,env,namespace){
  const ip=request.headers.get('cf-connecting-ip')||'unknown';
@@ -75,7 +79,7 @@ export async function authRoutes(request,env,url){
   const user=await getAdminSession(request,env);
   return user?json({authenticated:true,username:user}):json({authenticated:false},401);
  }
- if(!['/api/auth/setup','/api/auth/login','/api/auth/logout'].includes(path))return json({error:'요청한 인증 경로가 없습니다.'},404);
+ if(!['/api/auth/setup','/api/auth/login','/api/auth/logout','/api/auth/change-password'].includes(path))return json({error:'요청한 인증 경로가 없습니다.'},404);
  if(method!=='POST')return json({error:'허용되지 않은 요청입니다.'},405,{Allow:'POST'});
  if(!originOK(request,url))return json({error:'잘못된 요청 출처입니다.'},403);
  if(path==='/api/auth/logout'){
@@ -85,6 +89,32 @@ export async function authRoutes(request,env,url){
  }
  const data=await payload(request);
  if(!data)return json({error:'입력 형식을 확인하세요.'},400);
+ if(path==='/api/auth/change-password'){
+  const user=await getAdminSession(request,env);
+  if(!user)return json({error:'관리자 로그인이 필요합니다.'},401);
+  if(!isHex(data.currentProof,64)||!isHex(data.newProof,64)||!isHex(data.newSalt,32)){
+   return json({error:'비밀번호 변경 요청 형식을 확인하세요.'},400);
+  }
+  const account=await db.prepare('SELECT id,username,password_salt,password_hash FROM admin_accounts WHERE id=1').first();
+  if(!account||account.username!==user||!String(account.password_salt).startsWith(SCHEME)){
+   return json({error:'관리자 계정 상태를 확인하지 못했습니다.'},503);
+  }
+  const oldSalt=account.password_salt.slice(SCHEME.length);
+  if(data.newSalt===oldSalt)return json({error:'새 비밀번호를 위해 새로운 암호화 설정이 필요합니다.'},400);
+  const oldVerifier=await passwordVerifier(data.currentProof,oldSalt,env);
+  if(!equalDigest(oldVerifier,account.password_hash)){
+   if(await throttle(request,env,'change-password'))return json({error:'비밀번호 확인에 실패했습니다. 15분 후 다시 시도하세요.'},429);
+   return json({error:'기존 비밀번호가 올바르지 않습니다.'},401);
+  }
+  const newVerifier=await passwordVerifier(data.newProof,data.newSalt,env);
+  // The browser rejects unchanged plaintext. Different salts intentionally
+  // produce different proofs, so the server does not claim to compare them.
+  const updated=await db.prepare("UPDATE admin_accounts SET password_salt=?,password_hash=?,iterations=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=1 AND password_hash=?")
+   .bind(SCHEME+data.newSalt,newVerifier,ITERATIONS,account.password_hash).run();
+  if(updated.meta?.changes!==1)return json({error:'다른 비밀번호 변경 요청이 처리되었습니다. 다시 로그인하세요.'},409);
+  await db.prepare('DELETE FROM admin_sessions WHERE admin_id=1').run();
+  return json({ok:true,message:'비밀번호가 변경됐습니다. 모든 관리자 세션이 종료됩니다.'},200,{'set-cookie':sessionCookie('',0)});
+ }
  if(path==='/api/auth/setup'){
   if(await configured(env))return json({error:'관리자 계정은 이미 등록되어 있습니다.'},409);
   // A missing bootstrap secret is a setup problem, not a failed login attempt.

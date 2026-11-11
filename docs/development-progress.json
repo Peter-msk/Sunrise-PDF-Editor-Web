@@ -1,0 +1,378 @@
+{
+  "schema": 1,
+  "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
+  "asOf": "2026-11-01",
+  "basis": "PR #9 / PR #10의 구현·Node 검사 기록; 미확인 실기는 미검증으로 보수적 기재. 실증 수치가 아닌 잠정 검토 점수",
+  "excluded": [
+    "USR-20 (OCR)"
+  ],
+  "scoreWeights": {
+    "implementation": 40,
+    "automated": 30,
+    "practical": 20,
+    "deployment": 10
+  },
+  "phaseMethod": "1~7단계 동일 가중치; 단계 점수는 해당 기능의 산술 평균",
+  "features": [
+    {
+      "id": "ADM-01",
+      "name": "운영 홈·KPI",
+      "phase": 1,
+      "implementation": 85,
+      "automated": 80,
+      "practical": 10,
+      "deployment": 35,
+      "note": "7·14·30일 기간별 방문·활성시간 집계와 방문 세션당 활성 편집시간 추정 표시. 운영 데이터 대조 미완"
+    },
+    {
+      "id": "ADM-02",
+      "name": "방문 통계",
+      "phase": 1,
+      "implementation": 72,
+      "automated": 80,
+      "practical": 10,
+      "deployment": 35,
+      "note": "KST 익명 탭 세션 방문 추이·7/14/30일 필터 회귀 통과. 사람 수나 실제 재방문율로 표현하지 않음"
+    },
+    {
+      "id": "ADM-03",
+      "name": "사용시간 분석",
+      "phase": 1,
+      "implementation": 63,
+      "automated": 72,
+      "practical": 0,
+      "deployment": 30,
+      "note": "선택 기간 활성 편집시간 및 방문 탭 세션당 추정치 표시. 홈만 방문한 세션 포함; 실제 개인·완료 세션 평균은 아님. 실사용 검증 미완"
+    },
+    {
+      "id": "ADM-04",
+      "name": "기능 오류율",
+      "phase": 1,
+      "implementation": 65,
+      "automated": 80,
+      "practical": 0,
+      "deployment": 30,
+      "note": "저장·압축 준비의 시도/실패율 구현. 저장 외 기능별 실행 분모와 운영 실측은 미완"
+    },
+    {
+      "id": "ADM-05",
+      "name": "문의 관리",
+      "phase": 1,
+      "implementation": 92,
+      "automated": 96,
+      "practical": 20,
+      "deployment": 35,
+      "note": "동일 시각 문의를 포함한 50건씩 조회, 검색·상태 필터와 전후 페이지, 48시간 미확인 강조 및 이력 트랜잭션. 운영 D1·Windows 실기 미검증"
+    },
+    {
+      "id": "ADM-06",
+      "name": "공지사항 관리",
+      "phase": 1,
+      "implementation": 85,
+      "automated": 92,
+      "practical": 20,
+      "deployment": 0,
+      "note": "최초 게시일 7일 정책의 실제 SQLite 공개 피드·수정/숨김/재게시 만료 보호, Chromium 관리 UI CRUD/만료 표시 통과; 운영 배포 미검증"
+    },
+    {
+      "id": "ADM-07",
+      "name": "업데이트 관리",
+      "phase": 1,
+      "implementation": 85,
+      "automated": 90,
+      "practical": 20,
+      "deployment": 0,
+      "note": "업데이트 등록/수정 및 최초 게시일 만료 보호 SQLite+Chromium 시험, 만료 게시물 관리자 조회 유지; 운영 실기 미검증"
+    },
+    {
+      "id": "ADM-08",
+      "name": "서비스 상태",
+      "phase": 1,
+      "implementation": 80,
+      "automated": 90,
+      "practical": 10,
+      "deployment": 0,
+      "note": "관리자 인증된 Worker/D1 상태 200·503 구조화 응답·조회시간·복구 후 경고 해제 Chromium 시험. D1 전체 장애 시 로그인 세션 확인도 실패하므로 별도 외부 상태감시 아님"
+    },
+    {
+      "id": "ADM-09",
+      "name": "배포·버전",
+      "phase": 1,
+      "implementation": 75,
+      "automated": 85,
+      "practical": 10,
+      "deployment": 0,
+      "note": "Wrangler version_metadata 바인딩과 실제 Worker 버전 ID·태그·버전 생성시각 표시, 미설정 및 설정값 대체 처리 Node·Chromium 검증. 버전 생성일은 배포 시각이 아님; 운영 배포 이력 미검증"
+    },
+    {
+      "id": "ADM-10",
+      "name": "보존·백업",
+      "phase": 1,
+      "implementation": 70,
+      "automated": 90,
+      "practical": 20,
+      "deployment": 25,
+      "note": "90일 경과 문의·연관 상태 이력·고아 이력을 함께 정리. 14일 익명 세션·만료 세션 경계 및 멱등성 실 SQLite 검사, 합성 데이터 VACUUM INTO 로컬 백업·복원 무결성 PASS. 운영 D1 복원 리허설 미실시"
+    },
+    {
+      "id": "ADM-11",
+      "name": "계정 보안",
+      "phase": 1,
+      "implementation": 80,
+      "automated": 95,
+      "practical": 35,
+      "deployment": 45,
+      "note": "실제 HTTPS Chromium+로컬 SQLite에서 초기 등록·독립 브라우저 2개 로그인·Secure HttpOnly 쿠키·비밀번호 변경 시 전체 세션 폐기·재로그인·로그아웃 PASS. 운영 도메인·실계정/침투 검사 미완"
+    },
+    {
+      "id": "ADM-12",
+      "name": "이용 품질",
+      "phase": 1,
+      "implementation": 68,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 0,
+      "note": "PDF 준비 실패율 및 같은 창 재시도·준비 완료 집계 추가. 로컬 SQLite/Chromium 검증; 실제 PC 저장 완료와 운영 D1 미검증"
+    },
+    {
+      "id": "ADM-13",
+      "name": "통계 CSV",
+      "phase": 1,
+      "implementation": 78,
+      "automated": 90,
+      "practical": 20,
+      "deployment": 0,
+      "note": "30일 익명 통계 CSV 실제 Chromium 다운로드 및 SQLite 30일 필터·UTF-8 BOM 원시 바이트·비공개 API 검증; Excel/운영 브라우저 실기 미완"
+    },
+    {
+      "id": "ADM-14",
+      "name": "운영 알림",
+      "phase": 1,
+      "implementation": 75,
+      "automated": 90,
+      "practical": 10,
+      "deployment": 0,
+      "note": "관리자 화면 운영 알림 중복 제거·항목 수 표시·전체 상태/품질/통계 새로고침, D1 장애→복구 시 경고 해제 Chromium 검증. 서버 푸시·정기 감시·알림 이력 미구현"
+    },
+    {
+      "id": "USR-01",
+      "name": "PDF 병합",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 70,
+      "practical": 15,
+      "deployment": 35,
+      "note": "기존 병합, 양식 안전 차단·특수 PDF 실검증 필요"
+    },
+    {
+      "id": "USR-02",
+      "name": "분할·추출",
+      "phase": 2,
+      "implementation": 65,
+      "automated": 60,
+      "practical": 10,
+      "deployment": 35,
+      "note": "기본 기능 존재, 일괄 범위·재열기 확대 필요"
+    },
+    {
+      "id": "USR-03",
+      "name": "페이지 편집",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 75,
+      "practical": 10,
+      "deployment": 35,
+      "note": "복제·회전·삭제 회귀, 실무 파일 실검증 부족"
+    },
+    {
+      "id": "USR-04",
+      "name": "텍스트 삽입",
+      "phase": 2,
+      "implementation": 75,
+      "automated": 70,
+      "practical": 10,
+      "deployment": 35,
+      "note": "한글 지원, 실다운로드 위치·폰트 확인 필요"
+    },
+    {
+      "id": "USR-10",
+      "name": "PDF 양식",
+      "phase": 2,
+      "implementation": 80,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 0,
+      "note": "Work PR9 Draft 한글 필드·체크박스, 독립 실기 미완"
+    },
+    {
+      "id": "USR-11",
+      "name": "PDF 일괄 처리",
+      "phase": 2,
+      "implementation": 94,
+      "automated": 98,
+      "practical": 0,
+      "deployment": 0,
+      "note": "일괄 압축·표시·분할·병합 Draft, 결과 총 100MiB/50개 제한·청크별 취소·120쪽 회귀 및 실제 Chromium 저장 검사 PASS; Windows Edge/Chrome·장시간 메모리 실측 미완"
+    },
+    {
+      "id": "USR-18",
+      "name": "저장 안전성",
+      "phase": 2,
+      "implementation": 80,
+      "automated": 92,
+      "practical": 25,
+      "deployment": 30,
+      "note": "실제 Linux Chromium에서 PDF 업로드→Save As→Blob 다운로드→디스크 PDF 재열기→편집기 재업로드 성공. 양식·회전 보존 확인, Windows Chrome·Edge와 복잡한 실무 PDF 미검증"
+    },
+    {
+      "id": "USR-06",
+      "name": "표·도형",
+      "phase": 3,
+      "implementation": 50,
+      "automated": 35,
+      "practical": 5,
+      "deployment": 30,
+      "note": "기본 삽입, 셀/도형 재편집과 시각적 검사 필요"
+    },
+    {
+      "id": "USR-07",
+      "name": "주석·형광펜",
+      "phase": 3,
+      "implementation": 45,
+      "automated": 35,
+      "practical": 5,
+      "deployment": 30,
+      "note": "기본 삽입, 원본 주석 편집·삭제 기능 부족"
+    },
+    {
+      "id": "USR-08",
+      "name": "북마크·목차",
+      "phase": 3,
+      "implementation": 70,
+      "automated": 75,
+      "practical": 0,
+      "deployment": 30,
+      "note": "텍스트 기반 제목 후보 Draft, 계층·실무 PDF 검증 필요"
+    },
+    {
+      "id": "USR-09",
+      "name": "PDF 압축",
+      "phase": 3,
+      "implementation": 75,
+      "automated": 85,
+      "practical": 0,
+      "deployment": 30,
+      "note": "손실방지 및 구조/디스크 검사, 이미지 품질 실측 필요"
+    },
+    {
+      "id": "USR-12",
+      "name": "제출 전 품질 검사",
+      "phase": 3,
+      "implementation": 70,
+      "automated": 80,
+      "practical": 0,
+      "deployment": 0,
+      "note": "저장 PDF 제출 전 검사 모듈: 페이지·방향·크기, 글꼴 리소스, 필수 양식, XFA/서명, 내용 연산 기반 빈쪽 후보·부분 검사 경고, 49개 CI PASS; Chrome·Edge 실제 PDF 표시 검증 미완"
+    },
+    {
+      "id": "USR-17",
+      "name": "이미지·텍스트 추출",
+      "phase": 3,
+      "implementation": 50,
+      "automated": 45,
+      "practical": 0,
+      "deployment": 30,
+      "note": "페이지 렌더·텍스트 추출, 원본 내장 이미지 추출 미완"
+    },
+    {
+      "id": "USR-19",
+      "name": "모바일 UX",
+      "phase": 3,
+      "implementation": 50,
+      "automated": 25,
+      "practical": 10,
+      "deployment": 35,
+      "note": "일부 반응형 UI, 실제 모바일 파일/터치 검증 부족"
+    },
+    {
+      "id": "USR-05",
+      "name": "원문 직접 수정",
+      "phase": 4,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "정확한 제한 영역 기술 연구 미완"
+    },
+    {
+      "id": "USR-13",
+      "name": "민감정보 완전 삭제",
+      "phase": 4,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "보안삭제 검증 전, 출시 금지"
+    },
+    {
+      "id": "USR-14",
+      "name": "PDF 암호 보호",
+      "phase": 4,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "암호 및 권한 호환 검증 미완"
+    },
+    {
+      "id": "USR-15",
+      "name": "전자서명",
+      "phase": 4,
+      "implementation": 10,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "시각적 서명·인증서 기반 서명 분리 설계 미완"
+    },
+    {
+      "id": "USR-16",
+      "name": "Word·Excel 변환",
+      "phase": 4,
+      "implementation": 5,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "서식·한글 변환 정확도 검증 미완"
+    },
+    {
+      "id": "TECH-01",
+      "name": "코드·언어·성능 고도화",
+      "phase": 5,
+      "implementation": 40,
+      "automated": 50,
+      "practical": 0,
+      "deployment": 0,
+      "note": "관리자·PDF 일괄·편집 선택 검사용 명령 및 PR 중복 CI 취소·Chromium 캐시 도입, 6개 파일 1회 커밋. 타입·모듈/병렬 성능 검증 미완"
+    },
+    {
+      "id": "QA-01",
+      "name": "전체 통합 안정화",
+      "phase": 6,
+      "implementation": 32,
+      "automated": 65,
+      "practical": 25,
+      "deployment": 0,
+      "note": "50개 Node 계약 검사(120쪽 분할·100MiB 예산·타이머 취소 포함), Chromium 저장·다운로드·재열기 E2E PASS; Windows·모바일·실무 파일·메모리 실측 미완"
+    },
+    {
+      "id": "REL-01",
+      "name": "최종 배포·운영 인계",
+      "phase": 7,
+      "implementation": 0,
+      "automated": 0,
+      "practical": 0,
+      "deployment": 0,
+      "note": "PR9/10 Draft; 전체 릴리스·운영 인수검사 미시행"
+    }
+  ]
+}

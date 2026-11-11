@@ -1,0 +1,51 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+(async()=>{
+ const {adminApi}=await import('../src/admin-api.mjs');
+ const {default:worker}=await import('../src/worker.mjs');
+ const url=new URL('https://unit.test/api/admin/health');
+ let calls=0;
+ const DB={prepare(sql){assert.equal(sql,'SELECT 1 AS ok');calls++;return {first:async()=>({ok:1})}}};
+ const id='123e4567-e89b-42d3-a456-426614174000';
+ const date='2026-10-31T14:55:20.000Z';
+ const env={DB,CF_VERSION_METADATA:{id,tag:'beta-v2.0',timestamp:date},RELEASE_VERSION:'local-fallback'};
+ let result=await worker.fetch(new Request(url),env,{});
+ assert.equal(result.status,401);assert.equal(calls,0);
+ result=await adminApi(new Request(url),env,url,'admin');assert.equal(result.status,200);
+ let response=await result.json();
+ assert.equal(response.version.deploymentId,id);
+ assert.equal(response.version.releaseTag,'beta-v2.0');
+ assert.equal(response.version.source,'cloudflare');
+ assert.equal(response.version.versionCreatedAt,date);
+ assert.equal(response.services.database,'ready');
+ assert.equal(response.probeMs>=0,true);
+ assert.equal(result.headers.get('cache-control'),'no-store');
+ result=await adminApi(new Request(url),{DB,CF_VERSION_METADATA:{id:'invalid',tag:'bad tag<script>',timestamp:'invalid'},RELEASE_VERSION:'release-local'},url,'admin');
+ response=await result.json();
+ assert.equal(response.version.deploymentId,null);
+ assert.equal(response.version.releaseTag,'release-local');
+ assert.equal(response.version.source,'configured');
+ assert.equal(response.version.versionCreatedAt,null);
+ result=await adminApi(new Request(url),{DB},url,'admin');
+ response=await result.json();
+ assert.equal(response.version.releaseTag,null);
+ assert.equal(response.version.versionCreatedAt,null);
+ assert.equal(response.version.source,null);
+ result=await adminApi(new Request(url),{
+  DB:{prepare(){return {first:async()=>{throw Error('PRIVATE_DATABASE_SECRET')}}}},
+  CF_VERSION_METADATA:{id,tag:'beta-v2.0',timestamp:date}
+ },url,'admin');
+ assert.equal(result.status,503);
+ response=await result.json();
+ assert.equal(response.status,'degraded');
+ assert.equal(response.services.worker,'responsive');
+ assert.equal(response.services.database,'unavailable');
+ assert(!JSON.stringify(response).includes('PRIVATE_DATABASE_SECRET'));
+ const wrangler=fs.readFileSync('wrangler.toml','utf8');
+ assert.match(wrangler,/\[version_metadata\]\s*binding = "CF_VERSION_METADATA"/);
+ const html=fs.readFileSync('dist/admin/index.html','utf8');
+ for(const name of ['healthVersionCreated','operationAlertCount','operationsReload'])assert(html.includes('id="'+name+'"'));
+ assert(html.includes("...new Set([...healthAlerts,...qualityAlerts,...operationAlerts])"));
+ assert(!html.includes('innerHTML=message'),'no HTML injection in alerts');
+ console.log('PASS: authenticated Cloudflare Worker version ID/tag/timestamp, safe fallback, no-leak D1 degradation and admin alert controls');
+})().catch(e=>{console.error(e);process.exitCode=1});

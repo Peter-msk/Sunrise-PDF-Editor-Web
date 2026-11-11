@@ -13,5 +13,10 @@ database_name = "sunrise-pdf-editor-web-contact"
 database_id = "efaab4d4-9d79-46dd-b037-461c4cd4c683"
 migrations_dir = "migrations"
 
+# Expose the actual Worker version ID/tag/date to the authenticated admin UI.
+# No secrets or account data are included in this binding.
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 [triggers]
 crons = ["0 3 * * *"]

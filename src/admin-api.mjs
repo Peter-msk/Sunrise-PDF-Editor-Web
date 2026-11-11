@@ -1,5 +1,6 @@
 // Server-side admin authorization + privacy-minimal aggregate telemetry.
 // No PDF bytes, names, document text, email, IP or client error message enters analytics.
+const APP_VERSION='1.0.0';
 const FEATURES=['문서 열기','페이지','검색','북마크','압축','저장','주석','기타'];
 export const PUBLICATION_WINDOW_SQL="date(first_published_at)>date('now','+9 hours','-7 days') AND date(first_published_at)<=date('now','+9 hours')";
 const PUBLICATION_STATUS_SQL=`CASE WHEN is_active=0 AND first_published_at IS NULL THEN 'draft' WHEN is_active=0 THEN 'hidden' WHEN date(first_published_at) IS NULL THEN 'unknown' WHEN date(first_published_at)>date('now','+9 hours') THEN 'scheduled' WHEN ${PUBLICATION_WINDOW_SQL} THEN 'published' ELSE 'expired' END AS visibility`;
@@ -17,7 +18,7 @@ export async function telemetry(request,env,url){
   if(request.method!=='POST')return response({error:'Method not allowed'},405);
   if(!sameOrigin(request,url))return response({error:'Invalid origin'},403);
   const data=await readPayload(request);
-  if(!data||!validSid(data.session)||!['visit','pulse','failure'].includes(data.type))return response({error:'Invalid event'},400);
+  if(!data||!validSid(data.session)||!['visit','pulse','failure','save_operation'].includes(data.type))return response({error:'Invalid event'},400);
   const now=Date.now(),today=day(),db=env.DB;
   try{
     if(data.type==='visit'){
@@ -29,6 +30,15 @@ export async function telemetry(request,env,url){
       if(data.area!=='editor'||!Number.isInteger(data.seconds)||data.seconds<1||data.seconds>15)return response({error:'Invalid duration'},400);
       const accepted=await db.prepare('UPDATE analytics_sessions SET last_pulse_ms=? WHERE day=? AND session_id=? AND last_pulse_ms<=? RETURNING session_id').bind(now,today,data.session,now-8000).first();
       if(accepted)await db.prepare('INSERT INTO analytics_daily(day,editor_seconds) VALUES (?,?) ON CONFLICT(day) DO UPDATE SET editor_seconds=editor_seconds+excluded.editor_seconds').bind(today,data.seconds).run();
+    } else if(data.type==='save_operation'){
+      const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+      if(!uuid(data.operationId)||!['started','ready','failed','cancelled'].includes(data.stage)||(data.retryOf!=null&&(!uuid(data.retryOf)||data.retryOf===data.operationId||data.stage!=='started')))return response({error:'Invalid operation'},400);
+      if(data.stage==='started'){
+        await db.prepare("INSERT OR IGNORE INTO analytics_save_operations(day,session_id,operation_id,state,retry_of) SELECT ?,?,?,?,CASE WHEN EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND operation_id=? AND state='failed' AND day BETWEEN date(?,'-1 day') AND ?) AND NOT EXISTS (SELECT 1 FROM analytics_save_operations WHERE session_id=? AND retry_of=?) THEN ? ELSE NULL END WHERE EXISTS (SELECT 1 FROM analytics_sessions WHERE day=? AND session_id=?) AND (SELECT COUNT(*) FROM analytics_save_operations WHERE day=? AND session_id=?)<40")
+          .bind(today,data.session,data.operationId,'started',data.session,data.retryOf||null,today,today,data.session,data.retryOf||null,data.retryOf||null,today,data.session,today,data.session).run();
+      }else{
+        await db.prepare("UPDATE analytics_save_operations SET state=? WHERE session_id=? AND operation_id=? AND state='started' AND day>=date(?,'-1 day') AND day<=?").bind(data.stage,data.session,data.operationId,today,today).run();
+      }
     } else {
       if(!FEATURES.includes(data.feature))return response({error:'Invalid feature'},400);
       const accepted=await db.prepare('UPDATE analytics_sessions SET last_error_ms=?,error_events=error_events+1 WHERE day=? AND session_id=? AND last_error_ms<=? AND error_events<40 RETURNING session_id').bind(now,today,data.session,now-3000).first();
@@ -51,6 +61,75 @@ const earliestWeek=(date)=>{
 };
 export async function adminApi(request,env,url,identity){
   const path=url.pathname,db=env.DB,today=day();
+  if(path==='/api/admin/save-quality'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    try{
+      const counts=await db.prepare("SELECT COUNT(*) attempts, SUM(CASE WHEN state='ready' THEN 1 ELSE 0 END) ready, SUM(CASE WHEN state='failed' THEN 1 ELSE 0 END) failed, SUM(CASE WHEN state='cancelled' THEN 1 ELSE 0 END) cancelled, SUM(CASE WHEN state='started' THEN 1 ELSE 0 END) pending, SUM(CASE WHEN retry_of IS NOT NULL THEN 1 ELSE 0 END) retries, SUM(CASE WHEN retry_of IS NOT NULL AND state='ready' THEN 1 ELSE 0 END) recovered FROM analytics_save_operations WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first();
+      const number=value=>{const n=Number(value||0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid count');return n};
+      const result=Object.fromEntries(['attempts','ready','failed','cancelled','pending','retries','recovered'].map(key=>[key,number(counts?.[key])]));
+      if(result.ready+result.failed+result.cancelled+result.pending!==result.attempts||result.retries>result.attempts||result.recovered>result.retries||result.recovered>result.ready)throw Error('Inconsistent count');
+      return response({windowDays:14,...result});
+    }catch{return response({error:'save statistics unavailable'},503)}
+  }
+  // Private, read-only point-in-time check; not an uptime claim.
+  if(path==='/api/admin/health'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    const started=Date.now();let database='unavailable';
+    try{
+      const probe=await db.prepare('SELECT 1 AS ok').first();
+      if(Number(probe?.ok)===1)database='ready';
+    }catch{/* Do not expose raw D1 error messages. */}
+    const rawId=env.CF_VERSION_METADATA?.id;
+    const deploymentId=typeof rawId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)?rawId:null;
+    // Cloudflare version metadata is bound at deploy time. A dashboard release
+    // label is a fallback, not a substitute for the actual Worker version ID.
+    const rawTag=env.CF_VERSION_METADATA?.tag;
+    const explicitTag=env.RELEASE_VERSION;
+    const validTag=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value);
+    const releaseTag=validTag(rawTag)?rawTag:validTag(explicitTag)?explicitTag:null;
+    const source=validTag(rawTag)?'cloudflare':validTag(explicitTag)?'configured':null;
+    const rawCreated=env.CF_VERSION_METADATA?.timestamp;
+    const parsedCreated=typeof rawCreated==='string'&&rawCreated.length<=50?Date.parse(rawCreated):NaN;
+    const versionCreatedAt=Number.isFinite(parsedCreated)?new Date(parsedCreated).toISOString():null;
+    const healthy=database==='ready';
+    return response({
+      status:healthy?'ready':'degraded',
+      services:{worker:'responsive',database},
+      checkedAt:new Date().toISOString(),probeMs:Math.max(0,Date.now()-started),
+      version:{application:APP_VERSION,releaseTag,deploymentId,source,versionCreatedAt}
+    },healthy?200:503);
+  }
+  // Session quality is measured over 14 KST calendar days because the
+  // scheduled retention policy removes older analytics_sessions rows.
+  // This is NOT a per-feature operation failure rate.
+  if(path==='/api/admin/quality'){
+    if(request.method!=='GET')return response({error:'Method not allowed'},405);
+    const [totals,byDay,agedInquiries]=await Promise.all([
+      db.prepare("SELECT COUNT(*) sessions,COALESCE(SUM(CASE WHEN error_events>0 THEN 1 ELSE 0 END),0) affected FROM analytics_sessions WHERE day BETWEEN date(?,'-13 days') AND ?").bind(today,today).first(),
+      db.prepare("SELECT day,COUNT(*) sessions,COALESCE(SUM(CASE WHEN error_events>0 THEN 1 ELSE 0 END),0) affected FROM analytics_sessions WHERE day BETWEEN date(?,'-13 days') AND ? GROUP BY day ORDER BY day").bind(today,today).all(),
+      db.prepare("SELECT COUNT(*) count FROM inquiries WHERE status='new' AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-48 hours')").first()
+    ]);
+    const safe=value=>{const n=Number(value??0);if(!Number.isSafeInteger(n)||n<0)throw Error('Invalid aggregate');return n};
+    const total=safe(totals?.sessions),affected=safe(totals?.affected),overdue=safe(agedInquiries?.count);
+    if(affected>total)throw Error('Inconsistent aggregate');
+    const percentage=(n,d)=>d?Math.round(n/d*1000)/10:null;
+    const trend=(byDay.results||[]).map(row=>{
+      const sessions=safe(row.sessions),errors=safe(row.affected);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(row.day)||errors>sessions)throw Error('Invalid daily quality data');
+      return {day:row.day,sessions,affected:errors,percent:percentage(errors,sessions)};
+    });
+    const warning=total>=10&&affected>=3&&affected/total>=.15;
+    return response({
+      windowDays:14,since:today,
+      sessions:{total,withErrors:affected,percent:percentage(affected,total)},
+      trend,overdueInquiries:overdue,
+      alerts:[
+        ...(warning?[{code:'error-sessions',severity:'review',message:'최근 14일 오류 발생 세션 비율이 15% 이상입니다. 오류 발생 원인을 확인해 주세요.'}]:[]),
+        ...(overdue?[{code:'old-inquiries',severity:'review',message:'48시간 이상 미확인 문의 '+overdue+'건이 있습니다.'}]:[])
+      ],
+      definition:'익명 탭 세션 중 최소 한 번의 오류가 기록된 세션 비율. 기능별 클릭/작업 성공률이 아니며, 최대 14일 보존되는 통계에 한정합니다.'
+    });
+  }
   if(path==='/api/admin/statistics.csv'&&request.method==='GET'){
     const result=await db.prepare("SELECT day,visits,editor_seconds FROM analytics_daily WHERE day BETWEEN date(?,'-29 days') AND ? ORDER BY day").bind(today,today).all();
     const number=value=>{const n=Number(value);if(!Number.isSafeInteger(n)||n<0)throw new Error('Invalid aggregate');return String(n)};
@@ -99,27 +178,35 @@ export async function adminApi(request,env,url,identity){
     }
   }
   if(path==='/api/admin/overview'&&request.method==='GET'){
-    const monday=earliestWeek(today);
+    const value=url.searchParams.get('days');
+    const days=value===null?14:Number(value);
+    if(![7,14,30].includes(days))return response({error:'조회 기간은 7·14·30일만 지원합니다.'},400);
+    const range='-'+(days-1)+' days',monday=earliestWeek(today);
     const [all,week,tod,series,errors,inq]=await Promise.all([
       db.prepare('SELECT COALESCE(SUM(visits),0) visits,COALESCE(SUM(editor_seconds),0) seconds FROM analytics_daily').first(),
       db.prepare('SELECT COALESCE(SUM(visits),0) visits FROM analytics_daily WHERE day>=?').bind(monday).first(),
       db.prepare('SELECT COALESCE(visits,0) visits,COALESCE(editor_seconds,0) seconds FROM analytics_daily WHERE day=?').bind(today).first(),
-      db.prepare("SELECT day,visits,editor_seconds seconds FROM analytics_daily WHERE day >= date(?,'-13 days') ORDER BY day").bind(today).all(),
-      db.prepare("SELECT feature,SUM(count) count FROM analytics_errors WHERE day >= date(?,'-29 days') GROUP BY feature ORDER BY count DESC LIMIT 10").bind(today).all(),
+      db.prepare("SELECT day,visits,editor_seconds seconds FROM analytics_daily WHERE day BETWEEN date(?,?) AND ? ORDER BY day").bind(today,range,today).all(),
+      db.prepare("SELECT feature,SUM(count) count FROM analytics_errors WHERE day BETWEEN date(?,?) AND ? GROUP BY feature ORDER BY count DESC LIMIT 10").bind(today,range,today).all(),
       db.prepare("SELECT status,COUNT(*) count FROM inquiries GROUP BY status").all()
     ]);
-    return response({since:today,visits:{today:tod?.visits||0,week:week?.visits||0,total:all?.visits||0},usage:{today:tod?.seconds||0,total:all?.seconds||0},trend:series.results||[],errors:errors.results||[],inquiries:inq.results||[],definitions:'방문=브라우저 탭 세션 기준, 사용시간=화면이 활성화된 편집기 시간; 수집 시작 이후 합계'});
+    return response({since:today,days,visits:{today:tod?.visits||0,week:week?.visits||0,total:all?.visits||0},usage:{today:tod?.seconds||0,total:all?.seconds||0},trend:series.results||[],errors:errors.results||[],inquiries:inq.results||[],definitions:'방문=브라우저 탭 세션 기준, 사용시간=화면이 활성화된 편집기 시간; 수집 시작 이후 합계'});
   }
   if(path==='/api/admin/inquiries'&&request.method==='GET'){
     const statuses=['all','new','read','in_progress','answered'];
     const status=url.searchParams.get('status')||'all';
     if(!statuses.includes(status))return response({error:'Invalid status'},400);
     const q=(url.searchParams.get('q')||'').trim().slice(0,60);
-    const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? ESCAPE char(92) OR message LIKE ? ESCAPE char(92) OR email LIKE ? ESCAPE char(92))':'1=1');
+    const before=url.searchParams.get('before'),beforeId=url.searchParams.get('before_id');
+    if((before===null)!==(beforeId===null))return response({error:'Invalid cursor'},400);
+    const cursorId=beforeId===null?null:Number(beforeId);
+    if(before!==null&&(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(before)||!Number.isFinite(Date.parse(before))||!/^\d+$/.test(beforeId)||!Number.isSafeInteger(cursorId)||cursorId<1))return response({error:'Invalid cursor'},400);
+    const where=(status==='all'?'':'status=? AND ')+(q?'(category LIKE ? ESCAPE char(92) OR message LIKE ? ESCAPE char(92) OR email LIKE ? ESCAPE char(92))':'1=1')+(before!==null?' AND (created_at<? OR (created_at=? AND id<?))':'');
     const escaped=q.replaceAll('\\','\\\\').replaceAll('%','\\%').replaceAll('_','\\_');
-    const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+escaped+'%')]:[])];
-    const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC LIMIT 100').bind(...args).all();
-    return response({items:r.results||[]});
+    const args=[...(status==='all'?[]:[status]),...(q?[...Array(3).fill('%'+escaped+'%')]:[]),...(before!==null?[before,before,cursorId]:[])];
+    const r=await db.prepare('SELECT id,created_at,category,email,message,status,admin_note,updated_at FROM inquiries WHERE '+where+' ORDER BY created_at DESC,id DESC LIMIT 51').bind(...args).all();
+    const rows=r.results||[],items=rows.slice(0,50),last=items.at(-1);
+    return response({items,next:rows.length>50&&last?{before:last.created_at,before_id:last.id}:null,checkedAt:new Date().toISOString()});
   }
   const historyMatch=path.match(/^\/api\/admin\/inquiries\/(\d+)\/history$/);
   if(historyMatch&&request.method==='GET'){
@@ -136,10 +223,13 @@ export async function adminApi(request,env,url,identity){
     const data=await readPayload(request),status=data?.status,note=data?.note;
     if(!['new','read','in_progress','answered'].includes(status)||typeof note!=='string'||note.length>1000)return response({error:'Invalid update'},400);
     const id=Number(match[1]);if(!Number.isSafeInteger(id)||id<1)return response({error:'Invalid id'},400);
-    const old=await db.prepare('SELECT status FROM inquiries WHERE id=?').bind(id).first();
-    if(!old)return response({error:'Not found'},404);
-    await db.prepare("UPDATE inquiries SET status=?,admin_note=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(status,note.trim(),id).run();
-    if(old.status!==status)await db.prepare('INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) VALUES (?,?,?,?)').bind(id,identity,old.status,status).run();
+    // Both statements run in one D1 transaction. Read the prior status inside
+    // that transaction so concurrent updates cannot create a false history.
+    const results=await db.batch([
+      db.prepare('INSERT INTO inquiry_audit(inquiry_id,actor,old_status,new_status) SELECT id,?,status,? FROM inquiries WHERE id=? AND status<>?').bind(identity,status,id,status),
+      db.prepare("UPDATE inquiries SET status=?,admin_note=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(status,note.trim(),id)
+    ]);
+    if(results[1]?.meta?.changes!==1)return response({error:'Not found'},404);
     return response({ok:true});
   }
   return response({error:'Not found'},404);
