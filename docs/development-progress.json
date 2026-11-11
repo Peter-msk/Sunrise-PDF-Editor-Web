@@ -2,7 +2,7 @@
   "schema": 1,
   "plan": "Sunrise PDF Editor 기능개발완료·통합안정화 v1.2 (2026-10-31)",
   "asOf": "2026-11-01",
-  "basis": "관리자 Node/SQLite 28개·전체 Node 67개·릴리스 빌드, Linux Chromium/Windows Chrome/Edge 각 관리자 3개+PDF 저장 1개 및 운영 구조/바인딩 읽기 증거. 실제 운영 반영/사용자 PC는 미확인인 잠정 관리 점수",
+  "basis": "관리자 Node/SQLite 28개·전체 Node 67개·릴리스 빌드, Linux Chromium/Windows Chrome/Edge 각 관리자 3개+PDF 저장 1개 및 운영 구조/바인딩 읽기 증거. 실제 운영 반영/사용자 PC는 미확인인 잠정 관리 점수; USR-17 내장 이미지 추출 소스/계약 검사 코드 신규 작성(실행 결과 미확인).",
   "excluded": [
     "USR-20 (OCR)"
   ],
@@ -278,11 +278,11 @@
       "id": "USR-17",
       "name": "이미지·텍스트 추출",
       "phase": 3,
-      "implementation": 50,
+      "implementation": 75,
       "automated": 45,
       "practical": 0,
       "deployment": 30,
-      "note": "페이지 렌더·텍스트 추출, 원본 내장 이미지 추출 미완"
+      "note": "텍스트/페이지 PNG 추출에 더해 PDF.js의 내장 RGB·RGBA·1비트 회색조 이미지 객체를 PNG로 내보내는 엔진·모달·다운로드 코드와 Node 계약 검사를 작성. 마스크·색공간·복합 도면 일부 미지원; 신규 코드의 CI 및 실제 브라우저 추출 검증은 아직 미실시"
     },
     {
       "id": "USR-19",
