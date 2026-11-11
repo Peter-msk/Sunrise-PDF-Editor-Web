@@ -8,11 +8,50 @@
  const encoder=new TextEncoder(),MAX_PAGES=120,MAX_TEXT=2*1024*1024;
  function escapeXml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
   .replace(/"/g,'&quot;').replace(/'/g,'&apos;').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\uFFFE\uFFFF]/g,'');}
+ // PDF.js text items are not paragraphs: use explicit EOL signals, then
+ // conservative baseline changes; never claim to recover the source layout.
+ function pageTextFromItems(items){
+  if(!Array.isArray(items)||items.length>100000)
+   throw Error('PDF 텍스트 레이어 항목 수가 올바르지 않습니다.');
+  let out='',previous=null;
+  for(const item of items){
+   if(!item||typeof item.str!=='string')continue;
+   const value=item.str.normalize('NFC').replace(/\r\n?/g,'\n');
+   if(previous){
+    const prev=previous.transform,cur=item.transform;
+    const valid=Array.isArray(prev)&&prev.length>=6&&Array.isArray(cur)&&cur.length>=6&&
+      [prev[4],prev[5],cur[4],cur[5],previous.width].every(Number.isFinite);
+    const size=valid?Math.max(5,Math.abs(prev[3])||12):12;
+    const changedLine=valid&&Math.abs(cur[5]-prev[5])>Math.max(2,size*0.35);
+    if(previous.hasEOL||changedLine){
+     if(!out.endsWith('\n'))out+='\n';
+    }else if(value&&!/[\s]$/.test(out)&&!/^[\s]/.test(value)){
+     // A measurable gap between text items indicates a word boundary.
+     const spaced=!valid||cur[4]-prev[4]-previous.width>Math.max(1.5,size*0.18);
+     if(spaced)out+=' ';
+    }
+   }
+   out+=value;
+   previous=item;
+  }
+  if(previous?.hasEOL&&!out.endsWith('\n'))out+='\n';
+  return out;
+ }
  function normalizePages(raw){
   if(!Array.isArray(raw)||raw.length<1||raw.length>MAX_PAGES)throw Error('최대 120페이지까지 변환합니다.');
   let size=0;
   return raw.map(v=>{
-   const t=String(v??'').normalize('NFC');size+=encoder.encode(t).length;
+   const t=String(v??'').normalize('NFC');
+   // Silent removal of control chars would change the user's extracted text.
+   if(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\uFFFE\uFFFF]/.test(t))
+    throw Error('원본 텍스트에 Office XML로 저장할 수 없는 제어 문자가 있습니다.');
+   for(let i=0;i<t.length;i++){
+    const c=t.charCodeAt(i);
+    if(c>=0xd800&&c<=0xdbff){if(++i>=t.length||t.charCodeAt(i)<0xdc00||t.charCodeAt(i)>0xdfff)
+      throw Error('원본 텍스트에 손상된 Unicode 문자가 있습니다.');}
+    else if(c>=0xdc00&&c<=0xdfff)throw Error('원본 텍스트에 손상된 Unicode 문자가 있습니다.');
+   }
+   size+=encoder.encode(t).length;
    if(size>MAX_TEXT)throw Error('변환할 텍스트가 2 MiB를 초과합니다.');
    return t;
   });
@@ -62,7 +101,7 @@
   const pages=normalizePages(rawPages),items=[];
   pages.forEach((text,i)=>{
    if(i)items.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
-   for(const row of text.replace(/\r\n/g,'\n').split('\n')){
+   for(const row of text.replace(/\r\n?/g,'\n').split('\n')){
     items.push('<w:p><w:r><w:t xml:space="preserve">'+escapeXml(row)+'</w:t></w:r></w:p>');
    }
   });
@@ -77,11 +116,14 @@
  function xlsx(rawPages){
   const pages=normalizePages(rawPages),rows=[['페이지','텍스트']];
   pages.forEach((text,i)=>{
-   for(const line of text.replace(/\r\n/g,'\n').split('\n'))rows.push([String(i+1),line]);
+   for(const line of text.replace(/\r\n?/g,'\n').split('\n'))rows.push([String(i+1),line]);
   });
   if(rows.length>30000)throw Error('Excel 변환 결과가 3만 행을 초과합니다.');
-  const cell=(col,r,value)=>'<c r="'+col+r+'" t="inlineStr"><is><t xml:space="preserve">'+
-   escapeXml(value.slice(0,32767))+'</t></is></c>';
+  const cell=(col,r,value)=>{
+   if(value.length>32767)throw Error('Excel 한 셀에 32,767자를 초과했습니다. 내용을 자르지 않고 변환을 중단합니다.');
+   return '<c r="'+col+r+'" t="inlineStr"><is><t xml:space="preserve">'+
+    escapeXml(value)+'</t></is></c>';
+  };
   const sheet=header+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
    rows.map((row,i)=>'<row r="'+(i+1)+'">'+cell('A',i+1,row[0])+cell('B',i+1,row[1])+'</row>').join('')+
    '</sheetData></worksheet>';
@@ -95,5 +137,5 @@
    ['xl/worksheets/sheet1.xml',sheet]
   ]);
  }
- return {docx,xlsx,normalizePages};
+ return {docx,xlsx,normalizePages,pageTextFromItems};
 });
