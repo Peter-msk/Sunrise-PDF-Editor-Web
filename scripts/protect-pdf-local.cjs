@@ -50,6 +50,9 @@ async function rejectSignedSource(source){
    if(kind?.toString()==='/Sig')
     throw Error('전자서명 필드가 있는 PDF는 암호 보호를 지원하지 않습니다.');
   }
+  // Fingerprint the exact bytes inspected for signatures. Size/mtime alone
+  // cannot detect in-place replacement while an external process is running.
+  return crypto.createHash('sha256').update(raw).digest('hex');
  }catch(error){
   if(/전자서명/.test(error.message))throw error;
   throw Error('서명 여부를 확인할 수 없는 PDF는 안전을 위해 암호 보호하지 않습니다.');
@@ -88,7 +91,7 @@ async function protectPdfFile({inputPath,outputPath,password,qpdf=invokeQpdf}){
   throw Error('QPDF 11.7 이상이 필요합니다.');
  const original=await qpdf(['--requires-password',source]);
  if(original.code!==2)throw Error('이미 암호화된 PDF이거나 입력 구조가 지원되지 않습니다.');
- await rejectSignedSource(source);
+ const initialDigest=await rejectSignedSource(source);
  const owner=crypto.randomBytes(32).toString('base64url');
  const dir=await fs.mkdtemp(path.join(path.dirname(target),'.sunrise-pdf-lock-'));
  await fs.chmod(dir,0o700).catch(()=>{});
@@ -117,9 +120,15 @@ async function protectPdfFile({inputPath,outputPath,password,qpdf=invokeQpdf}){
   const rejected=await qpdf(['@-'],argsOnStdin(['--password='+wrong,'--check',stage]));
   if(encryptedFlag.code!==0||required.code!==0||accepted.code!==0||rejected.code===0)
    throw Error('출력 PDF의 암호화 및 암호 검증에 실패했습니다.');
-  const originalAgain=await fs.stat(source);
-  if(originalAgain.size!==stat.size||originalAgain.mtimeMs!==stat.mtimeMs)
+  const originalAgain=await fs.lstat(source);
+  if(!originalAgain.isFile()||originalAgain.isSymbolicLink()||
+     originalAgain.size!==stat.size||originalAgain.mtimeMs!==stat.mtimeMs||
+     originalAgain.dev!==stat.dev||originalAgain.ino!==stat.ino)
    throw Error('암호화 도중 원본 PDF가 변경됐습니다.');
+  // Defend against same-size/same-mtime edits that metadata checks miss.
+  const finalDigest=crypto.createHash('sha256').update(await fs.readFile(source)).digest('hex');
+  if(finalDigest!==initialDigest)
+   throw Error('암호화 도중 원본 PDF 내용이 변경됐습니다.');
   // Atomic publish on the same disk: do not overwrite an existing target.
   await fs.link(stage,target);
   return {outputPath:target,bytes:encryptedStat.size,method:'qpdf AES-256',verified:true};
