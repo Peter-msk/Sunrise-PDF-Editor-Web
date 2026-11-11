@@ -2,7 +2,7 @@
   'use strict';
   const KEY = 'SunriseWebEdits';
   const TOKEN = 'SunriseWebToken';
-  const TYPES = new Set(['Text', 'Note', 'Highlight', 'Stamp', 'Watermark', 'Table', 'Shape', 'PageNumber', 'Header', 'Footer']);
+  const TYPES = new Set(['Text', 'Note', 'Highlight', 'Stamp', 'Watermark', 'Table', 'Shape', 'Correction', 'VisualSignature', 'PageNumber', 'Header', 'Footer']);
 
   function validItem(item, pageCount) {
     if (!item || !TYPES.has(item.type) || !Number.isInteger(item.pageIndex) ||
