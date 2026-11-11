@@ -52,6 +52,10 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
      if(state==='failCorrectPassword')return {code:1};
      return {code:lines[0].includes('PASSWORD_FOR_TEST_2026')?0:2};
     }
+    if(lines.includes('--show-npages')){
+     if(state==='failPageProbe')return {code:1,stdout:''};
+     return {code:0,stdout:state==='wrongPageCount'?'2\n':'1\n'};
+    }
    }
    throw Error('unexpected mock qpdf call '+JSON.stringify(args));
   }
@@ -90,6 +94,20 @@ assert.equal(protect.validatePassword('암호한글테스트abcd'), '암호한�
   );
   await assert.rejects(fs.stat(tamperedTarget),{code:'ENOENT'});
   await fs.writeFile(original,raw);
+  // A successfully encrypted but truncated/wrong document must never publish.
+  const mismatchTarget=path.join(tmp,'wrong-pages.pdf');
+  state='wrongPageCount';
+  await assert.rejects(
+   protect.protectPdfFile({inputPath:original,outputPath:mismatchTarget,password,qpdf:mock}),
+   /페이지 수/);
+  await assert.rejects(fs.stat(mismatchTarget),{code:'ENOENT'});
+  const probeTarget=path.join(tmp,'failed-page-probe.pdf');
+  state='failPageProbe';
+  await assert.rejects(
+   protect.protectPdfFile({inputPath:original,outputPath:probeTarget,password,qpdf:mock}),
+   /페이지 수/);
+  await assert.rejects(fs.stat(probeTarget),{code:'ENOENT'});
+  state='normal';
   const success=await protect.protectPdfFile({inputPath:original,outputPath:target,password,qpdf:mock});
   assert.equal(success.verified,true);
   assert.equal(success.method,'qpdf AES-256');
