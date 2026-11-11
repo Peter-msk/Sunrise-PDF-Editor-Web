@@ -74,14 +74,27 @@
    ['word/document.xml',doc]
   ]);
  }
+ function splitExcelText(text){
+  // Excel limits one cell to 32,767 UTF-16 code units. Split instead of truncating.
+  // Iterate Unicode code points so surrogate pairs remain intact.
+  const segments=[];let part='';
+  for(const codePoint of text){
+   if(part.length+codePoint.length>32767){segments.push(part);part='';}
+   part+=codePoint;
+  }
+  segments.push(part);
+  return segments;
+ }
  function xlsx(rawPages){
   const pages=normalizePages(rawPages),rows=[['페이지','텍스트']];
   pages.forEach((text,i)=>{
-   for(const line of text.replace(/\r\n/g,'\n').split('\n'))rows.push([String(i+1),line]);
+   for(const line of text.replace(/\r\n/g,'\n').split('\n')){
+    for(const part of splitExcelText(line))rows.push([String(i+1),part]);
+   }
   });
   if(rows.length>30000)throw Error('Excel 변환 결과가 3만 행을 초과합니다.');
   const cell=(col,r,value)=>'<c r="'+col+r+'" t="inlineStr"><is><t xml:space="preserve">'+
-   escapeXml(value.slice(0,32767))+'</t></is></c>';
+   escapeXml(value)+'</t></is></c>';
   const sheet=header+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+
    rows.map((row,i)=>'<row r="'+(i+1)+'">'+cell('A',i+1,row[0])+cell('B',i+1,row[1])+'</row>').join('')+
    '</sheetData></worksheet>';
@@ -95,5 +108,5 @@
    ['xl/worksheets/sheet1.xml',sheet]
   ]);
  }
- return {docx,xlsx,normalizePages};
+ return {docx,xlsx,normalizePages,splitExcelText};
 });

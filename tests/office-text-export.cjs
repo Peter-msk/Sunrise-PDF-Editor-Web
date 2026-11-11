@@ -33,6 +33,18 @@ assert(!excel['xl/worksheets/sheet1.xml'].includes('<f>'),'input must not execut
 assert.equal((excel['xl/worksheets/sheet1.xml'].match(/<row r=/g)||[]).length,4);
 assert.throws(()=>office.docx(Array(121).fill('hello')),/120/);
 assert.throws(()=>office.xlsx(['too long'.repeat(300000)]),/2 MiB/);
+// Excel must preserve a line > 32,767 UTF-16 code units instead of silently truncating.
+const longLine='한'.repeat(32766)+'😀'+'가'.repeat(110);
+const parts=office.splitExcelText(longLine);
+assert(parts.length>=2);
+assert.equal(parts.join(''),longLine);
+assert(parts.every(x=>x.length<=32767));
+assert(!parts.some(x=>/[\uD800-\uDBFF]$/.test(x)),'must not split a surrogate pair');
+const longXml=readZip(office.xlsx([longLine]))['xl/worksheets/sheet1.xml'];
+for(const part of parts)assert(longXml.includes(part),'full source text must be preserved across rows');
+const rowCount=(longXml.match(/<row r=/g)||[]).length;
+assert.equal(rowCount,parts.length+1,'page header plus continuation rows');
+assert(!longXml.includes('<f>'));
 const editor=fs.readFileSync('src/editor/index.html','utf8');
 const build=fs.readFileSync('scripts/build-release.cjs','utf8');
 for(const id of ['exportWordText','exportExcelText'])assert(editor.includes('case "'+id+'":'));

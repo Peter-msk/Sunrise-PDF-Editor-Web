@@ -1987,6 +1987,7 @@
               { id: "insertStamp", label: "스탬프", icon: "fa-stamp", shortcut: "Ctrl+Alt+T", docReq: true },
               { id: "insertVisualSignature", label: "시각 서명 (인증서 아님)", icon: "fa-signature", docReq: true },
               { id: "maskedPageExport", label: "현재 쪽 마스킹 PDF", icon: "fa-user-shield", docReq: true },
+              { id: "maskedDocumentExport", label: "전체 문서 다중영역 마스킹", icon: "fa-shield-halved", docReq: true },
               { id: "insertWatermark", label: "워터마크", icon: "fa-droplet", shortcut: "Ctrl+Alt+W", docReq: true },
             ],
           },
@@ -5446,6 +5447,10 @@
           if (!doc) return;
           openMaskedPageExportModal(doc);
           break;
+        case "maskedDocumentExport":
+          if (!doc) return;
+          openMaskedDocumentExportModal(doc);
+          break;
 
         case "insertWatermark":
           if (!doc) return;
@@ -7459,6 +7464,89 @@
               if(status.isConnected)status.textContent="마스킹 PDF 생성 실패: "+(error?.message||error);
             }finally{
               running=false;if(status.isConnected)submit.disabled=false;
+              finish(outcome);
+            }
+          });
+        }
+      });
+    }
+
+    // Full-document export rasterizes EVERY page, masking ONLY explicit rectangles.
+    function openMaskedDocumentExportModal(doc) {
+      if(!window.SunriseSpecialPdf?.exportMaskedDocument) {
+        showToast("전체 문서 마스킹 엔진을 불러오지 못했습니다.","fa-triangle-exclamation");return;
+      }
+      const reader=doc.pdfJsDoc,source=doc.bytes,originalPageCount=doc.pageCount;
+      const defaultPage=doc.currentPage+1;
+      openModal({
+        title:"전체 PDF 다중 영역 마스킹 (새 이미지 기반 PDF)",icon:"fa-shield-halved",width:"660px",
+        bodyHtml:`<div class="dialog-info-box">
+          모든 페이지를 이미지로 새로 생성하여 원본 PDF 내용 스트림·복사 가능한 텍스트·양식·북마크·첨부파일을 넣지 않습니다.
+          <strong>입력한 검정 영역만 가려집니다. 지정하지 않은 페이지와 영역의 개인정보는 그대로 보이며,
+          완전 삭제나 비식별을 보증하지 않습니다.</strong> 원본 PDF는 변경하지 않습니다.
+          서명 또는 양식이 있는 PDF와 편집기 삽입 항목은 안전을 위해 거부합니다.
+        </div>
+        <p style="font-size:12px">한 줄에 <strong>페이지 번호, 왼쪽 X, 위쪽 Y, 너비, 높이</strong>(pt), 쉼표로 구분.
+        회전된 페이지도 화면 왼쪽 위가 기준입니다. 최대 12쪽 / 120영역.</p>
+        <textarea class="dialog-textarea" id="documentMasksInput" rows="7"
+          spellcheck="false" placeholder="1,70,100,180,40">${defaultPage},70,100,180,40</textarea>
+        <label style="display:flex;gap:8px;margin:12px 0">
+          <input type="checkbox" id="documentMasksConfirmed">
+          전체 ${originalPageCount}쪽을 새 이미지 기반 PDF로 출력하며, 영역 밖 민감정보가 남을 수 있음을 확인했습니다.
+        </label>
+        <p id="documentMasksStatus" role="status">전체 ${originalPageCount}쪽 중 가릴 영역을 지정하세요.</p>`,
+        footerHtml:`<div></div><div class="modal-footer-right">
+          <button type="button" class="dialog-btn primary" id="documentMasksExportBtn">전체 문서 마스킹 PDF 생성</button>
+          <button type="button" class="dialog-btn" id="documentMasksCloseBtn">닫기 / 중단</button>
+        </div>`,
+        onMount:()=>{
+          const start=document.getElementById("documentMasksExportBtn");
+          const status=document.getElementById("documentMasksStatus");
+          let running=false,stopped=false;
+          const valid=()=>!stopped&&activeDoc()===doc&&doc.pdfJsDoc===reader&&
+            doc.bytes===source&&doc.pageCount===originalPageCount&&status.isConnected;
+          document.getElementById("documentMasksCloseBtn").addEventListener("click",()=>{
+            stopped=true;if(running)status.textContent="변환 중단 요청됨. 결과 파일은 생성하지 않습니다.";
+            else closeModal();
+          });
+          start.addEventListener("click",async()=>{
+            if(running||!valid()||doc.operationBusy)return;
+            if(!document.getElementById("documentMasksConfirmed").checked){
+              showToast("영역 밖 민감정보가 남을 수 있음을 확인해 주세요.","fa-triangle-exclamation");return;
+            }
+            if(doc.overlays.length){
+              showToast("삽입 항목이 있는 PDF는 마스킹할 수 없습니다. 원본을 별도로 열어주세요.","fa-triangle-exclamation");return;
+            }
+            let plan;
+            try {
+              plan=window.SunriseSpecialPdf.parseMaskPlan(
+                document.getElementById("documentMasksInput").value,originalPageCount);
+              const original=await window.PDFLib.PDFDocument.load(source);
+              const key=window.PDFLib.PDFName.of;
+              if(original.catalog.has(key("Perms"))||original.catalog.has(key("AcroForm")))
+                throw Error("서명·양식이 포함된 PDF는 지원하지 않습니다.");
+            }catch(error){showToast(error.message,"fa-triangle-exclamation");return}
+            const finish=beginOperationMetric("page_extract");let outcome="failed";
+            running=true;start.disabled=true;
+            try {
+              status.textContent="모든 페이지를 래스터로 변환하는 중입니다…";
+              const output=await window.SunriseSpecialPdf.exportMaskedDocument({
+                reader,plan,PDFLib:window.PDFLib,
+                cancelled:()=>!valid(),
+                onProgress:p=>{if(status.isConnected)status.textContent=
+                  p.completed+"/"+p.total+"쪽 처리 · 검정 영역 "+p.masks+"개"; }
+              });
+              if(!valid())throw Error("문서가 변경되거나 변환이 중단되었습니다.");
+              const stem=doc.name.replace(/\.pdf$/i,"").replace(/[^a-zA-Z0-9가-힣._-]/g,"_").slice(0,70)||"document";
+              downloadBytes(output.bytes,stem+"_masked_full_document.pdf","application/pdf");
+              status.textContent="완료: "+output.pages+"쪽 · 검정 영역 "+output.masked+"개. "+
+                (output.pagesWithNoMasks?output.pagesWithNoMasks+"개 페이지는 마스크가 없습니다. ":"")+
+                "영역 밖의 개인정보는 여전히 보입니다.";
+              outcome="succeeded";
+            }catch(error){
+              if(status.isConnected)status.textContent="전체 문서 마스킹 실패: "+(error?.message||error);
+            }finally {
+              running=false;if(status.isConnected)start.disabled=false;
               finish(outcome);
             }
           });
