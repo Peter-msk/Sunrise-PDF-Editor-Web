@@ -4094,7 +4094,7 @@
         el.style.left = `${Math.round(item.x * scale)}px`;
         el.style.top = `${Math.round(item.y * scale)}px`;
         if (item.width) el.style.width = `${Math.max(item.type === "Shape" ? 1 : 0, Math.round(item.width * scale))}px`;
-        if (item.height) el.style.height = `${Math.round(item.height * scale)}px`;
+        if (item.height) el.style.height = `${Math.max(item.type === "Shape" ? 1 : 0, Math.round(item.height * scale))}px`;
         el.style.fontSize = `${Math.max(9, Math.round((item.fontSize || 13) * scale))}px`;
         el.style.color = item.color || "#1B2631";
         el.style.background = item.bgColor || "transparent";
@@ -4130,9 +4130,9 @@
         } else if (item.type === "Shape") {
           el.style.background = "transparent";
           const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
-          const w = Math.max(0.01, Number(item.width) || 180), h = Math.max(20, Number(item.height) || 90);
+          const w = Math.max(0.01, Number(item.width) || 180), h = Math.max(0.01, Number(item.height) || 90);
           // Padding and selection borders must not consume sub-20pt SVG width.
-          if (w < 20) { el.style.padding = "0"; el.style.border = "0"; }
+          if (w < 20 || h < 20) { el.style.padding = "0"; el.style.border = "0"; }
           const stroke = Math.min(w / 2,h / 2,Math.max(1,Math.min(15,Number(item.strokeWidth) || 2)));
           svg.setAttribute("viewBox", "0 0 " + w + " " + h);
           svg.setAttribute("preserveAspectRatio","none");
@@ -4143,11 +4143,11 @@
           if (kind === "rect") {
             node.setAttribute("x",String(stroke/2));node.setAttribute("y",String(stroke/2));
             node.setAttribute("width",String(Math.max(0,w-stroke)));
-            node.setAttribute("height",String(Math.max(1,h-stroke)));
+            node.setAttribute("height",String(Math.max(0,h-stroke)));
           } else if (kind === "ellipse") {
             node.setAttribute("cx",String(w/2));node.setAttribute("cy",String(h/2));
             node.setAttribute("rx",String(Math.max(0,(w-stroke)/2)));
-            node.setAttribute("ry",String(Math.max(1,(h-stroke)/2)));
+            node.setAttribute("ry",String(Math.max(0,(h-stroke)/2)));
           } else {
             node.setAttribute("x1",String(stroke/2));node.setAttribute("y1",String(stroke/2));
             node.setAttribute("x2",String(w-stroke/2));node.setAttribute("y2",String(h-stroke/2));
@@ -4273,14 +4273,19 @@
                   saveUndoSnapshot(doc, `항목 크기 조절 (${item.type})`);
                   resized = true;
                 }
-                item.width = Math.max(48, Math.round(initW + dw));
-                item.height = Math.max(22, Math.round(initH + dh));
-                if (item.type !== "Table") {
+                if (item.type === "Shape") {
+                  item.width = Math.max(0.01, Math.round((initW + dw) * 100) / 100);
+                  item.height = Math.max(0.01, Math.round((initH + dh) * 100) / 100);
+                } else {
+                  item.width = Math.max(48, Math.round(initW + dw));
+                  item.height = Math.max(22, Math.round(initH + dh));
+                }
+                if (item.type !== "Table" && item.type !== "Shape") {
                   item.fontSize = Math.max(8, Math.min(72, Math.round(initFont * (item.height / initH))));
                   el.style.fontSize = `${Math.max(9, Math.round(item.fontSize * scale))}px`;
                 }
-                el.style.width = `${Math.round(item.width * scale)}px`;
-                el.style.height = `${Math.round(item.height * scale)}px`;
+                el.style.width = `${Math.max(item.type === "Shape" ? 1 : 0, Math.round(item.width * scale))}px`;
+                el.style.height = `${Math.max(item.type === "Shape" ? 1 : 0, Math.round(item.height * scale))}px`;
               }
             },
             wasResized: () => resized,
@@ -4294,7 +4299,7 @@
           const onUp = () => {
             window.removeEventListener("mousemove", onMove);
             window.removeEventListener("mouseup", onUp);
-            if (rs.wasResized()) renderRightPane();
+            if (rs.wasResized()) { if (item.type === "Shape") renderCurrentPageCanvas(); renderRightPane(); }
           };
           window.addEventListener("mousemove", onMove);
           window.addEventListener("mouseup", onUp);
@@ -4316,7 +4321,7 @@
             const onEnd = () => {
               window.removeEventListener("touchmove", onMove);
               window.removeEventListener("touchend", onEnd);
-              if (rs.wasResized()) renderRightPane();
+              if (rs.wasResized()) { if (item.type === "Shape") renderCurrentPageCanvas(); renderRightPane(); }
             };
             window.addEventListener("touchmove", onMove, { passive: false });
             window.addEventListener("touchend", onEnd);
@@ -5205,10 +5210,10 @@
         const defaultH = item.type === "Table" ? 64 : Math.max(26, lines.length * lineH + 12);
 
         const w = item.type === "Shape" ? Math.max(0.01, Number(item.width) || 180) : Math.max(40, item.width || defaultW);
-        const h = Math.max(22, item.height || defaultH);
+        const h = item.type === "Shape" ? Math.max(0.01, Number(item.height) || 90) : Math.max(22, item.height || defaultH);
         const dpr = 3;
         offCanvas.width = Math.max(1, Math.round(w * dpr));
-        offCanvas.height = Math.round(h * dpr);
+        offCanvas.height = Math.max(1, Math.round(h * dpr));
         if (item.type === "Shape") octx.scale(offCanvas.width / w, offCanvas.height / h);
         else octx.scale(dpr, dpr);
 
@@ -5224,8 +5229,8 @@
           octx.strokeStyle=item.color || "#1F6F9F";
           octx.fillStyle=item.bgColor || "#FFFFFF";
           octx.lineWidth=stroke;
-          if (kind === "rect") octx.rect(stroke/2,stroke/2,Math.max(0,w-stroke),Math.max(1,h-stroke));
-          else if (kind === "ellipse") octx.ellipse(w/2,h/2,Math.max(0,(w-stroke)/2),Math.max(1,(h-stroke)/2),0,0,2*Math.PI);
+          if (kind === "rect") octx.rect(stroke/2,stroke/2,Math.max(0,w-stroke),Math.max(0,h-stroke));
+          else if (kind === "ellipse") octx.ellipse(w/2,h/2,Math.max(0,(w-stroke)/2),Math.max(0,(h-stroke)/2),0,0,2*Math.PI);
           else {octx.moveTo(stroke/2,stroke/2);octx.lineTo(w-stroke/2,h-stroke/2);}
           if (kind !== "line") octx.fill();
           octx.stroke();
@@ -9747,7 +9752,7 @@
             <label for="shapeWidthInput">너비 (pt):</label>
             <input id="shapeWidthInput" type="number" class="dialog-input" min="0.01" max="800" step="0.01" value="180">
             <label for="shapeHeightInput">높이 (pt):</label>
-            <input id="shapeHeightInput" type="number" class="dialog-input" min="20" max="800" value="90">
+            <input id="shapeHeightInput" type="number" class="dialog-input" min="0.01" max="800" step="0.01" value="90">
             <label for="shapeColorInput">선 색상:</label>
             <input id="shapeColorInput" type="color" class="dialog-input" value="#1F6F9F">
             <label for="shapeFillInput">채움 색상:</label>
@@ -9766,7 +9771,7 @@
             let width,height,strokeWidth;
             try {
               width=validateOverlayDimension(document.getElementById("shapeWidthInput").value,0.01,800,"너비");
-              height=validateOverlayDimension(document.getElementById("shapeHeightInput").value,20,800,"높이");
+              height=validateOverlayDimension(document.getElementById("shapeHeightInput").value,0.01,800,"높이");
               strokeWidth=validateOverlayDimension(document.getElementById("shapeStrokeInput").value,1,15,"선 두께");
             } catch(error){showToast(error.message,"fa-triangle-exclamation");return;}
             const shapeKind=document.getElementById("shapeKindInput").value;
@@ -10046,7 +10051,7 @@
         <label for="editItemWidthInput">너비 (pt):</label>
         <input id="editItemWidthInput" type="number" class="dialog-input" min="${isShape?"0.01":"20"}" max="800" step="${isShape?"0.01":"1"}" value="${item.width||(isTable?240:isShape?180:220)}">
         <label for="editItemHeightInput">높이 (pt):</label>
-        <input id="editItemHeightInput" type="number" class="dialog-input" min="20" max="800" value="${item.height||(isTable?64:isShape?90:64)}">`:"";
+        <input id="editItemHeightInput" type="number" class="dialog-input" min="${isShape?"0.01":"20"}" max="800" step="${isShape?"0.01":"1"}" value="${item.height||(isTable?64:isShape?90:64)}">`:"";
       const paintFields=(isShape||isAnnotation)?`
         <label for="editItemBgInput">배경/채움 색상:</label>
         <input id="editItemBgInput" type="color" class="dialog-input" value="${fillColor}">
@@ -10084,7 +10089,7 @@
               }
               if(dimensions) {
                 width=validateOverlayDimension(document.getElementById("editItemWidthInput").value,isShape?0.01:20,800,"너비");
-                height=validateOverlayDimension(document.getElementById("editItemHeightInput").value,20,800,"높이");
+                height=validateOverlayDimension(document.getElementById("editItemHeightInput").value,isShape?0.01:20,800,"높이");
               }
               if(isShape||isAnnotation)
                 opacity=validateOverlayDimension(document.getElementById("editItemOpacityInput").value,.1,1,"투명도");

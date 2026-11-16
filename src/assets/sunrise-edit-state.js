@@ -13,7 +13,7 @@
     if (item.rotation !== undefined && ![0, 90, 180, 270].includes(item.rotation)) return false;
     if (item.type === 'Shape' && (!['rect','ellipse','line'].includes(item.shapeKind) ||
         !Number.isFinite(item.width) || item.width < 0.01 || item.width > 800 ||
-        !Number.isFinite(item.height) || item.height < 20 || item.height > 800 ||
+        !Number.isFinite(item.height) || item.height < 0.01 || item.height > 800 ||
         !Number.isFinite(item.strokeWidth) || item.strokeWidth < 1 || item.strokeWidth > 15)) return false;
     for (const key of ['color', 'bgColor']) {
       if (item[key] !== undefined && (typeof item[key] !== 'string' || item[key].length > 80 ||
