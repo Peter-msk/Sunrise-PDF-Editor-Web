@@ -4131,7 +4131,9 @@
           el.style.background = "transparent";
           const svg = document.createElementNS("http://www.w3.org/2000/svg","svg");
           const w = Math.max(0.01, Number(item.width) || 180), h = Math.max(20, Number(item.height) || 90);
-          const stroke = Math.min(w,h,Math.max(1,Math.min(15,Number(item.strokeWidth) || 2)));
+          // Padding and selection borders must not consume sub-20pt SVG width.
+          if (w < 20) { el.style.padding = "0"; el.style.border = "0"; }
+          const stroke = Math.min(w / 2,h / 2,Math.max(1,Math.min(15,Number(item.strokeWidth) || 2)));
           svg.setAttribute("viewBox", "0 0 " + w + " " + h);
           svg.setAttribute("preserveAspectRatio","none");
           svg.setAttribute("width","100%");svg.setAttribute("height","100%");
@@ -5216,7 +5218,7 @@
         }
 
         if (item.type === "Shape") {
-          const stroke=Math.min(w,h,Math.max(1,Math.min(15,Number(item.strokeWidth)||2)));
+          const stroke=Math.min(w/2,h/2,Math.max(1,Math.min(15,Number(item.strokeWidth)||2)));
           const kind=["rect","ellipse","line"].includes(item.shapeKind)?item.shapeKind:"rect";
           octx.beginPath();
           octx.strokeStyle=item.color || "#1F6F9F";

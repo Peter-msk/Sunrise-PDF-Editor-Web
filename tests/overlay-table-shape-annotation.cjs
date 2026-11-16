@@ -16,6 +16,7 @@ assert.equal(call('validateOverlayDimension("0.55",.1,1,"opacity")'),.55,'decima
 assert.equal(call('validateOverlayDimension("0.25",.01,800,"너비")'),.25,'shape width below 20pt');
 assert.throws(()=>call('validateOverlayDimension("0",.01,800,"너비")'),/범위/);
 assert.match(src,/id="shapeWidthInput"[^>]+min="0\.01"[^>]+step="0\.01"/);
+assert.match(src,/if \(w < 20\) \{ el\.style\.padding = "0"; el\.style\.border = "0"; \}/);
 assert.match(src,/width=validateOverlayDimension\(document\.getElementById\("editItemWidthInput"\)\.value,isShape\?0\.01:20,800/);
 for(const input of ['한열\n한열','a\tb\nc',
  'a\tb\nc\td\tvery-long-extra','a\tb\nc\t'+('x'.repeat(81))]){
