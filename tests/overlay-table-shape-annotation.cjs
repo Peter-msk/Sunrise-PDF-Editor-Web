@@ -13,6 +13,10 @@ const json=x=>JSON.parse(JSON.stringify(x));
 assert.deepEqual(json(call('parseEditableTableText("담당\\t검토\\t승인\\n김\\t박\\t이")')),[
  ['담당','검토','승인'],['김','박','이']]);
 assert.equal(call('validateOverlayDimension("0.55",.1,1,"opacity")'),.55,'decimal opacity support');
+assert.equal(call('validateOverlayDimension("0.25",.01,800,"너비")'),.25,'shape width below 20pt');
+assert.throws(()=>call('validateOverlayDimension("0",.01,800,"너비")'),/범위/);
+assert.match(src,/id="shapeWidthInput"[^>]+min="0\.01"[^>]+step="0\.01"/);
+assert.match(src,/width=validateOverlayDimension\(document\.getElementById\("editItemWidthInput"\)\.value,isShape\?0\.01:20,800/);
 for(const input of ['한열\n한열','a\tb\nc',
  'a\tb\nc\td\tvery-long-extra','a\tb\nc\t'+('x'.repeat(81))]){
  assert.throws(()=>{ctx.input=input;vm.runInContext('parseEditableTableText(input)',ctx);},/셀|행|열|표/);
@@ -37,6 +41,10 @@ async function roundtrip(){
   text:'',x:90,y:110,width:180,height:90,color:'#123456',bgColor:'#FFFFFF',
   strokeWidth:4,opacity:.7
  },{
+  id:'ov_thin_shape',pageIndex:0,type:'Shape',shapeKind:'line',
+  text:'',x:45,y:50,width:.25,height:25,color:'#123456',bgColor:'#FFFFFF',
+  strokeWidth:1,opacity:1
+ },{
   id:'ov_table',pageIndex:0,type:'Table',text:'표 (항목/내용)',x:100,y:250,
   width:260,height:94,cells:[['항목','내용'],['수질','기준 충족'],['대기','적합']],
   color:'#1B2631',bgColor:'#FFFFFF',opacity:.98
@@ -56,6 +64,8 @@ async function roundtrip(){
  const badStream=badPage.getContentStream(false);
  assert.throws(()=>editState.record(bad,new Map([[0,{stream:badStream,ref:badPage.contentStreamRef}]]),
   [{...original[0],strokeWidth:400}],pdfLib),/삽입 항목/);
+ assert.throws(()=>editState.record(bad,new Map([[0,{stream:badStream,ref:badPage.contentStreamRef}]]),
+  [{...original[0],width:0}],pdfLib),/삽입 항목/);
  console.log('PASS: table rectangular edits, shape UI/save hooks, review panel, safe PDF overlay metadata roundtrip incl. colors/opacity');
 }
 roundtrip().catch(e=>{console.error(e);process.exitCode=1});
